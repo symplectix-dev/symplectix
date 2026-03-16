@@ -8,6 +8,9 @@ indent_style             = space
 insert_final_newline     = true
 trim_trailing_whitespace = true
 
+[*.nix]
+indent_size = 2
+
 [*.{yml,yaml,toml,json}]
 indent_size = 2
 
