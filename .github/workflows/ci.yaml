@@ -32,7 +32,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
+      - uses: cachix/install-nix-action@v31
       - uses: dtolnay/rust-toolchain@stable
+      - run: nix develop --command bash -c 'cargo run -p devtool -- info'
       - uses: Swatinem/rust-cache@v2
         with:
           # The prefix cache key, this can be changed to start a new cache manually.
@@ -41,3 +43,4 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' && matrix.profile == 'release' }}
       - run: cargo build --profile ${{ matrix.profile }} --workspace
       - run: cargo test --profile ${{ matrix.profile }} --workspace
+      - uses: cachix/install-nix-action@v31
