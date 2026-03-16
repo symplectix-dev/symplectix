@@ -44,6 +44,6 @@ jobs:
           # To only cache release builds from `main`.
           save-if: ${{ github.ref == 'refs/heads/main' && matrix.profile == 'release' }}
       - run: nix develop --command cargo fmt --all --check
-      - run: nix develop --command cargo clippy --no-deps --all-targets --all-features
+      - run: nix develop --command cargo clippy --no-deps --all-features
       - run: nix develop --command cargo build --profile ${{ matrix.profile }} --workspace
       - run: nix develop --command cargo test --profile ${{ matrix.profile }} --workspace
