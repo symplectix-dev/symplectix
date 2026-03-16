@@ -15,7 +15,6 @@ use serde::{
     Serialize,
 };
 
-mod format;
 mod info;
 
 trait DevTool {
@@ -55,8 +54,6 @@ pub struct Cli {
 enum Command {
     /// Print buildinfo collected at compile time.
     Info(info::Info),
-    /// Format code.
-    Format(format::Format),
 }
 
 impl Cli {
@@ -99,10 +96,8 @@ impl Cli {
         // let run_number = env::var("GITHUB_RUN_NUMBER").unwrap_or("0".to_owned());
 
         let ctx = Context { cargo: PathBuf::from(env!("CARGO")), workspace_status };
-
         match self.cmd {
             Command::Info(c) => c.run(ctx),
-            Command::Format(c) => c.run(ctx),
         }
     }
 }
