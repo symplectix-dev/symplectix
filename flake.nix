@@ -31,15 +31,13 @@
       overlays.default = final: prev: {
         rust-toolchain =
           with inputs.fenix.packages.${prev.stdenv.hostPlatform.system};
-          combine (
-            [
-              stable.clippy
-              stable.rustc
-              stable.rust-src
-              stable.cargo
-              complete.rustfmt
-            ]
-          );
+          combine ([
+            stable.clippy
+            stable.rustc
+            stable.rust-src
+            stable.cargo
+            complete.rustfmt
+          ]);
       };
 
       devShells = forEachSupportedSystem (
