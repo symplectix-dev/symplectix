@@ -36,18 +36,18 @@ fn gen_bits(r: Range<u64>) -> (BufVec, Roaring) {
 }
 
 fn benchmarks(c: &mut Criterion) {
-    let (bv, roaring_bv) = gen_bits(0..BOUND);
+    let (bufvec, roaring) = gen_bits(0..BOUND);
 
     let mut group = c.benchmark_group("rank1");
     let i = 1 << 20;
     group.bench_function("BufVec", |b| {
         b.iter(|| {
-            let _ = black_box(bv.rank1(..i));
+            let _ = black_box(bufvec.rank1(..i));
         })
     });
     group.bench_function("Roaring", |b| {
         b.iter(|| {
-            let _ = black_box(roaring_bv.rank1(i));
+            let _ = black_box(roaring.rank1(i));
         })
     });
     group.finish();
@@ -55,12 +55,12 @@ fn benchmarks(c: &mut Criterion) {
     let mut group = c.benchmark_group("rank0");
     group.bench_function("BufVec", |b| {
         b.iter(|| {
-            let _ = black_box(bv.rank0(..i));
+            let _ = black_box(bufvec.rank0(..i));
         })
     });
     group.bench_function("Roaring", |b| {
         b.iter(|| {
-            let _ = black_box(roaring_bv.rank0(i));
+            let _ = black_box(roaring.rank0(i));
         })
     });
     group.finish();
@@ -69,12 +69,12 @@ fn benchmarks(c: &mut Criterion) {
     let mut group = c.benchmark_group("select1");
     group.bench_function("BufVec", |b| {
         b.iter(|| {
-            let _ = black_box(bv.select1(n));
+            let _ = black_box(bufvec.select1(n));
         })
     });
     group.bench_function("Roaring", |b| {
         b.iter(|| {
-            let _ = black_box(roaring_bv.select1(n));
+            let _ = black_box(roaring.select1(n));
         })
     });
     group.finish();
@@ -82,12 +82,12 @@ fn benchmarks(c: &mut Criterion) {
     let mut group = c.benchmark_group("select0");
     group.bench_function("BufVec", |b| {
         b.iter(|| {
-            let _ = black_box(bv.select0(n));
+            let _ = black_box(bufvec.select0(n));
         })
     });
     group.bench_function("Roaring", |b| {
         b.iter(|| {
-            let _ = black_box(roaring_bv.select0(n));
+            let _ = black_box(roaring.select0(n));
         })
     });
     group.finish();
