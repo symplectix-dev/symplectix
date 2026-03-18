@@ -5,10 +5,19 @@ edition.workspace = true
 publish = false
 
 [dev-dependencies]
+criterion.workspace = true
 lazy_static.workspace = true
 quickcheck.workspace = true
 quickcheck_macros.workspace = true
 rand.workspace = true
+
+[[bench]]
+name = "bits"
+harness = false
+
+[[bench]]
+name = "wm"
+harness = false
 
 [lints]
 workspace = true

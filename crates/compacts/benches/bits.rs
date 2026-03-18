@@ -1,8 +1,5 @@
-//! Bench!!
-
-#![allow(non_snake_case)]
-#![feature(test)]
-extern crate test;
+//! Benchmarks for bit-vector primitives.
+use std::hint::black_box;
 
 use compacts::ops::*;
 use compacts::{
@@ -10,15 +7,16 @@ use compacts::{
     BitMap,
     Pop,
 };
+use criterion::{
+    Criterion,
+    criterion_group,
+    criterion_main,
+};
 use lazy_static::lazy_static;
 use rand::prelude::*;
-use test::Bencher;
-
-// type BitMap = compacts::BitMap<[u64; 1024]>;
 
 macro_rules! generate {
     (Vec; $rng:expr, $nbits:expr, $bound:expr) => {{
-        // let mut build = vec![0; compacts::bits::blocks_by($bound, 64)];
         let mut build = compacts::bits::sized($bound);
         for _ in 0..$nbits {
             build.put1($rng.random_range(0..$bound));
@@ -59,105 +57,96 @@ lazy_static! {
     static ref A2: BitArray<u64> = BitArray::from(V2.clone());
 }
 
-mod bit_vec {
-    use super::*;
+fn bit_vec(c: &mut Criterion) {
+    let mut g = c.benchmark_group("bit_vec");
 
-    #[bench]
-    fn bit(bench: &mut Bencher) {
-        let cap = V0.size() - 1;
-        bench.iter(|| V0.bit(rand::rng().random_range(0..cap)));
-    }
+    let cap = V0.size() - 1;
+    g.bench_function("bit", |b| b.iter(|| black_box(V0.bit(rand::rng().random_range(0..cap)))));
 
-    #[bench]
-    fn put1(bench: &mut Bencher) {
+    g.bench_function("put1", |b| {
         let mut v0 = V0.clone();
         let cap = v0.size() - 1;
-        bench.iter(|| {
-            v0.put1(rand::rng().random_range(0..cap));
-        });
-    }
+        b.iter(|| v0.put1(rand::rng().random_range(0..cap)))
+    });
+
+    g.finish();
 }
 
-mod pop_vec {
-    use super::*;
+fn pop_vec(c: &mut Criterion) {
+    let mut g = c.benchmark_group("pop_vec");
 
-    #[bench]
-    fn put1(bench: &mut Bencher) {
+    g.bench_function("put1", |b| {
         let mut p0 = P0.clone();
         let cap = p0.len() - 1;
-        bench.iter(|| {
-            p0.put1(rand::rng().random_range(0..cap));
-        });
-    }
+        b.iter(|| p0.put1(rand::rng().random_range(0..cap)))
+    });
+
+    g.finish();
 }
 
-mod bit_map {
-    use super::*;
+fn bit_map(c: &mut Criterion) {
+    let mut g = c.benchmark_group("bit_map");
 
-    #[bench]
-    fn bit(bench: &mut Bencher) {
-        let cap = M0.size() - 1;
-        bench.iter(|| M0.bit(rand::rng().random_range(0..cap)));
-    }
+    let cap = M0.size() - 1;
+    g.bench_function("bit", |b| b.iter(|| black_box(M0.bit(rand::rng().random_range(0..cap)))));
 
-    #[bench]
-    fn put1(bench: &mut Bencher) {
+    g.bench_function("put1", |b| {
         let mut m0 = M0.clone();
         let cap = m0.size() - 1;
-        bench.iter(|| {
-            m0.put1(rand::rng().random_range(0..cap));
-        });
-    }
+        b.iter(|| m0.put1(rand::rng().random_range(0..cap)))
+    });
+
+    g.finish();
 }
 
-mod rank {
-    use super::*;
+fn rank(c: &mut Criterion) {
+    let mut g = c.benchmark_group("rank");
 
-    #[bench]
-    fn BitSlice(bench: &mut Bencher) {
-        bench.iter(|| V0.rank1(..rand::rng().random_range(0..V0.size())));
-    }
+    g.bench_function("BitSlice", |b| {
+        b.iter(|| black_box(V0.rank1(..rand::rng().random_range(0..V0.size()))))
+    });
+    g.bench_function("BitArray", |b| {
+        b.iter(|| black_box(A0.rank1(..rand::rng().random_range(0..A0.size()))))
+    });
+    g.bench_function("BitMap", |b| {
+        b.iter(|| black_box(M0.rank1(..rand::rng().random_range(0..M0.size()))))
+    });
+    g.bench_function("PopVec", |b| {
+        b.iter(|| black_box(P0.rank1(..rand::rng().random_range(0..P0.len()))))
+    });
 
-    #[bench]
-    fn BitArray(bench: &mut Bencher) {
-        bench.iter(|| A0.rank1(..rand::rng().random_range(0..A0.size())));
-    }
-
-    #[bench]
-    fn BitMap(bench: &mut Bencher) {
-        bench.iter(|| M0.rank1(..rand::rng().random_range(0..M0.size())));
-    }
-
-    #[bench]
-    fn PopVec(bench: &mut Bencher) {
-        bench.iter(|| P0.rank1(..rand::rng().random_range(0..P0.len())));
-    }
+    g.finish();
 }
 
-mod select {
-    use super::*;
+fn select(c: &mut Criterion) {
+    let mut g = c.benchmark_group("select");
 
-    #[bench]
-    fn BitSlice(bench: &mut Bencher) {
-        let cap = V0.count1() - 1;
-        bench.iter(|| V0.select1(rand::rng().random_range(0..cap)));
-    }
+    let cap_v = V0.count1() - 1;
+    g.bench_function("BitSlice", |b| {
+        b.iter(|| black_box(V0.select1(rand::rng().random_range(0..cap_v))))
+    });
 
-    #[bench]
-    fn BitArray(bench: &mut Bencher) {
-        let cap = A0.count1() - 1;
-        bench.iter(|| A0.select1(rand::rng().random_range(0..cap)));
-    }
+    let cap_a = A0.count1() - 1;
+    g.bench_function("BitArray", |b| {
+        b.iter(|| black_box(A0.select1(rand::rng().random_range(0..cap_a))))
+    });
 
-    #[bench]
-    fn BitMap(bench: &mut Bencher) {
-        let cap = M0.count1() - 1;
-        bench.iter(|| M0.select1(rand::rng().random_range(0..cap)));
-    }
+    let cap_m = M0.count1() - 1;
+    g.bench_function("BitMap", |b| {
+        b.iter(|| black_box(M0.select1(rand::rng().random_range(0..cap_m))))
+    });
 
-    #[bench]
-    fn PopVec(bench: &mut Bencher) {
-        let cap = P0.count1() - 1;
-        bench.iter(|| P0.select1(rand::rng().random_range(0..cap)));
-    }
+    let cap_p = P0.count1() - 1;
+    g.bench_function("PopVec", |b| {
+        b.iter(|| black_box(P0.select1(rand::rng().random_range(0..cap_p))))
+    });
+
+    g.finish();
 }
+
+criterion_group!(bit_vec_benches, bit_vec);
+criterion_group!(pop_vec_benches, pop_vec);
+criterion_group!(bit_map_benches, bit_map);
+criterion_group!(rank_benches, rank);
+criterion_group!(select_benches, select);
+criterion_main!(bit_vec_benches, pop_vec_benches, bit_map_benches, rank_benches, select_benches);
