@@ -144,6 +144,7 @@ dependencies = [
 name = "bitcomp_test"
 version = "0.0.0"
 dependencies = [
+ "bitcomp_poppy",
  "bitcomp_roaring",
  "bitcomp_rrr",
  "bitcomp_slicing",

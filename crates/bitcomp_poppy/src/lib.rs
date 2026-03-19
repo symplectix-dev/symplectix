@@ -173,6 +173,7 @@ impl<B: Bits> Pop<B> {
         }
     }
 
+    #[inline]
     pub fn rank1<R: RangeBounds<u64>>(&self, r: R) -> u64 {
         let (i, j) = bits::range(&r, 0, self.bits());
         self.rank1_impl(j) - self.rank1_impl(i)

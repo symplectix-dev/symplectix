@@ -19,6 +19,7 @@ name = "compint"
 [dependencies]
 
 [dev-dependencies]
+bitcomp_poppy.workspace = true
 bitcomp_roaring.workspace = true
 bitcomp_rrr.workspace = true
 bitcomp_slicing.workspace = true
