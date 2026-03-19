@@ -19,16 +19,19 @@ name = "compint"
 [dependencies]
 
 [dev-dependencies]
+bitcomp_poppy.workspace = true
 bitcomp_roaring.workspace = true
 bitcomp_rrr.workspace = true
 bitcomp_slicing.workspace = true
-bits.workspace = true
 bitpacking.workspace = true
+bits.workspace = true
 criterion.workspace = true
 lazy_static.workspace = true
 rand.workspace = true
 streamvbyte.workspace = true
 varint.workspace = true
+quickcheck.workspace = true
+quickcheck_macros.workspace = true
 
 [lints]
 workspace = true

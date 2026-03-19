@@ -144,6 +144,7 @@ dependencies = [
 name = "bitcomp_test"
 version = "0.0.0"
 dependencies = [
+ "bitcomp_poppy",
  "bitcomp_roaring",
  "bitcomp_rrr",
  "bitcomp_slicing",
@@ -151,6 +152,8 @@ dependencies = [
  "bits",
  "criterion",
  "lazy_static",
+ "quickcheck",
+ "quickcheck_macros",
  "rand",
  "streamvbyte",
  "varint",
@@ -349,6 +352,7 @@ checksum = "b05b61dc5112cbb17e4b6cd61790d9845d13888356391624cbe7e41efeac1e75"
 name = "compacts"
 version = "0.0.0"
 dependencies = [
+ "criterion",
  "lazy_static",
  "quickcheck",
  "quickcheck_macros",

@@ -62,8 +62,7 @@ jobs:
         run: nix develop --command cargo check --locked
 
       - name: Lint
-        # TODO: add --all-targets when setup criterion for compacts/benches
-        run: nix develop --command cargo clippy --locked --no-deps --all-features
+        run: nix develop --command cargo clippy --locked --no-deps --all-targets --all-features
 
       - name: Build
         run: nix develop --command cargo build --locked --profile ${{ matrix.profile }} --workspace

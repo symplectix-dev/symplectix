@@ -1,7 +1,6 @@
-//! Benchmark roaring partitioning.
+//! Benchmarks for bit-vector primitives.
 
 use std::hint::black_box;
-use std::ops::Range;
 
 use bitcomp_roaring::bit_set::BitSet;
 use bits::{
@@ -19,69 +18,96 @@ use rand::prelude::*;
 const NBITS: u64 = 150_000;
 const BOUND: u64 = 10_000_000;
 
-fn gen_bits(r: Range<u64>) -> (Vec<u64>, BitSet<u64>) {
+type UncompVec = Vec<u64>;
+type UncompPop = bitcomp_poppy::Pop<UncompVec>;
+type Roaring = BitSet<u64>;
+
+fn random_bits() -> (UncompVec, UncompPop, Roaring) {
     let mut rng = rand::rng();
-    let mut roaring_bv = BitSet::new();
-    let mut bv = vec![0u64; bits::blocks(BOUND, <u64 as Block>::BITS)];
+    let mut uncomp_vec = vec![0; bits::blocks(BOUND, <u64 as Block>::BITS)];
+    let mut uncomp_pop = UncompPop::new(BOUND);
+    let mut roaring = BitSet::new();
     for _ in 0..NBITS {
-        let bit = rng.random_range(r.clone());
-        roaring_bv.insert(bit);
-        bv.set1(bit);
+        let bit = rng.random_range(0..BOUND);
+        roaring.insert(bit);
+        uncomp_vec.set1(bit);
+        uncomp_pop.set1(bit);
     }
-    (bv, roaring_bv)
+    (uncomp_vec, uncomp_pop, roaring)
 }
 
-fn benchmark(c: &mut Criterion) {
-    let (bv, roaring_bv) = gen_bits(0..BOUND);
-    {
-        let mut group = c.benchmark_group("bitcomp_rank");
-        let i = 1 << 20;
-        group.bench_function("vec_u64_rank1", |b| {
-            b.iter(|| {
-                let _ = black_box(bv.rank1(..i));
-            })
-        });
-        group.bench_function("vec_u64_rank0", |b| {
-            b.iter(|| {
-                let _ = black_box(bv.rank0(..i));
-            })
-        });
-        group.bench_function("roaring_rank1", |b| {
-            b.iter(|| {
-                let _ = black_box(roaring_bv.rank1(i));
-            })
-        });
-        group.bench_function("roaring_rank0", |b| {
-            b.iter(|| {
-                let _ = black_box(roaring_bv.rank0(i));
-            })
-        });
-    }
-    {
-        let n = 10000;
-        let mut group = c.benchmark_group("bitcomp_select");
-        group.bench_function("vec_u64_select1", |b| {
-            b.iter(|| {
-                let _ = black_box(bv.select1(n));
-            })
-        });
-        group.bench_function("vec_u64_select0", |b| {
-            b.iter(|| {
-                let _ = black_box(bv.select0(n));
-            })
-        });
-        group.bench_function("roaring_select1", |b| {
-            b.iter(|| {
-                let _ = black_box(roaring_bv.select1(n));
-            })
-        });
-        group.bench_function("roaring_select0", |b| {
-            b.iter(|| {
-                let _ = black_box(roaring_bv.select0(n));
-            })
-        });
-    }
+fn benchmarks(c: &mut Criterion) {
+    let (uncomp_vec, uncomp_pop, roaring) = random_bits();
+
+    let mut group = c.benchmark_group("bitcomp/rank");
+    let i = BOUND / 2;
+    group.bench_function("uncomp_vec/rank1", |b| {
+        b.iter(|| {
+            let _ = black_box(uncomp_vec.rank1(..i));
+        })
+    });
+    group.bench_function("uncomp_pop/rank1", |b| {
+        b.iter(|| {
+            let _ = black_box(uncomp_pop.rank1(..i));
+        })
+    });
+    group.bench_function("roaring/rank1", |b| {
+        b.iter(|| {
+            let _ = black_box(roaring.rank1(i));
+        })
+    });
+    group.bench_function("uncomp_vec/rank0", |b| {
+        b.iter(|| {
+            let _ = black_box(uncomp_vec.rank0(..i));
+        })
+    });
+    group.bench_function("uncomp_pop/rank0", |b| {
+        b.iter(|| {
+            let _ = black_box(uncomp_pop.rank0(..i));
+        })
+    });
+    group.bench_function("roaring/rank0", |b| {
+        b.iter(|| {
+            let _ = black_box(roaring.rank0(i));
+        })
+    });
+    group.finish();
+
+    let mut group = c.benchmark_group("bitcomp/select");
+    let c1 = uncomp_vec.count1() / 2;
+    let c0 = uncomp_vec.count0() / 2;
+    group.bench_function("uncomp_vec/select1", |b| {
+        b.iter(|| {
+            let _ = black_box(uncomp_vec.select1(c1));
+        })
+    });
+    group.bench_function("uncomp_pop/select1", |b| {
+        b.iter(|| {
+            let _ = black_box(uncomp_pop.select1(c1));
+        })
+    });
+    group.bench_function("roaring/select1", |b| {
+        b.iter(|| {
+            let _ = black_box(roaring.select1(c1));
+        })
+    });
+    group.bench_function("uncomp_vec/select0", |b| {
+        b.iter(|| {
+            let _ = black_box(uncomp_vec.select0(c0));
+        })
+    });
+    group.bench_function("uncomp_pop/select0", |b| {
+        b.iter(|| {
+            let _ = black_box(uncomp_pop.select0(c0));
+        })
+    });
+    group.bench_function("roaring/select0", |b| {
+        b.iter(|| {
+            let _ = black_box(roaring.select0(c0));
+        })
+    });
+    group.finish();
 }
 
-criterion_group!(benches, benchmark);
+criterion_group!(benches, benchmarks);
 criterion_main!(benches);

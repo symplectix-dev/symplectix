@@ -1,8 +1,6 @@
-//! Bench!!
+//! Benchmarks for bit-vector primitives.
 
-#![allow(non_snake_case)]
-#![feature(test)]
-extern crate test;
+use std::hint::black_box;
 
 use compacts::ops::*;
 use compacts::{
@@ -10,154 +8,106 @@ use compacts::{
     BitMap,
     Pop,
 };
-use lazy_static::lazy_static;
+use criterion::{
+    Criterion,
+    criterion_group,
+    criterion_main,
+};
 use rand::prelude::*;
-use test::Bencher;
 
-// type BitMap = compacts::BitMap<[u64; 1024]>;
-
-macro_rules! generate {
-    (Vec; $rng:expr, $nbits:expr, $bound:expr) => {{
-        // let mut build = vec![0; compacts::bits::blocks_by($bound, 64)];
-        let mut build = compacts::bits::sized($bound);
-        for _ in 0..$nbits {
-            build.put1($rng.random_range(0..$bound));
-        }
-        build
-    }};
-    (Pop; $rng:expr, $nbits:expr, $bound:expr) => {{
-        let mut build = Pop::new($bound);
-        for _ in 0..$nbits {
-            build.put1($rng.random_range(0..$bound));
-        }
-        build
-    }};
-    (BitMap; $rng:expr, $nbits:expr, $bound:expr) => {{
-        let mut build = BitMap::none($bound);
-        for _ in 0..$nbits {
-            build.put1($rng.random_range(0..$bound));
-        }
-        build
-    }};
-}
-
+const NBITS: usize = 150_000;
 const BOUND: usize = 10_000_000;
 
-lazy_static! {
-    static ref NBITS: usize = BOUND / rand::rng().random_range(1..100);
-    static ref V0: Vec<u64> = generate!(Vec; rand::rng(), *NBITS, BOUND);
-    static ref V1: Vec<u64> = generate!(Vec; rand::rng(), *NBITS, BOUND);
-    static ref V2: Vec<u64> = generate!(Vec; rand::rng(), *NBITS, BOUND);
-    static ref P0: Pop<u64> = generate!(Pop; rand::rng(), *NBITS, BOUND);
-    static ref P1: Pop<u64> = generate!(Pop; rand::rng(), *NBITS, BOUND);
-    static ref P2: Pop<u64> = generate!(Pop; rand::rng(), *NBITS, BOUND);
-    static ref M0: BitMap<[u64; 1024]> = generate!(BitMap; rand::rng(), *NBITS, BOUND);
-    static ref M1: BitMap<[u64; 1024]> = generate!(BitMap; rand::rng(), *NBITS, BOUND);
-    static ref M2: BitMap<[u64; 1024]> = generate!(BitMap; rand::rng(), *NBITS, BOUND);
-    static ref A0: BitArray<u64> = BitArray::from(V0.clone());
-    static ref A1: BitArray<u64> = BitArray::from(V1.clone());
-    static ref A2: BitArray<u64> = BitArray::from(V2.clone());
+type Uncompressed = BitMap<[u64; 1024]>;
+type PopVec = Pop<u64>;
+type Poppy = BitArray<u64>;
+
+fn random_bits() -> (Uncompressed, PopVec, Poppy) {
+    let mut rng = rand::rng();
+    let mut vec = compacts::bits::sized(BOUND);
+    let mut uncomp = BitMap::none(BOUND);
+    let mut pop = Pop::new(BOUND);
+    for _ in 0..NBITS {
+        let bit = rng.random_range(0..BOUND);
+        vec.put1(bit);
+        uncomp.put1(bit);
+        pop.put1(bit);
+    }
+    (uncomp, pop, Poppy::from(vec))
 }
 
-mod bit_vec {
-    use super::*;
+fn benchmarks(c: &mut Criterion) {
+    let (uncomp, popvec, poppy) = random_bits();
 
-    #[bench]
-    fn bit(bench: &mut Bencher) {
-        let cap = V0.size() - 1;
-        bench.iter(|| V0.bit(rand::rng().random_range(0..cap)));
-    }
+    let mut group = c.benchmark_group("compacts/rank");
+    let i = BOUND / 2;
+    group.bench_function("uncompressed/rank1", |b| {
+        b.iter(|| {
+            let _ = black_box(uncomp.rank1(..i));
+        })
+    });
+    group.bench_function("poppy/rank1", |b| {
+        b.iter(|| {
+            let _ = black_box(poppy.rank1(..i));
+        })
+    });
+    group.bench_function("popvec/rank1", |b| {
+        b.iter(|| {
+            let _ = black_box(popvec.rank1(..i));
+        })
+    });
+    group.bench_function("uncompressed/rank0", |b| {
+        b.iter(|| {
+            let _ = black_box(uncomp.rank0(..i));
+        })
+    });
+    group.bench_function("poppy/rank0", |b| {
+        b.iter(|| {
+            let _ = black_box(poppy.rank0(..i));
+        })
+    });
+    group.bench_function("popvec/rank0", |b| {
+        b.iter(|| {
+            let _ = black_box(popvec.rank0(..i));
+        })
+    });
+    group.finish();
 
-    #[bench]
-    fn put1(bench: &mut Bencher) {
-        let mut v0 = V0.clone();
-        let cap = v0.size() - 1;
-        bench.iter(|| {
-            v0.put1(rand::rng().random_range(0..cap));
-        });
-    }
+    let mut group = c.benchmark_group("compacts/select");
+    let c1 = uncomp.count1() / 2;
+    let c0 = uncomp.count0() / 2;
+    group.bench_function("uncompressed/select1", |b| {
+        b.iter(|| {
+            let _ = black_box(uncomp.select1(c1));
+        })
+    });
+    group.bench_function("poppy/select1", |b| {
+        b.iter(|| {
+            let _ = black_box(poppy.select1(c1));
+        })
+    });
+    group.bench_function("popvec/select1", |b| {
+        b.iter(|| {
+            let _ = black_box(popvec.select1(c1));
+        })
+    });
+    group.bench_function("uncompressed/select0", |b| {
+        b.iter(|| {
+            let _ = black_box(uncomp.select0(c0));
+        })
+    });
+    group.bench_function("poppy/select0", |b| {
+        b.iter(|| {
+            let _ = black_box(poppy.select0(c0));
+        })
+    });
+    group.bench_function("popvec/select0", |b| {
+        b.iter(|| {
+            let _ = black_box(popvec.select0(c0));
+        })
+    });
+    group.finish();
 }
 
-mod pop_vec {
-    use super::*;
-
-    #[bench]
-    fn put1(bench: &mut Bencher) {
-        let mut p0 = P0.clone();
-        let cap = p0.len() - 1;
-        bench.iter(|| {
-            p0.put1(rand::rng().random_range(0..cap));
-        });
-    }
-}
-
-mod bit_map {
-    use super::*;
-
-    #[bench]
-    fn bit(bench: &mut Bencher) {
-        let cap = M0.size() - 1;
-        bench.iter(|| M0.bit(rand::rng().random_range(0..cap)));
-    }
-
-    #[bench]
-    fn put1(bench: &mut Bencher) {
-        let mut m0 = M0.clone();
-        let cap = m0.size() - 1;
-        bench.iter(|| {
-            m0.put1(rand::rng().random_range(0..cap));
-        });
-    }
-}
-
-mod rank {
-    use super::*;
-
-    #[bench]
-    fn BitSlice(bench: &mut Bencher) {
-        bench.iter(|| V0.rank1(..rand::rng().random_range(0..V0.size())));
-    }
-
-    #[bench]
-    fn BitArray(bench: &mut Bencher) {
-        bench.iter(|| A0.rank1(..rand::rng().random_range(0..A0.size())));
-    }
-
-    #[bench]
-    fn BitMap(bench: &mut Bencher) {
-        bench.iter(|| M0.rank1(..rand::rng().random_range(0..M0.size())));
-    }
-
-    #[bench]
-    fn PopVec(bench: &mut Bencher) {
-        bench.iter(|| P0.rank1(..rand::rng().random_range(0..P0.len())));
-    }
-}
-
-mod select {
-    use super::*;
-
-    #[bench]
-    fn BitSlice(bench: &mut Bencher) {
-        let cap = V0.count1() - 1;
-        bench.iter(|| V0.select1(rand::rng().random_range(0..cap)));
-    }
-
-    #[bench]
-    fn BitArray(bench: &mut Bencher) {
-        let cap = A0.count1() - 1;
-        bench.iter(|| A0.select1(rand::rng().random_range(0..cap)));
-    }
-
-    #[bench]
-    fn BitMap(bench: &mut Bencher) {
-        let cap = M0.count1() - 1;
-        bench.iter(|| M0.select1(rand::rng().random_range(0..cap)));
-    }
-
-    #[bench]
-    fn PopVec(bench: &mut Bencher) {
-        let cap = P0.count1() - 1;
-        bench.iter(|| P0.select1(rand::rng().random_range(0..cap)));
-    }
-}
+criterion_group!(benches, benchmarks);
+criterion_main!(benches);

@@ -15,6 +15,7 @@ bitcomp_roaring = { path = "crates/bitcomp_roaring" }
 bitcomp_rrr = { path = "crates/bitcomp_rrr" }
 bitcomp_slicing = { path = "crates/bitcomp_slicing" }
 bits = { path = "crates/bits" }
+compacts = { path = "crates/compacts" }
 fenwicktree = { path = "crates/fenwicktree" }
 
 streamvbyte = { path = "crates/streamvbyte" }
