@@ -205,7 +205,14 @@ impl<B: Bits> Pop<B> {
             debug_assert!(r < self.rank1(s..e));
         }
 
-        // i + imp.bit_vec[x..y].select1(r).unwrap()
+        // TODO: consider to remove `word` loop here
+        //
+        // Aligned access can be implemented by slicing and select.
+        // x and y can be derived from s and e.
+        //
+        // ```
+        // i + self.repr.[x..y].select1(r).unwrap()
+        // ```
 
         const BITS: u64 = <u128 as Block>::BITS;
         for i in (s..e).step_by(BITS as usize) {

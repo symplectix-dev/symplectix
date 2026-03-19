@@ -152,6 +152,8 @@ dependencies = [
  "bits",
  "criterion",
  "lazy_static",
+ "quickcheck",
+ "quickcheck_macros",
  "rand",
  "streamvbyte",
  "varint",

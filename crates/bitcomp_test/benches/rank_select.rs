@@ -81,11 +81,11 @@ fn benchmarks(c: &mut Criterion) {
             let _ = black_box(uncomp_vec.select1(c1));
         })
     });
-    // group.bench_function("uncomp_pop/select1", |b| {
-    //     b.iter(|| {
-    //         let _ = black_box(uncomp_pop.select1(c1));
-    //     })
-    // });
+    group.bench_function("uncomp_pop/select1", |b| {
+        b.iter(|| {
+            let _ = black_box(uncomp_pop.select1(c1));
+        })
+    });
     group.bench_function("roaring/select1", |b| {
         b.iter(|| {
             let _ = black_box(roaring.select1(c1));
@@ -96,11 +96,11 @@ fn benchmarks(c: &mut Criterion) {
             let _ = black_box(uncomp_vec.select0(c0));
         })
     });
-    // group.bench_function("uncomp_pop/select0", |b| {
-    //     b.iter(|| {
-    //         let _ = black_box(uncomp_pop.select0(c0));
-    //     })
-    // });
+    group.bench_function("uncomp_pop/select0", |b| {
+        b.iter(|| {
+            let _ = black_box(uncomp_pop.select0(c0));
+        })
+    });
     group.bench_function("roaring/select0", |b| {
         b.iter(|| {
             let _ = black_box(roaring.select0(c0));

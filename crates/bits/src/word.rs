@@ -350,7 +350,10 @@ macro_rules! impls_for_word {
             #[inline]
             fn word<T: Word>(&self, i: u64, n: u64) -> T {
                 debug_assert!(i < self.bits() && n <= T::BITS);
-                num::cast((*self & mask!(i, i + n)) >> i).expect("cast failed")
+                // Shift first, then mask — avoids `1 << n` overflow when n == Self::BITS.
+                let shifted = *self >> i;
+                let masked = if n < <Self as Block>::BITS { shifted & ((1 << n) - 1) } else { shifted };
+                num::cast(masked).expect("cast failed")
             }
 
             // fn write_word<T: Word>(&mut self, i: usize, n: usize, bits: T) {

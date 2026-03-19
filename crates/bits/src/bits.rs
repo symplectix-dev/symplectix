@@ -433,7 +433,7 @@ impl<B: Block> Bits for [B] {
                 out |= block.word::<T>(0, B::BITS) << (cur as usize);
                 cur += B::BITS;
             }
-            if e < self.len() {
+            if e < self.len() && q > 0 {
                 out |= self[e].word::<T>(0, q) << (cur as usize);
             }
             out
