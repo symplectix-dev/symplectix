@@ -25,13 +25,15 @@ type Roaring = BitSet<u64>;
 fn random_bits() -> (UncompVec, UncompPop, Roaring) {
     let mut rng = rand::rng();
     let mut uncomp_vec = vec![0; bits::blocks(BOUND, <u64 as Block>::BITS)];
+    let mut uncomp_pop = UncompPop::new(BOUND);
     let mut roaring = BitSet::new();
     for _ in 0..NBITS {
         let bit = rng.random_range(0..BOUND);
         roaring.insert(bit);
         uncomp_vec.set1(bit);
+        uncomp_pop.set1(bit);
     }
-    (uncomp_vec.clone(), UncompPop::from(uncomp_vec), roaring)
+    (uncomp_vec, uncomp_pop, roaring)
 }
 
 fn benchmarks(c: &mut Criterion) {
