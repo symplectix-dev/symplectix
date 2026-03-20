@@ -14,7 +14,7 @@ use crate::{
 };
 
 impl<'a> BitVec {
-    pub(crate) fn build(slice: &'a [bits::Buf<[u64; 1024]>]) -> Self {
+    pub(crate) fn build(slice: &'a [bits::Page<[u64; 1024]>]) -> Self {
         let chunks: Vec<_> = slice.iter().enumerate().filter(|(_, b)| b.count1() > 0).collect();
         let mut bv = BitVec::with_chunks(chunks.len());
 
