@@ -11,6 +11,7 @@ mod bits;
 mod bits_mut;
 mod block;
 mod mask;
+mod page;
 mod word;
 
 pub use bits::Bits;
@@ -21,10 +22,8 @@ pub use block::{
     IntoBlocks,
 };
 pub use mask::Mask;
-pub use word::{
-    Buf,
-    Word,
-};
+pub use page::Page;
+pub use word::Word;
 
 mod and;
 mod not;
