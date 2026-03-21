@@ -1,7 +1,8 @@
-use bits::{
+use bitcomp_core::{
     Bits as _,
     BitsMut as _,
     Block as _,
+    Page,
 };
 
 use crate::BitVec;
@@ -29,7 +30,7 @@ enum ChunkBitPattern {
 }
 
 impl ChunkBitPattern {
-    fn prep(&self, bits: &mut bits::Page<[u64; 1024]>) {
+    fn prep(&self, bits: &mut Page<[u64; 1024]>) {
         use ChunkBitPattern::*;
         let bits = bits.or_empty();
         match self {
@@ -102,14 +103,14 @@ impl ChunkBitPattern {
             (DenseClearly, Dense { index, bits, data }) => {
                 assert_eq!(i, index, "index not match");
                 assert_eq!(bits, 4 * 8 * 1024);
-                let mut bits = bits::Page::<[u64; 1024]>::empty();
+                let mut bits = Page::<[u64; 1024]>::empty();
                 self.prep(&mut bits);
                 assert_eq!(bytemuck::cast_slice::<u64, u8>(bits.as_ref().unwrap()), data);
             }
             (DenseByInspecting, Dense { index, bits, data }) => {
                 assert_eq!(i, index, "index not match");
                 assert_eq!(bits, 2 * 8 * 1024);
-                let mut bits = bits::Page::<[u64; 1024]>::empty();
+                let mut bits = Page::<[u64; 1024]>::empty();
                 self.prep(&mut bits);
                 assert_eq!(bytemuck::cast_slice::<u64, u8>(bits.as_ref().unwrap()), data);
             }
@@ -175,7 +176,7 @@ fn encode_decode_chunk_bit_patterns_as_expected() {
     ];
 
     let bv = {
-        let mut vec = vec![bits::Page::<[u64; 1024]>::empty(); 1 << 16];
+        let mut vec = vec![Page::<[u64; 1024]>::empty(); 1 << 16];
         for (i, pat) in &indexed_pats {
             pat.prep(&mut vec[*i]);
         }

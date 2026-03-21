@@ -7,7 +7,7 @@
 //!    read ends exactly on a block boundary q==0, cur has already reached T::BITS (e.g., 128). The
 //!    `<< cur` then panics for u128.
 
-use bits::Bits;
+use bitcomp_core::Bits;
 use quickcheck_macros::quickcheck;
 
 #[quickcheck]

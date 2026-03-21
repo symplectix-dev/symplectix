@@ -1,5 +1,5 @@
 [package]
-name = "bits"
+name = "bitcomp_core"
 version.workspace = true
 edition.workspace = true
 publish = false

@@ -4,7 +4,7 @@ use std::cmp;
 use std::iter::Sum;
 use std::ops::RangeBounds;
 
-use bits::*;
+use bitcomp_core::*;
 use fenwicktree::{
     LowerBound,
     Nodes,
@@ -81,7 +81,7 @@ fn super_blocks_from_words<T: Word>(slice: &[T]) -> impl Iterator<Item = Option<
 }
 
 fn ubs_len(n: u64) -> usize {
-    bits::blocks(n, UPPER_BLOCK) + 1
+    bitcomp_core::blocks(n, UPPER_BLOCK) + 1
 }
 
 fn lbs_len(n: u64) -> usize {
@@ -89,7 +89,7 @@ fn lbs_len(n: u64) -> usize {
         1
     } else {
         // A minimum and a *logical* length of a vector to store `L1L2`.
-        let supers = bits::blocks(n, SUPER_BLOCK);
+        let supers = bitcomp_core::blocks(n, SUPER_BLOCK);
         supers + {
             // Remenber that fenwicks for L1 and L2 is logically `Vec<Vec<LL>>` but flattened.
             // Need additional space for each fenwicks because of its 1-based indexing.
@@ -118,10 +118,10 @@ impl<T: Word> From<Vec<T>> for Pop<Vec<T>> {
     }
 }
 
-impl<B: bits::Block> Pop<Vec<B>> {
+impl<B: bitcomp_core::Block> Pop<Vec<B>> {
     #[inline]
     pub fn new(n: u64) -> Pop<Vec<B>> {
-        let repr = vec![B::empty(); bits::blocks(n, B::BITS)];
+        let repr = vec![B::empty(); bitcomp_core::blocks(n, B::BITS)];
         Pop { aux: Aux::new(repr.bits()), repr }
     }
 }
@@ -160,9 +160,9 @@ impl<B: Bits> Pop<B> {
         } else if p0 == self.bits() {
             self.count1()
         } else {
-            let (q0, r0) = bits::index(p0, UPPER_BLOCK);
-            let (q1, r1) = bits::index(r0, SUPER_BLOCK);
-            let (q2, r2) = bits::index(r1, BASIC_BLOCK);
+            let (q0, r0) = bitcomp_core::index(p0, UPPER_BLOCK);
+            let (q1, r1) = bitcomp_core::index(r0, SUPER_BLOCK);
+            let (q2, r2) = bitcomp_core::index(r1, BASIC_BLOCK);
 
             let hi = &self.aux.ubs;
             let lo = self.aux.lb(q0);
@@ -175,13 +175,13 @@ impl<B: Bits> Pop<B> {
 
     #[inline]
     pub fn rank1<R: RangeBounds<u64>>(&self, r: R) -> u64 {
-        let (i, j) = bits::range(&r, 0, self.bits());
+        let (i, j) = bitcomp_core::range(&r, 0, self.bits());
         self.rank1_impl(j) - self.rank1_impl(i)
     }
 
     #[inline]
     pub fn rank0<R: RangeBounds<u64>>(&self, r: R) -> u64 {
-        let (i, j) = bits::range(&r, 0, self.bits());
+        let (i, j) = bitcomp_core::range(&r, 0, self.bits());
         (j - i) - (self.rank1_impl(j) - self.rank1_impl(i))
     }
 
@@ -311,7 +311,7 @@ where
     p2
 }
 
-impl<B: bits::BitsMut> Pop<B> {
+impl<B: bitcomp_core::BitsMut> Pop<B> {
     /// Swaps a bit at `i` by `bit` and returns the previous value.
     fn swap(&mut self, i: u64, bit: bool) -> bool {
         let before = self.repr.bit(i);
@@ -368,14 +368,14 @@ impl Aux {
         // } else {
         //     blocks(self.low.len(), MAXL1 + 1)
         // }
-        bits::blocks(self.lbs.len() as u64, MAX_SB_LEN as u64 + 1)
+        bitcomp_core::blocks(self.lbs.len() as u64, MAX_SB_LEN as u64 + 1)
     }
 
     fn incr(&mut self, p0: u64, delta: u64) {
         use fenwicktree::Incr;
 
-        let (q0, r0) = bits::index(p0, UPPER_BLOCK);
-        let (q1, r1) = bits::index(r0, SUPER_BLOCK);
+        let (q0, r0) = bitcomp_core::index(p0, UPPER_BLOCK);
+        let (q1, r1) = bitcomp_core::index(r0, SUPER_BLOCK);
 
         self.ubs.incr(q0 + 1, delta);
 
@@ -397,8 +397,8 @@ impl Aux {
     fn decr(&mut self, p0: u64, delta: u64) {
         use fenwicktree::Decr;
 
-        let (q0, r0) = bits::index(p0, UPPER_BLOCK);
-        let (q1, r1) = bits::index(r0, SUPER_BLOCK);
+        let (q0, r0) = bitcomp_core::index(p0, UPPER_BLOCK);
+        let (q1, r1) = bitcomp_core::index(r0, SUPER_BLOCK);
 
         let hi = &mut self.ubs;
         hi.decr(q0 + 1, delta);

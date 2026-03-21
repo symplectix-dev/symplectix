@@ -8,7 +8,7 @@ use std::ops::{
     SubAssign,
 };
 
-use bits::Word;
+use bitcomp_core::Word;
 pub use index::{
     children,
     prefix,
@@ -97,7 +97,7 @@ mod index {
         Sub,
     };
 
-    use bits::Word;
+    use bitcomp_core::Word;
 
     // The next node to be updated can be found by adding the node size `n.lsb()`.
     #[inline]

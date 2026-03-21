@@ -2,12 +2,12 @@
 
 use std::hint::black_box;
 
-use bitcomp_roaring::bit_set::BitSet;
-use bits::{
+use bitcomp_core::{
     Bits,
     BitsMut,
     Block,
 };
+use bitcomp_roaring::bit_set::BitSet;
 use criterion::{
     Criterion,
     criterion_group,
@@ -24,7 +24,7 @@ type Roaring = BitSet<u64>;
 
 fn random_bits() -> (UncompVec, UncompPop, Roaring) {
     let mut rng = rand::rng();
-    let mut uncomp_vec = vec![0; bits::blocks(BOUND, <u64 as Block>::BITS)];
+    let mut uncomp_vec = vec![0; bitcomp_core::blocks(BOUND, <u64 as Block>::BITS)];
     let mut uncomp_pop = UncompPop::new(BOUND);
     let mut roaring = BitSet::new();
     for _ in 0..NBITS {

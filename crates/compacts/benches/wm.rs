@@ -167,28 +167,21 @@ fn wm_map(c: &mut Criterion) {
     g.finish();
 }
 
-/// Build benchmarks are slow and excluded from the default run.
-/// Run explicitly with: cargo bench --bench wm -- wm_build
-fn wm_build(c: &mut Criterion) {
-    let mut g = c.benchmark_group("wm_build");
-
-    g.bench_function("wm_vec", |b| {
-        let mut vec = S0.clone();
-        b.iter(|| black_box(WaveletMatrix::<u32, BitArray<u64>>::from(vec.as_mut_slice())))
-    });
-    g.bench_function("wm_map", |b| {
-        let mut vec = S0.clone();
-        b.iter(|| black_box(WaveletMatrix::<u32, BitMap>::from(vec.as_mut_slice())))
-    });
-
-    g.finish();
-}
+// Build benchmarks are too slow.
+// fn wm_build(c: &mut Criterion) {
+//     let mut g = c.benchmark_group("wm_build");
+//     g.bench_function("wm_vec", |b| {
+//         let mut vec = S0.clone();
+//         b.iter(|| black_box(WaveletMatrix::<u32, BitArray<u64>>::from(vec.as_mut_slice())))
+//     });
+//     g.bench_function("wm_map", |b| {
+//         let mut vec = S0.clone();
+//         b.iter(|| black_box(WaveletMatrix::<u32, BitMap>::from(vec.as_mut_slice())))
+//     });
+//     g.finish();
+// }
+// criterion_group!(wm_build_benches, wm_build);
 
 criterion_group!(wm_vec_benches, wm_vec);
 criterion_group!(wm_map_benches, wm_map);
-criterion_group!(
-    name = wm_build_benches;
-    config = Criterion::default().sample_size(10);
-    targets = wm_build
-);
 criterion_main!(wm_vec_benches, wm_map_benches);

@@ -98,10 +98,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 
 [[package]]
+name = "bitcomp_core"
+version = "0.0.0"
+dependencies = [
+ "num",
+ "quickcheck",
+ "quickcheck_macros",
+]
+
+[[package]]
 name = "bitcomp_poppy"
 version = "0.0.0"
 dependencies = [
- "bits",
+ "bitcomp_core",
  "fenwicktree",
  "quickcheck",
  "quickcheck_macros",
@@ -111,7 +120,7 @@ dependencies = [
 name = "bitcomp_roaring"
 version = "0.0.0"
 dependencies = [
- "bits",
+ "bitcomp_core",
  "lazy_static",
  "quickcheck",
  "quickcheck_macros",
@@ -134,7 +143,7 @@ dependencies = [
 name = "bitcomp_slicing"
 version = "0.0.0"
 dependencies = [
- "bits",
+ "bitcomp_core",
  "bytemuck",
  "quickcheck",
  "quickcheck_macros",
@@ -144,12 +153,12 @@ dependencies = [
 name = "bitcomp_test"
 version = "0.0.0"
 dependencies = [
+ "bitcomp_core",
  "bitcomp_poppy",
  "bitcomp_roaring",
  "bitcomp_rrr",
  "bitcomp_slicing",
  "bitpacking",
- "bits",
  "criterion",
  "lazy_static",
  "quickcheck",
@@ -182,15 +191,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "96a7139abd3d9cebf8cd6f920a389cf3dc9576172e32f4563f188cae3c3eb019"
 dependencies = [
  "crunchy",
-]
-
-[[package]]
-name = "bits"
-version = "0.0.0"
-dependencies = [
- "num",
- "quickcheck",
- "quickcheck_macros",
 ]
 
 [[package]]
@@ -540,7 +540,7 @@ checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
 name = "fenwicktree"
 version = "0.0.0"
 dependencies = [
- "bits",
+ "bitcomp_core",
  "quickcheck",
  "quickcheck_macros",
 ]
