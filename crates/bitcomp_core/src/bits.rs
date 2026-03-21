@@ -24,7 +24,7 @@ pub trait Bits {
     /// # Examples
     ///
     /// ```
-    /// # use bits::Bits;
+    /// # use bitcomp_core::Bits;
     /// let v: &[u64] = &[0b00000101, 0b01100011, 0b01100000];
     /// assert!(v.bit(0));
     /// assert!(v.bit(64));
@@ -39,7 +39,7 @@ pub trait Bits {
     /// # Examples
     ///
     /// ```
-    /// # use bits::Bits;
+    /// # use bitcomp_core::Bits;
     /// let v: &[u16] = &[0b_1101_0001_1010_0011, 0b_1001_1110_1110_1001];
     /// assert_eq!(v.word::<u8>(0, 4), 0b0011);
     /// assert_eq!(v.word::<u8>(8, 4), 0b0001);
@@ -63,7 +63,7 @@ pub trait Bits {
     /// # Examples
     ///
     /// ```
-    /// # use bits::Bits;
+    /// # use bitcomp_core::Bits;
     /// let a: &[u8] = &[];
     /// let b: &[u8] = &[0, 0, 0];
     /// let c: &[u8] = &[0, 1, 3];
@@ -81,7 +81,7 @@ pub trait Bits {
     /// # Examples
     ///
     /// ```
-    /// # use bits::Bits;
+    /// # use bitcomp_core::Bits;
     /// let a: &[u64] = &[];
     /// let b: &[u64] = &[0, 0, 0];
     /// let c: &[u64] = &[0, 1, 3];
@@ -99,7 +99,7 @@ pub trait Bits {
     /// # Examples
     ///
     /// ```
-    /// # use bits::Bits;
+    /// # use bitcomp_core::Bits;
     /// let a: &[u64] = &[];
     /// let b: &[u64] = &[0, 0, 0];
     /// let c: &[u64] = &[0, 1, 3];
@@ -118,7 +118,7 @@ pub trait Bits {
     /// # Examples
     ///
     /// ```
-    /// # use bits::Bits;
+    /// # use bitcomp_core::Bits;
     /// let a: &[u64] = &[];
     /// let b: &[u64] = &[0, 0, 0];
     /// let c: &[u64] = &[!0, !0, !0];
@@ -137,7 +137,7 @@ pub trait Bits {
     /// # Examples
     ///
     /// ```
-    /// # use bits::Bits;
+    /// # use bitcomp_core::Bits;
     /// let a: &[u64] = &[];
     /// let b: &[u64] = &[0, 0, 0];
     /// let c: &[u64] = &[0, 1, 0];
@@ -155,7 +155,7 @@ pub trait Bits {
     /// # Examples
     ///
     /// ```
-    /// # use bits::Bits;
+    /// # use bitcomp_core::Bits;
     /// let v: &[u64] = &[0b00000101, 0b01100011, 0b01100000];
     /// assert_eq!(v.rank1(..), v.count1());
     /// assert_eq!(v.rank1(..), 8);
@@ -165,13 +165,13 @@ pub trait Bits {
     /// ```
     ///
     /// ```
-    /// # use bits::Bits;
+    /// # use bitcomp_core::Bits;
     /// let v: &[u64] = &[];
     /// assert_eq!(v.rank1(..), 0);
     /// ```
     ///
     /// ```should_panic
-    /// # use bits::Bits;
+    /// # use bitcomp_core::Bits;
     /// # let v: &[u64] = &[];
     /// assert_eq!(v.rank1(1..), 0);
     /// assert_eq!(v.rank1(..100), 0);
@@ -187,7 +187,7 @@ pub trait Bits {
     /// # Examples
     ///
     /// ```
-    /// # use bits::Bits;
+    /// # use bitcomp_core::Bits;
     /// let v: &[u64] = &[0b00000101, 0b01100011, 0b01100000];
     /// assert_eq!(v.rank0(..), v.count0());
     /// assert_eq!(v.rank0(..5), 3);
@@ -204,7 +204,7 @@ pub trait Bits {
     /// # Examples
     ///
     /// ```
-    /// # use bits::Bits;
+    /// # use bitcomp_core::Bits;
     /// let v: &[u64] = &[0b00000101, 0b01100011, 0b01100000];
     /// assert_eq!(v.excess(..), v.count1().abs_diff(v.count0()));
     /// assert_eq!(v.excess(10..20), v.rank1(10..20).abs_diff(v.rank0(10..20)));
@@ -231,7 +231,7 @@ pub trait Bits {
     /// # Examples
     ///
     /// ```
-    /// # use bits::Bits;
+    /// # use bitcomp_core::Bits;
     /// let v: &[u64] = &[0b00000101, 0b01100011, 0b01100000];
     /// assert_eq!(v.select1(0).unwrap(), 0);
     /// assert_eq!(v.select1(1).unwrap(), 2);
@@ -248,7 +248,7 @@ pub trait Bits {
     /// # Examples
     ///
     /// ```
-    /// # use bits::Bits;
+    /// # use bitcomp_core::Bits;
     /// let v: &[u64] = &[0b00000101, 0b01100011, 0b01100000];
     /// assert_eq!(v.select0(0).unwrap(), 1);
     /// assert_eq!(v.select0(1).unwrap(), 3);

@@ -1,5 +1,5 @@
 #![allow(missing_docs)]
-use bits::{
+use bitcomp_core::{
     Bits,
     BitsMut,
     Block,

@@ -1,4 +1,4 @@
-use bits::BitsMut;
+use bitcomp_core::BitsMut;
 
 use crate::block::Blocks;
 use crate::consts::DENSE_BLOCK_BYTES;

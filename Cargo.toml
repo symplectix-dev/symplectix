@@ -10,11 +10,11 @@ version = "0.0.0"
 edition = "2024"
 
 [workspace.dependencies]
+bitcomp_core = { path = "crates/bitcomp_core" }
 bitcomp_poppy = { path = "crates/bitcomp_poppy" }
 bitcomp_roaring = { path = "crates/bitcomp_roaring" }
 bitcomp_rrr = { path = "crates/bitcomp_rrr" }
 bitcomp_slicing = { path = "crates/bitcomp_slicing" }
-bits = { path = "crates/bits" }
 compacts = { path = "crates/compacts" }
 fenwicktree = { path = "crates/fenwicktree" }
 
