@@ -2,12 +2,12 @@
 
 use std::hint::black_box;
 
-use bitcomp_roaring::bit_set::BitSet;
 use bitcomp_core::{
     Bits,
     BitsMut,
     Block,
 };
+use bitcomp_roaring::bit_set::BitSet;
 use criterion::{
     Criterion,
     criterion_group,
