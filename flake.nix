@@ -10,7 +10,6 @@
       supportedSystems = [
         "x86_64-linux"
         "aarch64-linux"
-        "x86_64-darwin"
         "aarch64-darwin"
       ];
       forEachSupportedSystem =
@@ -20,6 +19,8 @@
           f {
             pkgs = import inputs.nixpkgs {
               inherit system;
+              # if you need unfree packages:
+              # config.allowUnfree = true;
               overlays = [
                 inputs.self.overlays.default
               ];
@@ -53,8 +54,9 @@
               rust-analyzer
               # python
               python
+              basedpyright
               python.pkgs.uv
-              python.pkgs.python-lsp-server
+              python.pkgs.ruff
               # protobuf
               protobuf
               # nix
