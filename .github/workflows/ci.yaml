@@ -26,7 +26,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       # https://github.com/nixbuild/nix-quick-install-action/blob/master/action.yml
       - name: Setup nix without nix-daemon
@@ -56,16 +56,18 @@ jobs:
           path: ~/.cache/prek
           key: prek-${{ hashFiles('.pre-commit-config.yaml') }}
 
-      - name: Run prek
-        run: nix develop --command prek run --show-diff-on-failure --color=always
-
       - name: Restore rust cache
         uses: Swatinem/rust-cache@v2
         with:
+          # A format string used to format commands to be run, i.e. `rustc` and `cargo`.
+          cmd-format: nix develop --command {0}
           # The prefix cache key, this can be changed to start a new cache manually.
           prefix-key: "rust-cache-v0"
           # To only cache release builds from `main`.
           save-if: ${{ github.ref == 'refs/heads/main' && matrix.profile == 'release' }}
+
+      - name: Run prek
+        run: nix develop --command prek run --show-diff-on-failure --color=always
 
       - name: Run cargo fmt
         run: nix develop --command cargo fmt --all --check
