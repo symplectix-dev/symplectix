@@ -29,14 +29,14 @@ subreaper_test = { path = "crates/subreaper_test" }
 testing = { path = "crates/testing" }
 
 anyhow = { version = "1" }
-arc-swap = { version = "1.8" }
+arc-swap = { version = "1.9" }
 bitflags = { version = "2" }
 bitpacking = { version = "0.9" }
-bon = { version = "3.8" }
+bon = { version = "3.9" }
 bytemuck = { version = "1.25" }
 byteorder = { version = "1" }
 cc = { version = "1" }
-clap = { version = "4.5", features = ["derive"] }
+clap = { version = "4.6", features = ["derive"] }
 criterion = { version = "0.8" }
 futures = { version = "0.3" }
 humantime = { version = "2" }
