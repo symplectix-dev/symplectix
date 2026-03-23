@@ -63,8 +63,6 @@
               nixfmt-tree
               # lint for .github/workflows
               zizmor
-              # command runner
-              just
               # pre commit
               prek
             ];
