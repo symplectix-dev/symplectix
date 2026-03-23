@@ -61,6 +61,8 @@
               protobuf
               # nix
               nixfmt-tree
+              # pre commit
+              prek
             ];
 
             env = {
