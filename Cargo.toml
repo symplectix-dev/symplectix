@@ -32,7 +32,7 @@ anyhow = { version = "1" }
 arc-swap = { version = "1.8" }
 bitflags = { version = "2" }
 bitpacking = { version = "0.9" }
-bon = { version = "3.8" }
+bon = { version = "3.9" }
 bytemuck = { version = "1.25" }
 byteorder = { version = "1" }
 cc = { version = "1" }
