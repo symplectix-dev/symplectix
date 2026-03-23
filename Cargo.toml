@@ -45,7 +45,7 @@ lazy_static = { version = "1.5" }
 libc = { version = "0.2" }
 libfuzzer-sys = { version = "0.4" }
 num = { version = "0.4" }
-prost = { version = "0.13" }
+prost = { version = "0.14" }
 prost-reflect = { version = "0.14" }
 prost-types = { version = "0.13" }
 quickcheck = { version = "1" }
