@@ -9,10 +9,12 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read # Allow reading contents.
+
 jobs:
   validate:
-    permissions:
-      content: read
+    name: Validate PR
 
     runs-on: ubuntu-latest
 

@@ -13,10 +13,12 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read # Allow reading contents.
+
 jobs:
   testing:
-    permissions:
-      content: read
+    name: Testing
 
     strategy:
       matrix:
@@ -88,7 +90,7 @@ jobs:
         run: nix develop --command cargo clippy --locked --no-deps --all-targets --all-features
 
       - name: Run cargo build
-        run: nix develop --command cargo build --locked --profile ${{ matrix.profile }} --workspace
+        run: nix develop --command cargo build --locked --profile "${{ matrix.profile }}" --workspace
 
       - name: Run cargo test
-        run: nix develop --command cargo test --locked --profile ${{ matrix.profile }} --workspace
+        run: nix develop --command cargo test --locked --profile "${{ matrix.profile }}" --workspace
