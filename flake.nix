@@ -61,6 +61,10 @@
               protobuf
               # nix
               nixfmt-tree
+              # lint for .github/workflows
+              zizmor
+              # pre commit
+              prek
             ];
 
             env = {
