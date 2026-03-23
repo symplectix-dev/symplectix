@@ -1,16 +1,23 @@
 name: ci
 
 on:
-  workflow_dispatch:
   push:
     branches:
       - main
   pull_request:
     branches:
       - main
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   testing:
+    permissions:
+      content: read
+
     strategy:
       matrix:
         os:
@@ -26,18 +33,20 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
 
       # https://github.com/nixbuild/nix-quick-install-action/blob/master/action.yml
       - name: Setup nix without nix-daemon
-        uses: nixbuild/nix-quick-install-action@v34
+        uses: nixbuild/nix-quick-install-action@2c9db80fb984ceb1bcaa77cdda3fdf8cfba92035 # v34
         with:
           nix_conf: |
             keep-outputs = true
             keep-env-derivations = true
 
       - name: Restore nix store
-        uses: nix-community/cache-nix-action@v7
+        uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7
         with:
           # restore and save a cache using this key.
           primary-key: nix-${{ runner.os }}-${{ hashFiles('**/*.nix', '**/flake.lock') }}
@@ -51,13 +60,13 @@ jobs:
         run: nix flake show
 
       - name: Restore prek cache
-        uses: actions/cache@v5
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
         with:
           path: ~/.cache/prek
           key: prek-${{ hashFiles('.pre-commit-config.yaml') }}
 
       - name: Restore rust cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           # A format string used to format commands to be run, i.e. `rustc` and `cargo`.
           cmd-format: nix develop --command {0}

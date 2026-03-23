@@ -5,10 +5,20 @@ on:
     branches:
       - main
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
+    permissions:
+      content: read
+
     runs-on: ubuntu-latest
+
     steps:
       - name: Title
         run: |
-          [[ "${{ github.event.pull_request.title }}" =~ ^[a-z]{1}[a-z/_-]*:\ [a-z]{1}.*[^.]$ ]]
+          [[ "${GITHUB_EVENT_PULL_REQUEST_TITLE}" =~ ^[a-z]{1}[a-z/_-]*:\ [a-z]{1}.*[^.]$ ]]
+        env:
+          GITHUB_EVENT_PULL_REQUEST_TITLE: ${{ github.event.pull_request.title }}

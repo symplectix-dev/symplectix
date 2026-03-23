@@ -63,6 +63,8 @@
               nixfmt-tree
               # pre commit
               prek
+              # lint for .github/workflows
+              zizmor
             ];
 
             env = {
