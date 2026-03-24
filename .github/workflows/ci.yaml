@@ -81,7 +81,7 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' && matrix.profile == 'release' }}
 
       - name: Run prek
-        run: nix develop --command prek run --show-diff-on-failure --color=always
+        run: nix develop --command prek run --skip no-commit-to-branch --show-diff-on-failure --color=always
 
       - name: Run cargo fmt
         run: nix develop --command cargo fmt --all --check
