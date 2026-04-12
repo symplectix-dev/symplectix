@@ -1,0 +1,7 @@
+module(name = "symplectix")
+
+include("//bazel/bzlmod:bazel_dep.MODULE.bazel")
+include("//bazel/bzlmod:python.MODULE.bazel")
+
+# include("//bazel/bzlmod:bazel_lib.MODULE.bazel")
+# include("//bazel/bzlmod:rust.MODULE.bazel")

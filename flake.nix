@@ -48,10 +48,17 @@
         { pkgs }:
         let
           python = pkgs.python314;
+          bazelisk-as-bazel = pkgs.writeShellScriptBin "bazel" ''
+            exec ${pkgs.bazelisk}/bin/bazelisk $@
+          '';
         in
         {
           default = pkgs.mkShellNoCC {
             packages = with pkgs; [
+              # Bazel
+              bazelisk
+              bazelisk-as-bazel
+              bazel-buildtools
               # GitHub client
               github-cli
               # rust
