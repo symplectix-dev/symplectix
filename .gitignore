@@ -1,13 +1,16 @@
-### Temporary directory
+# Temporary directory
 /tmp
 
-### Direnv
+# Bazel
+/bazel-*
+
+# Direnv
 /.direnv
 
-### Rust
+# Rust
 /target
 
-### Python
+# Python
 .venv
 .mypy_cache
 .ruff_cache
