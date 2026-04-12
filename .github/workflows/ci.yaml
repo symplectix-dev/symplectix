@@ -85,7 +85,7 @@ jobs:
 
       - name: Save bazel cache
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
-        # if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main'
         with:
           path: |
             ~/.cache/bazel
