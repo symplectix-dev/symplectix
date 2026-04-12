@@ -1,0 +1,28 @@
+# Use a directory on the file system as a remote cache.
+# By default, Bazel has a build cache per workspace which keeps only the latest version
+# of any target. Disk cache is useful for sharing build artifacts when switching branches
+# and/or working on multiple workspaces of the same project, such as multiple checkouts.
+common:ci --disk_cache=~/.cache/bazel/disk/
+
+# The repository cache is shared between all workspaces and installed versions of bazel.
+# https://bazel.build/run/build#repository-cache
+common:ci --repository_cache=~/.cache/bazel/repository/
+
+# Collect garbage entries from the disk cache.
+# Bazel does not garbage-collect the directory by default.
+#
+# https://bazel.build/reference/command-line-reference#flag--experimental_disk_cache_gc_max_size
+# https://bazel.build/reference/command-line-reference#flag--experimental_disk_cache_gc_max_age
+common:ci --experimental_disk_cache_gc_max_size=5G
+common:ci --experimental_disk_cache_gc_max_age=5d
+
+# Allow skipping build/test targets on CI.
+common:ci --build_tag_filters=-no-ci
+common:ci --test_tag_filters=-no-ci
+
+# Enable linting.
+# common:ci --config=clippy
+# common:ci --config=rustfmt
+
+# common:ci --config=stable
+# common:ci --config=release
