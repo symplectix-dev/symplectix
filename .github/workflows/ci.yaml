@@ -70,14 +70,27 @@ jobs:
       - name: Restore bazel cache
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
         id: restore-bazel-cache
-        env:
-          cache-name: bazel-cache
         with:
           path: |
             ~/.cache/bazel
             ~/.cache/bazelisk
-          key: ${{ matrix.os }}-${{ env.cache-name }}-${{ github.sha }}
-          restore-keys: ${{ matrix.os }}-${{ env.cache-name }}-
+          key: bazel-${{ matrix.os }}-${{ github.sha }}
+          restore-keys: bazel-${{ matrix.os }}-
+
+      - name: Run bazel build
+        run: nix develop --command bazel build --config=ci //...
+
+      - name: Run bazel test
+        run: nix develop --command bazel test --config=ci //...
+
+      - name: Save bazel cache
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
+        if: github.ref == 'refs/heads/main'
+        with:
+          path: |
+            ~/.cache/bazel
+            ~/.cache/bazelisk
+          key: bazel-${{ matrix.os }}-${{ github.sha }}
 
       - name: Restore rust cache
         uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
@@ -109,18 +122,3 @@ jobs:
 
       - name: Run cargo test
         run: nix develop --command cargo test --locked --profile "${{ matrix.profile }}" --workspace
-
-      - name: Run bazel build
-        run: nix develop --command bazel build --config=ci //...
-
-      - name: Run bazel test
-        run: nix develop --command bazel test --config=ci //...
-
-      - name: Save bazel cache
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
-        if: github.ref == 'refs/heads/main'
-        with:
-          path: |
-            ~/.cache/bazel
-            ~/.cache/bazelisk
-          key: ${{ steps.restore-bazel-cache.outputs.cache-primary-key }}
