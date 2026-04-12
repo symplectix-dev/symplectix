@@ -111,15 +111,16 @@ jobs:
         run: nix develop --command cargo test --locked --profile "${{ matrix.profile }}" --workspace
 
       - name: Run bazel build
-        run: bazel build --config=ci //...
+        run: nix develop --command bazel build --config=ci //...
 
       - name: Run bazel test
-        run: bazel test --config=ci //...
+        run: nix develop --command bazel test --config=ci //...
 
       - name: Save bazel cache
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
         if: github.ref == 'refs/heads/main'
-        path: |
+        with:
+          path: |
             ~/.cache/bazel
             ~/.cache/bazelisk
-        key: ${{ steps.restore-bazel-cache.outputs.cache-primary-key }}
+          key: ${{ steps.restore-bazel-cache.outputs.cache-primary-key }}

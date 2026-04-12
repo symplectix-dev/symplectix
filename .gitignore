@@ -3,6 +3,7 @@
 
 # Bazel
 /bazel-*
+/bazel/bazelrc/user.bazelrc
 
 # Direnv
 /.direnv
