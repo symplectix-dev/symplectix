@@ -52,6 +52,8 @@
         {
           default = pkgs.mkShellNoCC {
             packages = with pkgs; [
+              # GitHub client
+              github-cli
               # rust
               rust-toolchain
               rust-analyzer
