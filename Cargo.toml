@@ -47,7 +47,7 @@ libfuzzer-sys = { version = "0.4" }
 num = { version = "0.4" }
 prost = { version = "0.13" }
 prost-reflect = { version = "0.14" }
-prost-types = { version = "0.13" }
+prost-types = { version = "0.14" }
 quickcheck = { version = "1" }
 quickcheck_macros = { version = "1" }
 rand = { version = "0.10" }
