@@ -51,12 +51,12 @@ jobs:
         uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7
         with:
           # restore and save a cache using this key.
-          primary-key: nix-${{ runner.os }}-${{ hashFiles('**/*.nix', '**/flake.lock') }}
+          primary-key: nix-${{ matrix.os }}-${{ hashFiles('**/*.nix', '**/flake.lock') }}
           # if there's no cache hit, restore a cache by this prefix.
-          restore-prefixes-first-match: nix-${{ runner.os }}-
+          restore-prefixes-first-match: nix-${{ matrix.os }}-
           # perform gc until the nix store size (in bytes) is at most this number
           # before trying to save a new cache.
-          gc-max-store-size-linux: 2G
+          gc-max-store-size-linux: 3G
 
       - name: Show nix flake
         run: nix flake show
@@ -64,7 +64,8 @@ jobs:
       - name: Restore prek cache
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
         with:
-          path: ~/.cache/prek
+          path: |
+            ~/.cache/prek
           key: prek-${{ hashFiles('.pre-commit-config.yaml') }}
 
       - name: Restore bazel cache
