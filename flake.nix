@@ -1,6 +1,8 @@
 {
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/4724d5647207377bede08da3212f809cbd94a648"; # 2026-03-23
+    # To update:
+    # gh api repos/nixos/nixpkgs/commits/nixpkgs-unstable --jq '[.sha, .commit.committer.date[:10]] | join(" # ")'
+    nixpkgs.url = "github:nixos/nixpkgs/cbb5cf358f50aa6acc9efd6113b7bcfbc352cd73"; # 2026-06-06
     fenix = {
       url = "github:nix-community/fenix/monthly";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -61,6 +63,7 @@
               bazel-buildtools
               # GitHub client
               github-cli
+              jq
               # rust
               rust-toolchain
               rust-analyzer
