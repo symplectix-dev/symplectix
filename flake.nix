@@ -82,14 +82,20 @@
             };
 
             shellHook = ''
+              # Anchor to the repo root so paths are correct even when entering the shell
+              # from a different working directory (e.g., `nix develop path/to/symplectix`).
+              _root=$(git rev-parse --show-toplevel)
+
               # Create venv on first entry.
               # Guard the activate so a failed bazel run doesn't break the shell.
-              if [[ ! -d .venv ]]; then
+              if [[ ! -d "$_root/.venv" ]]; then
                 bazel run //:create_venv
               fi
-              if [[ -d .venv ]]; then
-                source .venv/bin/activate
+              if [[ -d "$_root/.venv" ]]; then
+                source "$_root/.venv/bin/activate"
               fi
+
+              unset _root
             '';
           };
         }
