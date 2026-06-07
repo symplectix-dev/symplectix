@@ -82,8 +82,14 @@
             };
 
             shellHook = ''
-              [[ -d .venv ]] || bazel run //:create_venv
-              source .venv/bin/activate
+              # Create venv on first entry.
+              # Guard the activate so a failed bazel run doesn't break the shell.
+              if [[ ! -d .venv ]]; then
+                bazel run //:create_venv
+              fi
+              if [[ -d .venv ]]; then
+                source .venv/bin/activate
+              fi
             '';
           };
         }
