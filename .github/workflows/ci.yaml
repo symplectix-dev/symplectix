@@ -124,7 +124,11 @@ jobs:
         run: cargo clippy --locked --no-deps --all-targets --all-features
 
       - name: Run cargo build
-        run: cargo build --locked --profile "${{ matrix.profile }}" --workspace
+        env:
+          PROFILE: ${{ matrix.profile }}
+        run: cargo build --locked --profile "$PROFILE" --workspace
 
       - name: Run cargo test
-        run: cargo test --locked --profile "${{ matrix.profile }}" --workspace
+        env:
+          PROFILE: ${{ matrix.profile }}
+        run: cargo test --locked --profile "$PROFILE" --workspace
