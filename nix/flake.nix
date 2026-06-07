@@ -84,8 +84,6 @@
               RUST_SRC_PATH = "${pkgs.rust-toolchain}/lib/rustlib/src/rust/library";
             };
 
-            # NOTE: shellHook is skipped by `nix develop --command <cmd>`.
-            # This hook runs only when entering an interactive dev shell.
             shellHook = ''
               # Anchor to the repo root so paths are correct even when entering the shell
               # from a different working directory (e.g., `nix develop path/to/symplectix`).
