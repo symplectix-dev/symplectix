@@ -65,9 +65,7 @@
               rust-toolchain
               rust-analyzer
               # python
-              python
               basedpyright
-              python.pkgs.uv
               python.pkgs.ruff
               # protobuf
               protobuf
@@ -82,6 +80,11 @@
             env = {
               RUST_SRC_PATH = "${pkgs.rust-toolchain}/lib/rustlib/src/rust/library";
             };
+
+            shellHook = ''
+              [[ -d .venv ]] || bazel run //:create_venv
+              source .venv/bin/activate
+            '';
           };
         }
       );

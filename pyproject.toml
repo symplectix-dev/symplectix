@@ -7,7 +7,7 @@ dependencies = [
   "pydantic==2.12",
 ]
 
-[tools.uv]
+[tool.uv]
 python-downloads = "never"
 python-preference = "only-system"
 
