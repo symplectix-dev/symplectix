@@ -49,10 +49,12 @@ def git_rev_count(since: dt.datetime | None) -> int:
         stderr=subprocess.DEVNULL,
         check=True,
     )
-    return status.stdout.rstrip()
+    return int(status.stdout.rstrip())
 
 
 class WorkspaceStatus(BaseModel):
+    """Bazel workspace status used for build stamping."""
+
     year: int = Field(description="")
     week: int = Field(description="")
     rev_count: int = Field(description="")

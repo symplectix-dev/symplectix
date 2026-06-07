@@ -14,6 +14,9 @@ python-preference = "only-system"
 [tool.basedpyright]
 pythonVersion = "3.14"
 typeCheckingMode = "strict"
+venvPath = "."
+venv = ".venv"
+exclude = [".venv", ".direnv", "bazel-*"]
 
 [tool.ruff]
 target-version = "py314"
