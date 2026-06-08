@@ -17,7 +17,13 @@ Otherwise default to `main`.
 
 Follow the Pull requests section of CLAUDE.md.
 
-### 4. Create or update the PR
+### 4. Push the branch
+
+```bash
+git push -u origin HEAD
+```
+
+### 5. Create or update the PR
 
 If no PR exists:
 
@@ -37,4 +43,4 @@ gh pr edit \
   --body "<body>"
 ```
 
-### 5. Return the PR URL
+### 6. Return the PR URL
