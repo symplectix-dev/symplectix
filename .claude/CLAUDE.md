@@ -48,10 +48,11 @@ Body:
 * Bullet points are okay. Typically a hyphen or asterisk is
   used for the bullet, followed by a single space.
   Use a hanging indent.
-* If the PR is related to a GitHub issue, include a reference
-  at the end of the body. Skip this if the issue is unknown.
-  - `Fixes #123` — bug fix; closes the issue on merge.
-  - `Closes #123` — closes the issue on merge.
-  - `Resolves #123` — closes the issue on merge.
-  - `Part of #123` — partial progress; does not close the issue.
-  - `Related to #123` — related but does not close the issue.
+
+Footnotes (optional, skip if the issue is unknown):
+
+* `Fixes #123` — bug fix; closes the issue on merge.
+* `Closes #123` — closes the issue on merge.
+* `Resolves #123` — closes the issue on merge.
+* `Part of #123` — partial progress; does not close the issue.
+* `Related to #123` — related but does not close the issue.
