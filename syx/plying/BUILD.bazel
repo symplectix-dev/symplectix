@@ -12,6 +12,7 @@ rust.library(
 rust.pyo3_extension(
     name = "_plying",
     srcs = ["_plying.rs"],
+    stubs = True,
     deps = [":plying"],
 )
 

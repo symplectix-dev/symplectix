@@ -17,6 +17,8 @@ typeCheckingMode = "strict"
 venvPath = "."
 venv = ".venv"
 exclude = [".venv", ".direnv", "bazel-*"]
+# .pyi stubs but no .py source.
+reportMissingModuleSource = "none"
 
 [tool.ruff]
 target-version = "py314"
