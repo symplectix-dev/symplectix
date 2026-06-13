@@ -1,0 +1,20 @@
+rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
+rust.toolchain(
+    edition = "2024",
+    versions = [
+        "1.92.0",
+        "nightly/2026-01-14",
+    ],
+)
+use_repo(rust, "rust_toolchains")
+
+crate = use_extension(
+    "@rules_rust//crate_universe:extension.bzl",
+    "crate",
+)
+crate.spec(
+    package = "anyhow",
+    version = "1",
+)
+crate.from_specs()
+use_repo(crate, "crates")

@@ -1,0 +1,9 @@
+load("//bazel:rust.bzl", "rust")
+
+rust.library(
+    name = "plying",
+    srcs = glob(
+        ["src/**/*.rs"],
+        exclude = ["src/**/*_test.rs"],
+    ),
+)
