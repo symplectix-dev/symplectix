@@ -1,3 +1,4 @@
+load("@bazel_skylib//rules:diff_test.bzl", "diff_test")
 load("//bazel:py.bzl", "py")
 load("//bazel:rust.bzl", "rust")
 
@@ -14,6 +15,28 @@ rust.pyo3_extension(
     srcs = ["_plying.rs"],
     stubs = True,
     deps = [":plying"],
+)
+
+filegroup(
+    name = "_plying_stubs",
+    srcs = [":_plying"],
+    output_group = "pyo3_type_stubs",
+)
+
+# Rename to avoid runfiles conflict with the checked-in _plying.pyi.
+genrule(
+    name = "_plying_stubs_renamed",
+    srcs = [":_plying_stubs"],
+    outs = ["_plying_generated.pyi"],
+    cmd = "cp $(SRCS) $@",
+)
+
+diff_test(
+    name = "_plying_stubs_test",
+    size = "small",
+    failure_message = "Run: install -m 644 bazel-out/k8-opt/bin/syx/plying/_plying.pyi syx/plying/_plying.pyi",
+    file1 = "_plying.pyi",
+    file2 = ":_plying_stubs_renamed",
 )
 
 py.library(

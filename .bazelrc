@@ -48,5 +48,9 @@ test --test_verbose_timeout_warnings
 # https://bazel.build/docs/user-manual#workspace_status
 # common:stamp --stamp --workspace_status_command=bazel/tools/workspace_status.py
 
+# Always build pyo3 type stubs alongside native extension targets.
+# No-op for targets that don't provide this output group.
+build --output_groups=+pyo3_type_stubs
+
 # Load extra bazel settings if any.
 try-import %workspace%/bazel/bazelrc/user.bazelrc
