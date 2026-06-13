@@ -2,8 +2,6 @@
 # This file is auto-generated. DO NOT EDIT MANUALLY.
 """
 Python bindings for the plying crate.
-
-Exposes composable left fold operations over sequences of integers.
 """
 
 from collections.abc import Sequence
