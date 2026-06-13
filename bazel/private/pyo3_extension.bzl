@@ -22,13 +22,6 @@ def _pyo3_extension_impl(name, visibility, srcs, deps):
 
     # stubs = True embeds PYO3_INTROSPECTION_1_* symbols in the .so,
     # which pyo3-introspection reads to generate the .pyi at build time.
-    # This requires the inline module syntax (#[pymodule] mod name { ... });
-    # the function-based syntax (#[pymodule] fn name(...)) is not supported
-    # as of pyo3 == 0.28.2.
-    #
-    # Note: docstring support in generated stubs requires pyo3 >= 0.29.
-    # Until then, /// doc comments appear at runtime (help(), __doc__) but
-    # are not included in the .pyi file.
     _pyo3_extension(
         name = name,
         srcs = srcs,

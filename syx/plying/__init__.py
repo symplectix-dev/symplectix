@@ -1,5 +1,5 @@
 """Composable left folds."""
 
-from ._plying import sum
+from ._plying import prod, sum
 
-__all__ = ["sum"]
+__all__ = ["prod", "sum"]
