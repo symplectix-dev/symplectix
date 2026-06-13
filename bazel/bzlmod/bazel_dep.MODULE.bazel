@@ -19,14 +19,24 @@ bazel_dep(
 bazel_dep(name = "rules_python", version = "1.9.0")
 bazel_dep(name = "rules_uv", version = "0.89.2")
 
-# # Constraint values for specifying platforms and toolchains
-# # bazel_dep(name = "platforms", version = "1.0.0")
+# Rust rules for Bazel
+rules_rust_version = "0.70.0"
+
+bazel_dep(name = "rules_rust", version = rules_rust_version)
+bazel_dep(name = "rules_rust_pyo3", version = rules_rust_version)
+# bazel_dep(name = "rules_rust_bindgen", version = rules_rust_version)
+# bazel_dep(name = "rules_rust_mdbook", version = rules_rust_version)
+# bazel_dep(name = "rules_rust_prost", version = rules_rust_version)
+# bazel_dep(name = "rules_rust_protobuf", version = rules_rust_version)
+
+# Constraint values for specifying platforms and toolchains
+bazel_dep(name = "platforms", version = "1.0.0")
 
 # # Common functions and rules for Bazel
 # bazel_dep(name = "bazel_skylib", version = "1.9.0")
 
-# # Libraries and rules for constructing rules and BUILD files
-# bazel_dep(name = "aspect_bazel_lib", version = "2.22.5")
+# Libraries and rules for constructing rules and BUILD files
+bazel_dep(name = "aspect_bazel_lib", version = "2.22.5")
 
 # # Rules for creating packages (zip, tar, deb, rpm, ...)
 # # bazel_dep(name = "rules_pkg", version = "1.1.0")
@@ -52,11 +62,3 @@ bazel_dep(name = "rules_uv", version = "0.89.2")
 # # Build rules for interfacing with "foreign" (non-Bazel) build systems
 # # (CMake, configure-make, GNU Make, boost, ninja, Meson).
 # # bazel_dep(name = "rules_foreign_cc", version = "0.14.0")
-
-# # Rust rules for Bazel
-# bazel_dep(name = "rules_rust", version = "0.68.1")
-# # bazel_dep(name = "rules_rust_bindgen", version = rules_rust_version)
-# # bazel_dep(name = "rules_rust_mdbook", version = rules_rust_version)
-# # bazel_dep(name = "rules_rust_pyo3", version = rules_rust_version)
-# # bazel_dep(name = "rules_rust_prost", version = rules_rust_version)
-# # bazel_dep(name = "rules_rust_protobuf", version = rules_rust_version)

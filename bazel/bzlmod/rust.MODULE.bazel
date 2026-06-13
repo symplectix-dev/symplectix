@@ -1,0 +1,105 @@
+register_toolchains(
+    "//bazel/pyo3:toolchain",
+    "//bazel/pyo3:rust_toolchain",
+    # TODO: when rules_rust_pyo3 ships pyo3 0.29+, delete //bazel/pyo3/ and
+    # restore the two @rules_rust_pyo3 entries below.
+    # "@rules_rust_pyo3//toolchains:toolchain",
+    # "@rules_rust_pyo3//toolchains:rust_toolchain",
+)
+
+rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
+rust.toolchain(
+    edition = "2024",
+    versions = [
+        "1.94.1",
+        "nightly/2026-06-10",
+    ],
+)
+use_repo(rust, "rust_toolchains")
+
+crate = use_extension(
+    "@rules_rust//crate_universe:extension.bzl",
+    "crate",
+)
+
+# rules_rust_pyo3 0.70.0 ships pyo3 0.28.2 in its internal rpyo3c crate
+# universe. Override it with 0.29.0 here so that Rust doc comments are
+# included in generated .pyi stubs (added in 0.29).
+#
+# When rules_rust_pyo3 eventually ships 0.29+, this entire block
+# (specs, annotations, and //bazel/pyo3/) can be removed.
+crate.spec(
+    features = [
+        "abi3",
+        "abi3-py314",
+        "extension-module",
+        # experimental-inspect is required by pyo3-introspection for stub generation.
+        "experimental-inspect",
+    ],
+    package = "pyo3",
+    version = "0.29.0",
+)
+crate.spec(
+    package = "pyo3-ffi",
+    version = "0.29.0",
+)
+crate.spec(
+    package = "pyo3-introspection",
+    version = "0.29.0",
+)
+
+# rules_rust_pyo3 0.28.2 applied resolve_cross_compile_config_path patch to
+# pyo3-build-config. It was because pyo3-build-config's build.rs wrote a
+# config file into its OUT_DIR and used env!("OUT_DIR") to embed that absolute
+# sandbox path into the compiled library. When pyo3-ffi's build script called
+# resolve_cross_compile_config_path() to locate the config file, it used that
+# compile-time path, which pointed into a sandbox that no longer existed.
+# The patch changed the function to read OUT_DIR from the environment at runtime
+# so that it resolved to pyo3-ffi's own sandbox instead.
+#
+# PyO3/pyo3#5862 (released in pyo3 0.29.0) removed resolve_cross_compile_config_path
+# and build.rs from pyo3-build-config entirely. pyo3-ffi's build script now calls
+# resolve_build_config() directly, which reads from PYO3_CROSS_* environment
+# variables or the host interpreter -- not from a file path produced by
+# pyo3-build-config. The cross-build-script file dependency that caused the
+# sandbox path bug no longer exists. No patch is needed.
+#
+# https://bazelbuild.github.io/rules_rust/rust_pyo3.html
+# https://github.com/PyO3/pyo3/pull/5862
+
+# @@rules_rust_pyo3+ is the canonical bzlmod repo name for rules_rust_pyo3.
+# @rules_rust_pyo3 cannot be used here because the generated BUILD files for
+# @crates repos are evaluated in a context where rules_rust_pyo3 is not a
+# visible dependency; the canonical @@ form bypasses that restriction.
+#
+# buildifier: disable=canonical-repository
+_current_pyo3_toolchain = "@@rules_rust_pyo3+//:current_pyo3_toolchain"
+
+crate.annotation(
+    build_script_data = [_current_pyo3_toolchain],
+    build_script_env = {
+        "PYO3_CROSS": "$(PYO3_CROSS)",
+        "PYO3_CROSS_LIB_DIR": "$(PYO3_CROSS_LIB_DIR)",
+        "PYO3_CROSS_PYTHON_IMPLEMENTATION": "$(PYO3_CROSS_PYTHON_IMPLEMENTATION)",
+        "PYO3_CROSS_PYTHON_VERSION": "$(PYO3_CROSS_PYTHON_VERSION)",
+        "PYO3_NO_PYTHON": "$(PYO3_NO_PYTHON)",
+        "PYO3_PYTHON": "$(PYO3_PYTHON)",
+    },
+    build_script_toolchains = [_current_pyo3_toolchain],
+    crate = "pyo3-build-config",
+)
+crate.annotation(
+    build_script_data = [_current_pyo3_toolchain],
+    build_script_env = {
+        "PYO3_CROSS": "$(PYO3_CROSS)",
+        "PYO3_CROSS_LIB_DIR": "$(PYO3_CROSS_LIB_DIR)",
+        "PYO3_CROSS_PYTHON_IMPLEMENTATION": "$(PYO3_CROSS_PYTHON_IMPLEMENTATION)",
+        "PYO3_CROSS_PYTHON_VERSION": "$(PYO3_CROSS_PYTHON_VERSION)",
+        "PYO3_NO_PYTHON": "$(PYO3_NO_PYTHON)",
+        "PYO3_PYTHON": "$(PYO3_PYTHON)",
+    },
+    build_script_toolchains = [_current_pyo3_toolchain],
+    crate = "pyo3-ffi",
+)
+crate.from_specs()
+use_repo(crate, "crates")

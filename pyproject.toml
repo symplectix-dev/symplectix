@@ -17,6 +17,8 @@ typeCheckingMode = "strict"
 venvPath = "."
 venv = ".venv"
 exclude = [".venv", ".direnv", "bazel-*"]
+# .pyi stubs but no .py source.
+reportMissingModuleSource = "none"
 
 [tool.ruff]
 target-version = "py314"
@@ -53,7 +55,9 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"__init__.py" = ["F401"]
+"__init__.py" = ["A004", "F401"]
+"*_test.py" = ["D100", "D103", "PLR2004", "S101"]
+"*.pyi" = ["PGH004"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
