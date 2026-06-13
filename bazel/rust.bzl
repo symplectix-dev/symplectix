@@ -7,7 +7,7 @@ load(
     "rust_test",
     "rust_test_suite",
 )
-load("@rules_rust_pyo3//:defs.bzl", "pyo3_extension")
+load("//bazel/private:pyo3_extension.bzl", "pyo3_extension")
 
 # TODO: fuzz test
 # load(

@@ -1,6 +1,5 @@
 load("//bazel:py.bzl", "py")
 load("//bazel:rust.bzl", "rust")
-load("//bazel:util.bzl", "util")
 
 rust.library(
     name = "plying",
@@ -13,30 +12,7 @@ rust.library(
 rust.pyo3_extension(
     name = "_plying",
     srcs = ["_plying.rs"],
-    stubs = True,
     deps = [":plying"],
-)
-
-filegroup(
-    name = "_plying_stubs",
-    srcs = [":_plying"],
-    output_group = "pyo3_type_stubs",
-)
-
-# Rename to avoid runfiles path conflict with the checked-in _plying.pyi.
-# Prepend "# ruff: noqa" so ruff skips this generated file.
-genrule(
-    name = "_plying_stubs_renamed",
-    srcs = [":_plying_stubs"],
-    outs = ["_plying_renamed.pyi"],
-    cmd = "printf '# ruff: noqa\\n# This file is auto-generated. DO NOT EDIT MANUALLY.\\n' | cat - $(SRCS) > $@",
-)
-
-util.write_source_files(
-    name = "_plying_stubs_update",
-    files = {
-        "_plying.pyi": ":_plying_stubs_renamed",
-    },
 )
 
 py.library(
