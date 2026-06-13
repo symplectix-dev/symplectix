@@ -64,17 +64,19 @@ crate.spec(
 # pyo3-build-config. The cross-build-script file dependency that caused the
 # sandbox path bug no longer exists. No patch is needed.
 #
+# https://bazelbuild.github.io/rules_rust/rust_pyo3.html
+# https://github.com/PyO3/pyo3/pull/5862
+
 # @@rules_rust_pyo3+ is the canonical bzlmod repo name for rules_rust_pyo3.
 # @rules_rust_pyo3 cannot be used here because the generated BUILD files for
 # @crates repos are evaluated in a context where rules_rust_pyo3 is not a
 # visible dependency; the canonical @@ form bypasses that restriction.
 #
-# https://bazelbuild.github.io/rules_rust/rust_pyo3.html
-# https://github.com/PyO3/pyo3/pull/5862
+# buildifier: disable=canonical-repository
+_current_pyo3_toolchain = "@@rules_rust_pyo3+//:current_pyo3_toolchain"
+
 crate.annotation(
-    build_script_data = [
-        "@@rules_rust_pyo3+//:current_pyo3_toolchain",
-    ],
+    build_script_data = [_current_pyo3_toolchain],
     build_script_env = {
         "PYO3_CROSS": "$(PYO3_CROSS)",
         "PYO3_CROSS_LIB_DIR": "$(PYO3_CROSS_LIB_DIR)",
@@ -83,15 +85,11 @@ crate.annotation(
         "PYO3_NO_PYTHON": "$(PYO3_NO_PYTHON)",
         "PYO3_PYTHON": "$(PYO3_PYTHON)",
     },
-    build_script_toolchains = [
-        "@@rules_rust_pyo3+//:current_pyo3_toolchain",
-    ],
+    build_script_toolchains = [_current_pyo3_toolchain],
     crate = "pyo3-build-config",
 )
 crate.annotation(
-    build_script_data = [
-        "@@rules_rust_pyo3+//:current_pyo3_toolchain",
-    ],
+    build_script_data = [_current_pyo3_toolchain],
     build_script_env = {
         "PYO3_CROSS": "$(PYO3_CROSS)",
         "PYO3_CROSS_LIB_DIR": "$(PYO3_CROSS_LIB_DIR)",
@@ -100,9 +98,7 @@ crate.annotation(
         "PYO3_NO_PYTHON": "$(PYO3_NO_PYTHON)",
         "PYO3_PYTHON": "$(PYO3_PYTHON)",
     },
-    build_script_toolchains = [
-        "@@rules_rust_pyo3+//:current_pyo3_toolchain",
-    ],
+    build_script_toolchains = [_current_pyo3_toolchain],
     crate = "pyo3-ffi",
 )
 crate.from_specs()
