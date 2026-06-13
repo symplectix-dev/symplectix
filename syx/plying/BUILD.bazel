@@ -1,3 +1,4 @@
+load("//bazel:py.bzl", "py")
 load("//bazel:rust.bzl", "rust")
 
 rust.library(
@@ -6,4 +7,23 @@ rust.library(
         ["src/**/*.rs"],
         exclude = ["src/**/*_test.rs"],
     ),
+)
+
+rust.pyo3_extension(
+    name = "_plying",
+    srcs = ["_plying.rs"],
+    deps = [":plying"],
+)
+
+py.library(
+    name = "plying_py",
+    srcs = ["__init__.py"],
+    deps = [":_plying"],
+)
+
+py.test(
+    name = "plying_test",
+    size = "small",
+    srcs = ["plying_test.py"],
+    deps = [":plying_py"],
 )
