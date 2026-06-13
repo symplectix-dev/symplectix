@@ -9,6 +9,23 @@ rust.library(
     ),
 )
 
+rust.test(
+    name = "plying_test",
+    size = "small",
+    crate = ":plying",
+)
+
+rust.test_suite(
+    name = "plying_test_suite",
+    size = "small",
+    srcs = [
+        "tests/simple.rs",
+        "tests/thread.rs",
+    ],
+    shared_srcs = glob(["tests/helper/*"]),
+    deps = [":plying"],
+)
+
 rust.pyo3_extension(
     name = "_plying",
     srcs = ["_plying.rs"],
@@ -22,8 +39,8 @@ py.library(
 )
 
 py.test(
-    name = "plying_test",
+    name = "plying_py_test",
     size = "small",
-    srcs = ["plying_test.py"],
+    srcs = ["plying_py_test.py"],
     deps = [":plying_py"],
 )
