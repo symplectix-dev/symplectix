@@ -39,8 +39,8 @@ py.library(
 )
 
 py.test(
-    name = "plying_py_test",
+    name = "_plying_test",
     size = "small",
-    srcs = ["plying_py_test.py"],
+    srcs = ["_plying_test.py"],
     deps = [":plying_py"],
 )
