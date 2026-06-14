@@ -72,13 +72,10 @@ common:ci --test_tag_filters=-no-ci
 # common:ci --config=stable
 # common:ci --config=release
 
+# Embeds workspace status (commit SHA, version tag, etc.) into build outputs.
+# Targets depending on STABLE_* keys are rebuilt when the status changes.
 # https://bazel.build/docs/user-manual#workspace_status
-#
-# Use --config=stamp only for release/packaging steps, not for regular builds or tests.
-# Targets depending on STABLE_* keys lose cache hits on every commit.
-# Binaries should not depend on stamp directly; only release scripts should use it.
 common:stamp --stamp --workspace_status_command=$(pwd)/workspace_status.py
-# Enable workspace status stamping on CI.
 common:ci --config=stamp
 
 # Always build pyo3 type stubs alongside native extension targets.
