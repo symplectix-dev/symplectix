@@ -36,6 +36,7 @@ jobs:
     env:
       # Always use colored output.
       CARGO_TERM_COLOR: always
+      BUILDBUDDY_API_KEY: ${{ secrets.BUILDBUDDY_API_KEY }}
 
     steps:
       - name: Checkout
@@ -73,24 +74,46 @@ jobs:
             ~/.cache/prek
           key: prek-${{ hashFiles('.pre-commit-config.yaml') }}
 
+      # Bazel cache strategy:
+      #
+      # disk cache:
+      #   - Stores build artifacts locally, acting as an L1 cache alongside remote cache.
+      #   - Also useful as a fallback when remote cache is unavailable.
+      #   - Keyed on commit SHA; saved on main only to avoid cache churn from PRs.
+      #
+      # remote cache:
+      #   - Enabled when BUILDBUDDY_API_KEY is available.
+      #   - Acts as a shared L2 cache across all CI runs and developers.
+      #   - Stores build action results (CAS + AC) on a remote server.
+      #
+      # repository cache (~/.cache/bazel/repository/, ~/.cache/bazelisk):
+      #   - Stores downloaded files for external dependencies (http_archive, etc.)
+      #     and the Bazel binary itself (bazelisk).
+      #   - Independent of remote cache; remote cache does not cover dependency downloads.
+      #   - Keyed on MODULE.bazel lockfile; stable across branches with the same deps.
+      #   - Saved on all branches (not just main) since the key is content-addressed.
       - name: Setup remote cache for Bazel
         if: ${{ env.BUILDBUDDY_API_KEY != '' }}
         shell: bash
         run: |
           echo "common:remote --remote_header=x-buildbuddy-api-key=$BUILDBUDDY_API_KEY" >> bazel/bazelrc/user.bazelrc
           echo "common --config=remote" >> bazel/bazelrc/user.bazelrc
-        env:
-          BUILDBUDDY_API_KEY: ${{ secrets.BUILDBUDDY_API_KEY }}
+
+      - name: Restore bazel repository cache
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        with:
+          path: |
+            ~/.cache/bazel/repository/
+            ~/.cache/bazelisk
+          key: bazel-repo-${{ matrix.os }}-${{ hashFiles('MODULE.bazel', 'MODULE.bazel.lock') }}
+          restore-keys: bazel-repo-${{ matrix.os }}-
 
       - name: Restore bazel disk cache
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
-        id: restore-bazel-cache
         with:
-          path: |
-            ~/.cache/bazel
-            ~/.cache/bazelisk
-          key: bazel-${{ matrix.os }}-${{ github.sha }}
-          restore-keys: bazel-${{ matrix.os }}-
+          path: ~/.cache/bazel/disk/
+          key: bazel-disk-${{ matrix.os }}-${{ github.sha }}
+          restore-keys: bazel-disk-${{ matrix.os }}-
 
       - name: Run bazel build
         run: bazel build --config=ci //...
@@ -98,14 +121,20 @@ jobs:
       - name: Run bazel test
         run: bazel test --config=ci //...
 
-      - name: Save bazel disk cache
+      - name: Save bazel repository cache
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
-        if: github.ref == 'refs/heads/main'
         with:
           path: |
-            ~/.cache/bazel
+            ~/.cache/bazel/repository/
             ~/.cache/bazelisk
-          key: bazel-${{ matrix.os }}-${{ github.sha }}
+          key: bazel-repo-${{ matrix.os }}-${{ hashFiles('MODULE.bazel', 'MODULE.bazel.lock') }}
+
+      - name: Save bazel disk cache
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        if: ${{ github.ref == 'refs/heads/main' }}
+        with:
+          path: ~/.cache/bazel/disk/
+          key: bazel-disk-${{ matrix.os }}-${{ github.sha }}
 
       - name: Restore rust cache
         uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
