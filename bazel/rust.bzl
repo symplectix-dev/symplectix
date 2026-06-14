@@ -7,8 +7,6 @@ load(
     "rust_test",
     "rust_test_suite",
 )
-load("//bazel/private:pyo3_extension.bzl", "pyo3_extension")
-
 # TODO: fuzz test
 # load(
 #     "//bazel/internal:rust_fuzz_binary.bzl",
@@ -25,6 +23,5 @@ rust = struct(
     doc_test = rust_doc_test,
     test = rust_test,
     test_suite = rust_test_suite,
-    pyo3_extension = pyo3_extension,
     # fuzz_binary = rust_fuzz_binary,
 )

@@ -14,13 +14,7 @@ Prefer ASCII. Avoid non-ASCII characters such as:
 - curly quotes ("“”")
 - ellipses (…)
 
-### Dev environment
+### Directory layout
 
-The shell environment is managed by Nix. Enter it with:
-
-```sh
-nix develop ./nix
-# or, if direnv is configured, just `cd` into the repository.
-```
-
-This activates all the toolchains you need.
+- `crates/`: Rust libraries and binaries
+- `syx/`: Python packages and pyo3 bindings
