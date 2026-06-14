@@ -73,6 +73,15 @@ jobs:
             ~/.cache/prek
           key: prek-${{ hashFiles('.pre-commit-config.yaml') }}
 
+      - name: Setup remote cache for Bazel
+        if: ${{ env.BUILDBUDDY_API_KEY != '' }}
+        shell: bash
+        run: |
+          echo "common:remote --remote_header=x-buildbuddy-api-key=$BUILDBUDDY_API_KEY" >> bazel/bazelrc/user.bazelrc
+          echo "common --config=remote" >> bazel/bazelrc/user.bazelrc
+        env:
+          BUILDBUDDY_API_KEY: ${{ secrets.BUILDBUDDY_API_KEY }}
+
       - name: Restore bazel disk cache
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         id: restore-bazel-cache
