@@ -2,6 +2,7 @@
 
 import %workspace%/bazel/bazelrc/preset.bazelrc
 # import %workspace%/bazel/bazelrc/profile.bazelrc
+import %workspace%/bazel/bazelrc/remote.bazelrc
 import %workspace%/bazel/bazelrc/ci.bazelrc
 
 # Set default value of `allow_empty` to `False` in `glob()`.

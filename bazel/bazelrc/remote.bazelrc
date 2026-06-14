@@ -1,0 +1,26 @@
+# Specifies the base URL where a user can view the information
+# streamed to the BES backend. Bazel will output the URL appended
+# by the invocation id to the terminal.
+build:remote --bes_results_url=https://symplectix.buildbuddy.io/invocation/
+# Specifies the build event service (BES) backend endpoint in
+# the form [SCHEME://]HOST[:PORT]. The default is to disable BES uploads.
+# Supported schemes are grpc and grpcs (grpc with TLS enabled).
+# If no scheme is provided, Bazel assumes grpcs.
+build:remote --bes_backend=grpcs://symplectix.buildbuddy.io
+# Remote cache endpoint.
+common:remote --remote_cache=grpcs://symplectix.buildbuddy.io
+# If enabled, compress/decompress cache blobs with zstd when
+# their size is at least --experimental_remote_cache_compression_threshold.
+common:remote --remote_cache_compression
+# The minimum blob size required to compress/decompress with zstd.
+common:remote --experimental_remote_cache_compression_threshold=100
+# Slims down the size of the JSON profile by merging events
+# if the profile gets too large.
+# Supports boolean values or a size in bytes (e.g. 5M)
+# to start slimming after the profile exceeds that size.
+common:remote --noslim_profile
+# Includes target label in action events' JSON profile data.
+common:remote --experimental_profile_include_target_label
+# Includes the extra "out" attribute in action events
+# that contains the exec path to the action's primary output.
+common:remote --experimental_profile_include_primary_output
