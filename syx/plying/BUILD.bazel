@@ -1,36 +1,4 @@
 load("//bazel:py.bzl", "py")
-load("//bazel:rust.bzl", "rust")
-
-rust.library(
-    name = "plying",
-    srcs = glob(
-        ["src/**/*.rs"],
-        exclude = ["src/**/*_test.rs"],
-    ),
-)
-
-rust.test(
-    name = "plying_test",
-    size = "small",
-    crate = ":plying",
-)
-
-rust.test_suite(
-    name = "plying_test_suite",
-    size = "small",
-    srcs = [
-        "tests/simple.rs",
-        "tests/thread.rs",
-    ],
-    shared_srcs = glob(["tests/helper/*"]),
-    deps = [":plying"],
-)
-
-rust.pyo3_extension(
-    name = "_plying",
-    srcs = ["_plying.rs"],
-    deps = [":plying"],
-)
 
 py.library(
     name = "plying_py",
@@ -38,9 +6,15 @@ py.library(
     deps = [":_plying"],
 )
 
+py.extension(
+    name = "_plying",
+    srcs = ["_plying.rs"],
+    deps = ["//crates/plying"],
+)
+
 py.test(
     name = "_plying_test",
     size = "small",
     srcs = ["_plying_test.py"],
-    deps = [":plying_py"],
+    deps = [":_plying"],
 )

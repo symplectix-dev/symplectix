@@ -1,7 +1,25 @@
 [workspace]
 resolver = "3"
 members = [
-  "crates/*",
+  "crates/bitcomp_core",
+  "crates/bitcomp_poppy",
+  "crates/bitcomp_roaring",
+  "crates/bitcomp_rrr",
+  "crates/bitcomp_slicing",
+  "crates/bitcomp_test",
+  "crates/bitfunnel",
+  "crates/compacts",
+  "crates/faccess",
+  "crates/fenwicktree",
+  "crates/mdcstpp",
+  "crates/protoc_plugin",
+  "crates/shtok",
+  "crates/streamvbyte",
+  "crates/subreaper",
+  "crates/subreaper_test",
+  "crates/testing",
+  "crates/unionfind",
+  "crates/varint",
   "devtool",
 ]
 
