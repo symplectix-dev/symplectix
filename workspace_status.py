@@ -1,14 +1,24 @@
 #!/usr/bin/env python3
-"""Helper to stamp workspace status."""
+"""Helper to stamp workspace status.
+
+```console
+bazel run @rules_python//python/bin:repl --@rules_python//python/bin:repl_dep=@//:workspace_status <<'EOF'
+from workspace_status import _strip_credentials
+print(_strip_credentials("https://user:token@github.com/owner/repo.git"))
+print(_strip_credentials("https://github.com/owner/repo.git"))
+print(_strip_credentials("git@github.com:owner/repo.git"))
+EOF
+```
+"""  # noqa: E501
 
 import datetime as dt
 import os
 import shutil
 import subprocess
 from typing import Literal, overload
+from urllib.parse import urlparse, urlunparse
 
 _GIT = shutil.which("git") or "git"
-_GH = shutil.which("gh") or "gh"
 _NULL_SHA = "0000000000"
 
 
@@ -37,8 +47,14 @@ def _git(*args: str, check: bool = True) -> str | None:
     return _run(_GIT, *args, check=check)
 
 
-def _gh(*args: str) -> str:
-    return _run(_GH, *args)
+def _strip_credentials(url: str) -> str:
+    parsed = urlparse(url)
+    if parsed.username or parsed.password:
+        netloc = parsed.hostname or ""
+        if parsed.port:
+            netloc += f":{parsed.port}"
+        return urlunparse(parsed._replace(netloc=netloc))
+    return url
 
 
 class WorkspaceStatus:
@@ -81,7 +97,8 @@ def _collect(now: dt.datetime) -> WorkspaceStatus:
     if _git("rev-parse", "--git-dir", check=False) is None:
         return WorkspaceStatus(now)
 
-    repo_url = _gh("repo", "view", "--json", "url", "--jq", ".url")
+    remote = _git("remote", "get-url", "origin", check=False)
+    repo_url = _strip_credentials(remote) if remote else None
     branch = _git("rev-parse", "--abbrev-ref", "HEAD")
     commit = _git("rev-parse", "--short=10", "HEAD")
     clean = _git("diff-index", "--quiet", "HEAD", "--", check=False) is not None
