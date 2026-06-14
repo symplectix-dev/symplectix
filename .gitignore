@@ -1,17 +1,9 @@
-# Temporary directory
 /tmp
-
-# Bazel
 /bazel-*
 /bazel/bazelrc/user.bazelrc
-
-# Direnv
 /.direnv
-
-# Rust
 /target
-
-# Python
+.env
 .venv
 .mypy_cache
 .ruff_cache

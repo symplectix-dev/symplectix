@@ -2,7 +2,7 @@
 
 import %workspace%/bazel/bazelrc/preset.bazelrc
 # import %workspace%/bazel/bazelrc/profile.bazelrc
-import %workspace%/bazel/bazelrc/ci.bazelrc
+import %workspace%/bazel/bazelrc/remote.bazelrc
 
 # Set default value of `allow_empty` to `False` in `glob()`.
 #
@@ -45,8 +45,38 @@ test --test_verbose_timeout_warnings
 # build --action_env=CC=clang
 # build --action_env=CXX=clang++
 
+# Use a directory on the file system as a remote cache.
+# By default, Bazel has a build cache per workspace which keeps only the latest version
+# of any target. Disk cache is useful for sharing build artifacts when switching branches
+# and/or working on multiple workspaces of the same project, such as multiple checkouts.
+common:ci --disk_cache=~/.cache/bazel/disk/
+
+# The repository cache is shared between all workspaces and installed versions of bazel.
+# https://bazel.build/run/build#repository-cache
+common:ci --repository_cache=~/.cache/bazel/repository/
+
+# Collect garbage entries from the disk cache.
+# Bazel does not garbage-collect the directory by default.
+#
+# https://bazel.build/reference/command-line-reference#flag--experimental_disk_cache_gc_max_size
+# https://bazel.build/reference/command-line-reference#flag--experimental_disk_cache_gc_max_age
+common:ci --experimental_disk_cache_gc_max_size=2G
+common:ci --experimental_disk_cache_gc_max_age=5d
+
+# Allow skipping build/test targets on CI.
+common:ci --build_tag_filters=-no-ci
+common:ci --test_tag_filters=-no-ci
+
+# common:ci --config=clippy
+# common:ci --config=rustfmt
+# common:ci --config=stable
+# common:ci --config=release
+
+# Embeds workspace status (commit SHA, version tag, etc.) into build outputs.
+# Targets depending on STABLE_* keys are rebuilt when the status changes.
 # https://bazel.build/docs/user-manual#workspace_status
-# common:stamp --stamp --workspace_status_command=bazel/tools/workspace_status.py
+common:stamp --stamp --workspace_status_command=$(pwd)/workspace_status.py
+common:ci --config=stamp
 
 # Always build pyo3 type stubs alongside native extension targets.
 # No-op for targets that don't provide this output group.

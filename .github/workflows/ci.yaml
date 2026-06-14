@@ -1,4 +1,4 @@
-name: ci
+name: CI
 
 on:
   push:
@@ -36,22 +36,23 @@ jobs:
     env:
       # Always use colored output.
       CARGO_TERM_COLOR: always
+      BUILDBUDDY_API_KEY: ${{ secrets.BUILDBUDDY_API_KEY }}
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
 
       # https://github.com/nixbuild/nix-quick-install-action/blob/master/action.yml
-      - name: Setup nix without nix-daemon
+      - name: Install Nix (without nix-daemon)
         uses: nixbuild/nix-quick-install-action@2c9db80fb984ceb1bcaa77cdda3fdf8cfba92035 # v34
         with:
           nix_conf: |
             keep-outputs = true
             keep-env-derivations = true
 
-      - name: Restore nix store
+      - name: Restore Nix store
         uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7
         with:
           # restore and save a cache using this key.
@@ -62,43 +63,78 @@ jobs:
           # before trying to save a new cache.
           gc-max-store-size-linux: 3G
 
-      - name: Show nix flake
+      - name: Show Nix flake
         shell: bash
         run: nix flake show ./nix
 
-      - name: Restore prek cache
+      - name: Restore pre-commit (prek) cache
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
           path: |
             ~/.cache/prek
           key: prek-${{ hashFiles('.pre-commit-config.yaml') }}
 
-      - name: Restore bazel cache
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
-        id: restore-bazel-cache
+      # disk cache:
+      #   - Stores build artifacts locally, acting as an L1 cache alongside remote cache.
+      #   - Also useful as a fallback when remote cache is unavailable.
+      #   - Keyed on commit SHA; saved on main only to avoid cache churn from PRs.
+      #
+      # remote cache:
+      #   - Enabled when BUILDBUDDY_API_KEY is available.
+      #   - Acts as a shared L2 cache across all CI runs and developers.
+      #   - Stores build action results (CAS + AC) on a remote server.
+      #
+      # repository cache:
+      #   - Stores downloaded files for external dependencies (http_archive, etc.)
+      #     and the Bazel binary itself (bazelisk).
+      #   - Independent of remote cache; remote cache does not cover dependency downloads.
+      #   - Keyed on MODULE.bazel lockfile; stable across branches with the same deps.
+      #   - Saved on all branches (not just main) since the key is content-addressed.
+      - name: Enable Bazel remote cache
+        if: ${{ env.BUILDBUDDY_API_KEY != '' }}
+        shell: bash
+        run: |
+          echo "common:remote --remote_header=x-buildbuddy-api-key=$BUILDBUDDY_API_KEY" >> bazel/bazelrc/user.bazelrc
+          echo "common --config=remote" >> bazel/bazelrc/user.bazelrc
+
+      - name: Restore Bazel repository cache
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
           path: |
-            ~/.cache/bazel
+            ~/.cache/bazel/repository/
             ~/.cache/bazelisk
-          key: bazel-${{ matrix.os }}-${{ github.sha }}
-          restore-keys: bazel-${{ matrix.os }}-
+          key: bazel-repo-${{ matrix.os }}-${{ hashFiles('MODULE.bazel', 'MODULE.bazel.lock') }}
+          restore-keys: bazel-repo-${{ matrix.os }}-
 
-      - name: Run bazel build
+      - name: Restore Bazel disk cache
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        with:
+          path: ~/.cache/bazel/disk/
+          key: bazel-disk-${{ matrix.os }}-${{ github.sha }}
+          restore-keys: bazel-disk-${{ matrix.os }}-
+
+      - name: Bazel build
         run: bazel build --config=ci //...
 
-      - name: Run bazel test
+      - name: Bazel test
         run: bazel test --config=ci //...
 
-      - name: Save bazel cache
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
-        if: github.ref == 'refs/heads/main'
+      - name: Save Bazel repository cache
+        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
           path: |
-            ~/.cache/bazel
+            ~/.cache/bazel/repository/
             ~/.cache/bazelisk
-          key: bazel-${{ matrix.os }}-${{ github.sha }}
+          key: bazel-repo-${{ matrix.os }}-${{ hashFiles('MODULE.bazel', 'MODULE.bazel.lock') }}
 
-      - name: Restore rust cache
+      - name: Save Bazel disk cache
+        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        if: ${{ github.ref == 'refs/heads/main' }}
+        with:
+          path: ~/.cache/bazel/disk/
+          key: bazel-disk-${{ matrix.os }}-${{ github.sha }}
+
+      - name: Restore Rust cache
         uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           # A format string used to format commands to be run, i.e. `rustc` and `cargo`.
@@ -111,7 +147,7 @@ jobs:
           # To only cache release builds from `main`.
           save-if: ${{ github.ref == 'refs/heads/main' && matrix.profile == 'release' }}
 
-      - name: Run prek
+      - name: Run pre-commit hooks (prek)
         run: prek run --skip no-commit-to-branch --show-diff-on-failure --color=always
 
       - name: Run cargo fmt

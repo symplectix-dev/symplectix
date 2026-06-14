@@ -1,4 +1,10 @@
+load("//bazel:py.bzl", "py")
 load("//bazel:uv.bzl", "uv")
+
+py.binary(
+    name = "workspace_status",
+    srcs = ["workspace_status.py"],
+)
 
 exports_files([
     "MODULE.bazel",
