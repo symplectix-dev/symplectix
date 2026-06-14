@@ -20,7 +20,6 @@ members = [
   "crates/testing",
   "crates/unionfind",
   "crates/varint",
-  "devtool",
 ]
 
 [workspace.package]

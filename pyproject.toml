@@ -50,6 +50,8 @@ ignore = [
   "INP001",
   # Allow print.
   "T201",
+  # Allow functions with many arguments.
+  "PLR0913",
   # Allow specifying long messages outside the exception class.
   "TRY003",
 ]

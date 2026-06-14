@@ -46,7 +46,7 @@ test --test_verbose_timeout_warnings
 # build --action_env=CXX=clang++
 
 # https://bazel.build/docs/user-manual#workspace_status
-# common:stamp --stamp --workspace_status_command=bazel/tools/workspace_status.py
+common:stamp --stamp --workspace_status_command=$(pwd)/workspace_status.py
 
 # Always build pyo3 type stubs alongside native extension targets.
 # No-op for targets that don't provide this output group.
