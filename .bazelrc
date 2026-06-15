@@ -47,9 +47,10 @@ test --test_verbose_timeout_warnings
 # Override with absolute paths in user.bazelrc for a non-default location:
 #   build --repo_env=HERMETIC_CC_TOOLCHAIN_CACHE_PREFIX=/path/to/cache
 #   build:linux --sandbox_add_mount_pair=/path/to/cache
-build --repo_env=HERMETIC_CC_TOOLCHAIN_CACHE_PREFIX=/tmp/zigcc
+build:linux --repo_env=HERMETIC_CC_TOOLCHAIN_CACHE_PREFIX=/tmp/zigcc
 build:linux --sandbox_add_mount_pair=/tmp/zigcc
 build:linux --sandbox_writable_path=/tmp/zigcc
+build:macos --repo_env=HERMETIC_CC_TOOLCHAIN_CACHE_PREFIX=/var/tmp/zigcc
 build:macos --sandbox_add_mount_pair=/var/tmp/zigcc
 build:macos --sandbox_writable_path=/var/tmp/zigcc
 

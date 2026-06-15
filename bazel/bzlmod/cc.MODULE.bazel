@@ -5,6 +5,7 @@ register_toolchains(
     # used for default builds without --platforms
     "@zig_sdk//toolchain:linux_amd64_gnu.2.17",
     "@zig_sdk//toolchain:linux_arm64_gnu.2.17",
+    "@zig_sdk//toolchain:darwin_amd64",
     "@zig_sdk//toolchain:darwin_arm64",
     # used with --platforms=//bazel/platform:linux_*_gnu.2.17
     "@zig_sdk//libc_aware/toolchain:linux_amd64_gnu.2.17",
