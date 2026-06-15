@@ -15,28 +15,20 @@ platform(
 )
 
 platform(
-    name = "linux_amd64_gnu.2.35",
+    name = "linux_amd64_gnu.2.17",
     constraint_values = [
         "@platforms//os:linux",
         "@platforms//cpu:x86_64",
-        "@zig_sdk//libc:gnu.2.35",
+        "@zig_sdk//libc:gnu.2.17",
     ],
 )
 
 platform(
-    name = "linux_arm64_gnu.2.35",
+    name = "linux_arm64_gnu.2.17",
     constraint_values = [
         "@platforms//os:linux",
         "@platforms//cpu:aarch64",
-        "@zig_sdk//libc:gnu.2.35",
-    ],
-)
-
-platform(
-    name = "macos_arm64",
-    constraint_values = [
-        "@platforms//os:macos",
-        "@platforms//cpu:aarch64",
+        "@zig_sdk//libc:gnu.2.17",
     ],
 )
 
@@ -45,5 +37,13 @@ platform(
     constraint_values = [
         "@platforms//os:macos",
         "@platforms//cpu:x86_64",
+    ],
+)
+
+platform(
+    name = "macos_arm64",
+    constraint_values = [
+        "@platforms//os:macos",
+        "@platforms//cpu:aarch64",
     ],
 )
