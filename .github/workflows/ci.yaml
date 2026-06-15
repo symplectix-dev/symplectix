@@ -118,7 +118,7 @@ jobs:
             # This flag is a startup option and cannot be conditioned on --config=remote
             # (startup:remote is silently ignored by Bazel), so it is written here and only
             # takes effect when this step runs, i.e. when the remote cache is available.
-            echo "startup --experimental_remote_repo_contents_cache"
+            # echo "startup --experimental_remote_repo_contents_cache"
             # Authenticate with the remote cache.
             echo "common:remote --remote_header=x-buildbuddy-api-key=$BUILDBUDDY_API_KEY"
             # Activate the remote config, which enables remote_cache and related flags.

@@ -1,7 +1,49 @@
 module(name = "symplectix")
 
 include("//bazel/bzlmod:bazel_dep.MODULE.bazel")
-include("//bazel/bzlmod:python.MODULE.bazel")
-include("//bazel/bzlmod:rust.MODULE.bazel")
 
-# include("//bazel/bzlmod:bazel_lib.MODULE.bazel")
+zig_sdk = use_extension("@hermetic_cc_toolchain//toolchain:ext.bzl", "toolchains")
+use_repo(zig_sdk, "zig_sdk")
+
+rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
+rust.toolchain(
+    edition = "2024",
+    versions = [
+        "1.94.1",
+        "nightly/2026-06-10",
+    ],
+)
+use_repo(rust, "rust_toolchains")
+
+python = use_extension("@rules_python//python/extensions:python.bzl", "python")
+python.toolchain(
+    python_version = "3.14",
+)
+use_repo(python, "python_3_14")
+
+register_toolchains(
+    # used for default builds without --platforms
+    "@zig_sdk//toolchain:linux_amd64_gnu.2.28",
+    "@zig_sdk//toolchain:linux_arm64_gnu.2.28",
+    "@zig_sdk//toolchain:darwin_amd64",
+    "@zig_sdk//toolchain:darwin_arm64",
+    # used with --platforms=@zig_sdk//libc_aware/platform:linux_<arch>_gnu.<version>
+    "@zig_sdk//libc_aware/toolchain:linux_amd64_gnu.2.28",
+    "@zig_sdk//libc_aware/toolchain:linux_arm64_gnu.2.28",
+    "//bazel/pyo3:toolchain",
+    "//bazel/pyo3:rust_toolchain",
+    # TODO: when rules_rust_pyo3 ships pyo3 0.29+, delete //bazel/pyo3/ and
+    # restore the two @rules_rust_pyo3 entries below.
+    # "@rules_rust_pyo3//toolchains:toolchain",
+    # "@rules_rust_pyo3//toolchains:rust_toolchain",
+)
+
+pip = use_extension("@rules_python//python/extensions:pip.bzl", "pip")
+pip.parse(
+    hub_name = "pypi",
+    python_version = "3.14",
+    requirements_lock = "@//:requirements.txt",
+)
+use_repo(pip, "pypi")
+
+include("//bazel/bzlmod:crate.MODULE.bazel")
