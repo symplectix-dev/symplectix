@@ -28,8 +28,10 @@ def _pyo3_extension_impl(name, visibility, srcs, deps):
         deps = deps,
         stubs = True,
         # Keep .symtab so pyo3_introspection can read PYO3_INTROSPECTION_* symbols.
-        # rules_rust passes -Cstrip=debuginfo in opt mode, which some linkers (e.g.
-        # Zig/lld) interpret aggressively enough to also strip .symtab.
+        # rules_rust passes -Cstrip=debuginfo in opt mode, which Zig/LLD interprets
+        # aggressively enough to also strip .symtab.
+        # --keep-symbol and --export-dynamic-symbol are not in Zig's CC wrapper
+        # allowlist, so -Cstrip=none is the only available workaround for now.
         rustc_flags = ["-Cstrip=none"],
         visibility = visibility,
     )
