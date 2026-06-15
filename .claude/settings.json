@@ -16,6 +16,7 @@
       "Bash(git push -f *)",
       "Bash(git reset --hard*)",
       "Bash(git clean*)",
+      "Read(bazel/bazelrc/user.bazelrc)",
       "Read(.env)"
     ]
   }
