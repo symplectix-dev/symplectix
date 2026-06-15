@@ -1,6 +1,11 @@
 import %workspace%/bazel/bazelrc/preset.bazelrc
 import %workspace%/bazel/bazelrc/remote.bazelrc
 
+# Build metadata is custom key-value string pairs
+# to supply in a build event.
+# https://www.buildbuddy.io/docs/guide-metadata/
+common:ci --build_metadata=ROLE=CI
+
 # Set default value of `allow_empty` to `False` in `glob()`.
 #
 # This prevents a common mistake when attempting to use `glob()` to
