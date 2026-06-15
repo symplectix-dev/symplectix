@@ -29,6 +29,9 @@ bazel_dep(name = "rules_rust_pyo3", version = rules_rust_version)
 # bazel_dep(name = "rules_rust_prost", version = rules_rust_version)
 # bazel_dep(name = "rules_rust_protobuf", version = rules_rust_version)
 
+# Hermetic C/C++ toolchain using Zig-bundled Clang
+bazel_dep(name = "hermetic_cc_toolchain", version = "4.1.0")
+
 # Constraint values for specifying platforms and toolchains
 bazel_dep(name = "platforms", version = "1.0.0")
 

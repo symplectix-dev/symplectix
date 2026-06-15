@@ -47,6 +47,9 @@ test --test_verbose_timeout_warnings
 # build --action_env=CC=clang
 # build --action_env=CXX=clang++
 
+# Required by hermetic_cc_toolchain: Zig uses /tmp for its compilation cache.
+build:linux --sandbox_add_mount_pair=/tmp
+
 # Use a directory on the file system as a remote cache.
 # By default, Bazel has a build cache per workspace which keeps only the latest version
 # of any target. Disk cache is useful for sharing build artifacts when switching branches
