@@ -74,6 +74,13 @@ jobs:
             ~/.cache/prek
           key: prek-${{ hashFiles('.pre-commit-config.yaml') }}
 
+      - name: Create user.bazelrc
+        shell: bash
+        run: |
+          # Apply CI-specific settings to every Bazel invocation without requiring
+          # --config=ci on each command line.
+          echo "common --config=ci" > bazel/bazelrc/user.bazelrc
+
       # Three caches are used in combination.
       #
       # The disk cache stores build action results on the local filesystem. When the remote
@@ -135,10 +142,10 @@ jobs:
           restore-keys: bazel-disk-${{ matrix.os }}-
 
       - name: Bazel build
-        run: bazel build --config=ci //...
+        run: bazel build //...
 
       - name: Bazel test
-        run: bazel test --config=ci //...
+        run: bazel test //...
 
       - name: Save Bazel repository cache
         uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
