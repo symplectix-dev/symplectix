@@ -74,28 +74,56 @@ jobs:
             ~/.cache/prek
           key: prek-${{ hashFiles('.pre-commit-config.yaml') }}
 
-      # disk cache:
-      #   - Stores build artifacts locally, acting as an L1 cache alongside remote cache.
-      #   - Also useful as a fallback when remote cache is unavailable.
-      #   - Keyed on commit SHA; saved on main only to avoid cache churn from PRs.
+      - name: Create user.bazelrc
+        shell: bash
+        run: |
+          # Apply CI-specific settings to every Bazel invocation without requiring
+          # --config=ci on each command line.
+          echo "common --config=ci" > bazel/bazelrc/user.bazelrc
+
+      # Three caches are used in combination.
       #
-      # remote cache:
-      #   - Enabled when BUILDBUDDY_API_KEY is available.
-      #   - Acts as a shared L2 cache across all CI runs and developers.
-      #   - Stores build action results (CAS + AC) on a remote server.
+      # The disk cache stores build action results on the local filesystem. When the remote
+      # cache is also available, Bazel checks the disk cache first and falls back to the
+      # remote cache on a miss, so the disk cache acts as an L1 layer that avoids network
+      # round-trips for recently built targets. When the remote cache is not available,
+      # the disk cache serves as the only persistent store of build artifacts across runs.
+      # It is keyed on commit SHA and saved only from main to avoid cache churn from PRs.
       #
-      # repository cache:
-      #   - Stores downloaded files for external dependencies (http_archive, etc.)
-      #     and the Bazel binary itself (bazelisk).
-      #   - Independent of remote cache; remote cache does not cover dependency downloads.
-      #   - Keyed on MODULE.bazel lockfile; stable across branches with the same deps.
-      #   - Saved on all branches (not just main) since the key is content-addressed.
+      # The repository cache stores raw downloaded archives for external dependencies.
+      # The remote cache complements this with --experimental_remote_repo_contents_cache,
+      # which caches the evaluated result of repository rules.
+      # On a remote hit, repository contents are served from an in-memory filesystem
+      # and files are downloaded only when actually needed, avoiding full extraction.
+      # On a remote miss, the repository cache avoids re-downloading the archive so
+      # the rule can still be re-evaluated without a network fetch. The repository cache
+      # is keyed on the MODULE.bazel lockfile. All branches can read from main's cache,
+      # so saving is restricted to main to avoid accumulating duplicate entries across branches.
+      #
+      # The remote cache stores both build action results and repository rule results,
+      # acting as an L2 cache shared across all CI runs. It is enabled only when
+      # BUILDBUDDY_API_KEY is available. Local results are not uploaded to prevent
+      # cache poisoning.
       - name: Enable Bazel remote cache
         if: ${{ env.BUILDBUDDY_API_KEY != '' }}
         shell: bash
         run: |
-          echo "common:remote --remote_header=x-buildbuddy-api-key=$BUILDBUDDY_API_KEY" >> bazel/bazelrc/user.bazelrc
-          echo "common --config=remote" >> bazel/bazelrc/user.bazelrc
+          {
+            # If enabled, the remote cache will be used to store the results of reproducible
+            # repository rules. If a repository rule needs to be evaluated and its result is
+            # already in the remote cache, the contents of the repository will be kept in an
+            # in-memory file system and are only downloaded when needed, either by Bazel itself
+            # or an action that runs locally.
+            #
+            # This flag is a startup option and cannot be conditioned on --config=remote
+            # (startup:remote is silently ignored by Bazel), so it is written here and only
+            # takes effect when this step runs, i.e. when the remote cache is available.
+            echo "startup --experimental_remote_repo_contents_cache"
+            # Authenticate with the remote cache.
+            echo "common:remote --remote_header=x-buildbuddy-api-key=$BUILDBUDDY_API_KEY"
+            # Activate the remote config, which enables remote_cache and related flags.
+            echo "common --config=remote"
+          } >> bazel/bazelrc/user.bazelrc
 
       - name: Restore Bazel repository cache
         uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
@@ -114,13 +142,17 @@ jobs:
           restore-keys: bazel-disk-${{ matrix.os }}-
 
       - name: Bazel build
-        run: bazel build --config=ci //...
+        run: bazel build //...
 
       - name: Bazel test
-        run: bazel test --config=ci //...
+        run: bazel test //...
 
       - name: Save Bazel repository cache
         uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        # The key is the same across branches when deps are unchanged. Without this restriction,
+        # each branch saves a separate copy of identical content, consuming the 10GB cache budget
+        # with redundant entries. All branches can read from main, so saving only from main suffices.
+        if: ${{ github.ref == 'refs/heads/main' }}
         with:
           path: |
             ~/.cache/bazel/repository/
@@ -129,6 +161,9 @@ jobs:
 
       - name: Save Bazel disk cache
         uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        # Saving only from main avoids filling the 10GB GitHub Actions cache with PR entries.
+        # With remote cache available, disk cache misses on PRs are covered by the remote cache,
+        # so this restriction could be removed to allow exact key hits on re-runs of any branch.
         if: ${{ github.ref == 'refs/heads/main' }}
         with:
           path: ~/.cache/bazel/disk/

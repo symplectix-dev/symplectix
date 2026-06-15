@@ -7,13 +7,18 @@ build:remote --bes_results_url=https://symplectix.buildbuddy.io/invocation/
 # Supported schemes are grpc and grpcs (grpc with TLS enabled).
 # If no scheme is provided, Bazel assumes grpcs.
 build:remote --bes_backend=grpcs://symplectix.buildbuddy.io
-# Remote cache endpoint.
+# A URI of a caching endpoint.
+# https://bazel.build/remote/caching
 common:remote --remote_cache=grpcs://symplectix.buildbuddy.io
 # If enabled, compress/decompress cache blobs with zstd when
 # their size is at least --experimental_remote_cache_compression_threshold.
 common:remote --remote_cache_compression
 # The minimum blob size required to compress/decompress with zstd.
 common:remote --experimental_remote_cache_compression_threshold=100
+# If enabled, large blobs are split into content-defined chunks using FastCDC 2020
+# and uploaded/downloaded in chunks, enabling deduplication across blobs.
+# The server must advertise SplitBlob/SpliceBlob RPCs and FastCDC 2020 parameters in its capabilities.
+common:remote --experimental_remote_cache_chunking
 # Slims down the size of the JSON profile by merging events
 # if the profile gets too large.
 # Supports boolean values or a size in bytes (e.g. 5M)
