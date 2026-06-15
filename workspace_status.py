@@ -99,7 +99,14 @@ def _collect(now: dt.datetime) -> WorkspaceStatus:
 
     remote = _git("remote", "get-url", "origin", check=False)
     repo_url = _strip_credentials(remote) if remote else None
-    branch = _git("rev-parse", "--abbrev-ref", "HEAD")
+    # GITHUB_HEAD_REF is set on pull_request events (the PR's source branch).
+    # GITHUB_REF_NAME is set on push events (the branch or tag name).
+    # Both are unset outside GitHub Actions, so fall back to git.
+    branch = (
+        os.environ.get("GITHUB_HEAD_REF")
+        or os.environ.get("GITHUB_REF_NAME")
+        or _git("rev-parse", "--abbrev-ref", "HEAD")
+    )
     commit = _git("rev-parse", "--short=10", "HEAD")
     clean = _git("diff-index", "--quiet", "HEAD", "--", check=False) is not None
 
