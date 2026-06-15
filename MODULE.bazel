@@ -17,9 +17,9 @@ use_repo(rust, "rust_toolchains")
 
 python = use_extension("@rules_python//python/extensions:python.bzl", "python")
 python.toolchain(
-    python_version = "3.14",
+    python_version = "3.13",
 )
-use_repo(python)
+use_repo(python, "python_3_13")
 
 register_toolchains(
     # used for default builds without --platforms
