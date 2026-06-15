@@ -157,6 +157,9 @@ jobs:
 
       - name: Save Bazel disk cache
         uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        # Saving only from main avoids filling the 10GB GitHub Actions cache with PR entries.
+        # With remote cache available, disk cache misses on PRs are covered by the remote cache,
+        # so this restriction could be removed to allow exact key hits on re-runs of any branch.
         if: ${{ github.ref == 'refs/heads/main' }}
         with:
           path: ~/.cache/bazel/disk/
