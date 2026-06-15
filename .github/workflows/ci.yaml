@@ -97,8 +97,8 @@ jobs:
       # and files are downloaded only when actually needed, avoiding full extraction.
       # On a remote miss, the repository cache avoids re-downloading the archive so
       # the rule can still be re-evaluated without a network fetch. The repository cache
-      # is keyed on the MODULE.bazel lockfile and saved on all branches since the key
-      # is content-addressed.
+      # is keyed on the MODULE.bazel lockfile. All branches can read from main's cache,
+      # so saving is restricted to main to avoid accumulating duplicate entries across branches.
       #
       # The remote cache stores both build action results and repository rule results,
       # acting as an L2 cache shared across all CI runs. It is enabled only when
@@ -149,6 +149,10 @@ jobs:
 
       - name: Save Bazel repository cache
         uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        # The key is the same across branches when deps are unchanged. Without this restriction,
+        # each branch saves a separate copy of identical content, consuming the 10GB cache budget
+        # with redundant entries. All branches can read from main, so saving only from main suffices.
+        if: ${{ github.ref == 'refs/heads/main' }}
         with:
           path: |
             ~/.cache/bazel/repository/
