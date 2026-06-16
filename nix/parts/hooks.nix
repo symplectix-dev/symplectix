@@ -15,6 +15,8 @@
         "\\.pyi$"
         "/testdata/"
       ];
+      # Run heavy checks at pre-push, not pre-commit. Since PRs are squash-merged,
+      # intermediate commits do not need to pass all checks individually.
       default_stages = [ "pre-push" ];
       hooks = {
         no-commit-to-branch = {
@@ -36,11 +38,17 @@
         };
         end-of-file-fixer = {
           enable = true;
-          stages = [ "pre-commit" "pre-push" ];
+          stages = [
+            "pre-commit"
+            "pre-push"
+          ];
         };
         trim-trailing-whitespace = {
           enable = true;
-          stages = [ "pre-commit" "pre-push" ];
+          stages = [
+            "pre-commit"
+            "pre-push"
+          ];
           args = [ "--markdown-linebreak-ext=md" ];
         };
         ruff = {
@@ -58,8 +66,6 @@
         };
         rustfmt = {
           enable = true;
-          packageOverrides.cargo = pkgs.rust-toolchain;
-          packageOverrides.rustfmt = pkgs.rust-toolchain;
           entry = "${pkgs.rust-toolchain}/bin/rustfmt";
           pass_filenames = true;
         };
@@ -93,6 +99,7 @@
         zizmor = {
           enable = true;
           package = pkgs.zizmor;
+          args = [ "--persona" "pedantic" ];
           stages = [ "manual" ];
           raw.groups = [ "no-ci" ];
         };

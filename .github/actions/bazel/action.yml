@@ -1,0 +1,65 @@
+name: Bazel
+description: Build and test with Bazel.
+
+inputs:
+  base-sha:
+    description: Base SHA used to narrow down affected targets.
+    default: ''
+  head-sha:
+    description: Head SHA used to narrow down affected targets.
+    default: ''
+  save-cache:
+    description: Save caches after build ('true' or 'false').
+    default: 'false'
+
+runs:
+  using: composite
+  steps:
+    - name: Restore Bazel repository cache
+      uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+      with:
+        path: |
+          ~/.cache/bazel/repository/
+          ~/.cache/bazelisk
+        key: bazel-repo-${{ runner.os }}-${{ hashFiles('MODULE.bazel', 'MODULE.bazel.lock') }}
+        restore-keys: bazel-repo-${{ runner.os }}-
+
+    - name: Restore Bazel disk cache
+      uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+      with:
+        path: ~/.cache/bazel/disk/
+        key: bazel-disk-${{ runner.os }}-${{ github.sha }}
+        restore-keys: bazel-disk-${{ runner.os }}-
+
+    - name: Pre-build
+      if: ${{ inputs.base-sha != '' }}
+      shell: &nix nix develop ./nix#ci --command bash --noprofile --norc -eo pipefail {0}
+      env:
+        BASE_SHA: ${{ inputs.base-sha }}
+        HEAD_SHA: ${{ inputs.head-sha }}
+      run: |
+        prek run --no-group no-ci --from-ref "$BASE_SHA" --to-ref "$HEAD_SHA" --show-diff-on-failure --color=always
+
+    - name: Build
+      shell: *nix
+      run: bazel build //...
+
+    - name: Test
+      shell: *nix
+      run: bazel test //...
+
+    - name: Save Bazel repository cache
+      if: ${{ inputs.save-cache == 'true' }}
+      uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+      with:
+        path: |
+          ~/.cache/bazel/repository/
+          ~/.cache/bazelisk
+        key: bazel-repo-${{ runner.os }}-${{ hashFiles('MODULE.bazel', 'MODULE.bazel.lock') }}
+
+    - name: Save Bazel disk cache
+      if: ${{ inputs.save-cache == 'true' }}
+      uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+      with:
+        path: ~/.cache/bazel/disk/
+        key: bazel-disk-${{ runner.os }}-${{ github.sha }}

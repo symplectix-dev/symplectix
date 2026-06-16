@@ -1,0 +1,49 @@
+name: Cargo
+description: Build and test with Cargo.
+
+inputs:
+  save-cache:
+    description: Save caches after build ('true' or 'false').
+    default: 'false'
+  profile:
+    description: Cargo build profile.
+    default: release
+
+runs:
+  using: composite
+  steps:
+    - name: Restore Rust cache
+      uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      with:
+        # A format string used to format commands to be run, i.e. `rustc` and `cargo`.
+        cmd-format: nix develop ./nix#ci --command {0}
+        # The prefix cache key, this can be changed to start a new cache manually.
+        prefix-key: "rust-cache-v0"
+        # If `true` the workspace crates will be cached.
+        # Useful if the workspace contains libraries that are only updated sporadically.
+        cache-workspace-crates: "true"
+        save-if: ${{ inputs.save-cache == 'true' && inputs.profile == 'release' }}
+
+    - name: Run cargo fmt
+      shell: &nix nix develop ./nix#ci --command bash --noprofile --norc -eo pipefail {0}
+      run: cargo fmt --all --check
+
+    - name: Run cargo check
+      shell: *nix
+      run: cargo check --locked
+
+    - name: Run cargo clippy
+      shell: *nix
+      run: cargo clippy --locked --no-deps --all-targets --all-features
+
+    - name: Run cargo build
+      shell: *nix
+      env:
+        PROFILE: ${{ inputs.profile }}
+      run: cargo build --locked --profile "$PROFILE" --workspace
+
+    - name: Run cargo test
+      shell: *nix
+      env:
+        PROFILE: ${{ inputs.profile }}
+      run: cargo test --locked --profile "$PROFILE" --workspace

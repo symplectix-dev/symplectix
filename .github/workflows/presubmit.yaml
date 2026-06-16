@@ -1,0 +1,71 @@
+name: Presubmit
+
+on:
+  # Validates the change before it enters the merge queue.
+  pull_request:
+    branches:
+      - main
+  # Validates that the change is safe to merge when combined with other
+  # queued PRs, tested against the virtual main that includes them.
+  merge_group:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read # Allow reading contents.
+
+jobs:
+  pr:
+    name: PR
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate PR title
+        run: |
+          [[ "${GITHUB_EVENT_PULL_REQUEST_TITLE}" =~ ^[a-z]{1}[a-z/_-]*:\ [a-z]{1}.*[^.]$ ]]
+        env:
+          GITHUB_EVENT_PULL_REQUEST_TITLE: ${{ github.event.pull_request.title }}
+
+  check:
+    name: Check
+
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+        profile:
+          - release
+
+    runs-on: ${{ matrix.os }}
+
+    env:
+      # Always use colored output.
+      CARGO_TERM_COLOR: always
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          # fetch-depth: 2 ensures the base SHA is reachable. A PR merge
+          # commit has the base SHA as its direct parent, so depth 2 is sufficient.
+          fetch-depth: 2
+
+      - uses: ./.github/actions/setup
+        with:
+          buildbuddy-api-key: ${{ secrets.BUILDBUDDY_API_KEY }}
+
+      - uses: ./.github/actions/bazel
+        with:
+          base-sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          head-sha: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
+          # Save only from merge_group: the key is content-based, so PRs would create
+          # redundant entries; merge_group builds populate the cache for postsubmit.
+          save-cache: ${{ github.event_name == 'merge_group' }}
+
+      - uses: ./.github/actions/cargo
+        with:
+          profile: ${{ matrix.profile }}
+          save-cache: ${{ github.event_name == 'merge_group' }}

@@ -1,0 +1,55 @@
+name: Postsubmit
+
+on:
+  # Verifies the merged state on main and populates caches. merge_group tests
+  # a virtual merge; this run catches any divergence on the actual commit.
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read # Allow reading contents.
+
+jobs:
+  check:
+    name: Check
+
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+        profile:
+          - release
+
+    runs-on: ${{ matrix.os }}
+
+    env:
+      # Always use colored output.
+      CARGO_TERM_COLOR: always
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+
+      - uses: ./.github/actions/setup
+        with:
+          buildbuddy-api-key: ${{ secrets.BUILDBUDDY_API_KEY }}
+
+      - uses: ./.github/actions/bazel
+        with:
+          base-sha: ${{ github.event.before }}
+          head-sha: ${{ github.sha }}
+          save-cache: 'true'
+
+      - uses: ./.github/actions/cargo
+        with:
+          profile: ${{ matrix.profile }}
+          save-cache: 'true'

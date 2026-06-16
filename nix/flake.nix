@@ -28,8 +28,8 @@
       ];
       imports = [
         inputs.git-hooks.flakeModule
-        ./parts/githook.nix
-        ./parts/devshell.nix
+        ./parts/hooks.nix
+        ./parts/shell.nix
       ];
       perSystem =
         { system, pkgs, ... }:
@@ -73,7 +73,6 @@
                       };
                     };
                   in
-                  if binaries ? ${system} then
                     prev.stdenv.mkDerivation {
                       pname = "prek";
                       inherit version;
@@ -85,9 +84,7 @@
                         install -Dm755 prek $out/bin/prek
                       '';
                       meta.mainProgram = "prek";
-                    }
-                  else
-                    prev.prek;
+                    };
               })
             ];
           };

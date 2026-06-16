@@ -3,15 +3,14 @@
   perSystem =
     { pkgs, config, ... }:
     let
-      python = pkgs.python314;
       bazel = pkgs.writeShellScriptBin "bazel" ''
-        exec ${pkgs.bazelisk}/bin/bazelisk $@
+        exec ${pkgs.bazelisk}/bin/bazelisk "$@"
       '';
     in
     {
+      # Shell settings for interactive use.
       devShells.default = pkgs.mkShellNoCC {
-        # Tools for interactive use in the shell.
-        # Hook packages are managed separately in githook.nix and not included here.
+        # Hook packages are managed separately in hooks.nix and not included here.
         # To also expose hook packages in the shell, prepend:
         #   config.pre-commit.settings.enabledPackages ++
         packages = with pkgs; [
