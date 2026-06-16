@@ -1,4 +1,8 @@
-use super::{Comp, Folding, Xform};
+use super::{
+    Comp,
+    Folding,
+    Xform,
+};
 
 #[derive(Debug)]
 pub struct FilterXf<P> {
