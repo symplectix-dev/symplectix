@@ -97,21 +97,7 @@
               stages = [ "pre-commit" ];
             };
           }
-          // mkHooksWithPriority 10 [ "ci" ] {
-            shellcheck = {
-              args = [ "--severity=warning" ];
-              excludes = [ "\\.envrc$" ];
-            };
-            ruff = {
-              entry = "${pkgs.ruff}/bin/ruff check --diff";
-            };
-            pyright = {
-              package = pkgs.basedpyright;
-              entry = "${pkgs.basedpyright}/bin/basedpyright";
-              pass_filenames = false;
-            };
-          }
-          // mkHooksWithPriority 20 [ "ci" ] {
+          // mkHooksWithPriority 10 [ "ci" "format" ] {
             shfmt = {
               settings.indent = 2;
               settings.language-dialect = "bash";
@@ -123,6 +109,20 @@
             rustfmt = {
               entry = "${pkgs.rust-toolchain}/bin/rustfmt";
               pass_filenames = true;
+            };
+          }
+          // mkHooksWithPriority 20 [ "ci" "lint" ] {
+            shellcheck = {
+              args = [ "--severity=warning" ];
+              excludes = [ "\\.envrc$" ];
+            };
+            ruff = {
+              entry = "${pkgs.ruff}/bin/ruff check --diff";
+            };
+            pyright = {
+              package = pkgs.basedpyright;
+              entry = "${pkgs.basedpyright}/bin/basedpyright";
+              pass_filenames = false;
             };
           }
           // mkCustomHooks [ "ci" ] {
