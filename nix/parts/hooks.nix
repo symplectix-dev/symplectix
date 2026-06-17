@@ -122,7 +122,8 @@
               args = [ "--severity=warning" ];
               excludes = [ "\\.envrc$" ];
             };
-            ruff = {
+            ruff-check = {
+              name = "ruff-check";
               entry = "${pkgs.ruff}/bin/ruff check --diff";
             };
             # TODO: move Python type checking into Bazel.
