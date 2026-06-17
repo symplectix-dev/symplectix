@@ -1,5 +1,5 @@
-name: Bazel
-description: Build and test with Bazel.
+name: Check
+description: Run pre-build checks, build, and test.
 
 inputs:
   base-sha:

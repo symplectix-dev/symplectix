@@ -43,7 +43,7 @@ jobs:
         with:
           buildbuddy-api-key: ${{ secrets.BUILDBUDDY_API_KEY }}
 
-      - uses: ./.github/actions/bazel
+      - uses: ./.github/actions/check
         with:
           base-sha: ${{ github.event.before }}
           head-sha: ${{ github.sha }}
