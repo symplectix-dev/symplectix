@@ -127,9 +127,20 @@
             };
             # TODO: move Python type checking into Bazel.
             pyright = {
+              name = "pyright-all";
               package = pkgs.basedpyright;
               entry = "${pkgs.basedpyright}/bin/basedpyright";
               pass_filenames = false;
+            };
+          }
+          // mkHooksWithPriority 11 [ "no-ci" "lint" ] {
+            pyright-files = {
+              name = "pyright-files";
+              package = pkgs.basedpyright;
+              entry = "${pkgs.basedpyright}/bin/basedpyright";
+              pass_filenames = true;
+              # files = ["\.py$"];
+              types = ["file" "python"];
             };
           };
       };
