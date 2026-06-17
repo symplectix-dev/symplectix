@@ -53,6 +53,12 @@
         # Run heavy checks at pre-push, not pre-commit. Since PRs are squash-merged,
         # intermediate commits do not need to pass all checks individually.
         default_stages = [ "pre-push" ];
+
+        # Prefer `bazel test` over hooks. Bazel provides consistent coverage
+        # across the dependency graph, and its caching makes repeated runs fast.
+        # Hooks are for lightweight checks or tools not (yet) integrated into
+        # Bazel. But of course a hook is better than no check at all: if Bazel
+        # integration is too costly, adding a hook is the right pragmatic choice.
         hooks =
           mkHooks [ "ci" ] {
             end-of-file-fixer = {
@@ -119,17 +125,10 @@
             ruff = {
               entry = "${pkgs.ruff}/bin/ruff check --diff";
             };
+            # TODO: move Python type checking into Bazel.
             pyright = {
               package = pkgs.basedpyright;
               entry = "${pkgs.basedpyright}/bin/basedpyright";
-              pass_filenames = false;
-            };
-          }
-          // mkCustomHooks [ "ci" ] {
-            buildifier = {
-              name = "buildifier";
-              entry = "${pkgs.bazelisk}/bin/bazelisk run //bazel:buildifier";
-              types = [ "bazel" ];
               pass_filenames = false;
             };
           };
