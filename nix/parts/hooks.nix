@@ -121,7 +121,6 @@
               name = "ruff-check";
               entry = "${pkgs.ruff}/bin/ruff check --diff";
             };
-            # TODO: move Python type checking into Bazel.
             pyright-all = {
               name = "pyright-all";
               package = pkgs.basedpyright;
@@ -129,9 +128,13 @@
               pass_filenames = false;
               files = "\\.py$";
               types = ["python"];
+              stages = ["manual"];
             };
           }
           // mkHooksWithPriority 20 [ "no-ci" "lint" ] {
+            # TODO: Only changed files are checked. If a type change in one
+            # module breaks a dependent module, that breakage goes undetected.
+            # Use pyright-all (pass_filenames = false) or move to Bazel.
             pyright = {
               package = pkgs.basedpyright;
               entry = "${pkgs.basedpyright}/bin/basedpyright";

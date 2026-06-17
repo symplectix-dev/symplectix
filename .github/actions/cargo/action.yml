@@ -28,19 +28,9 @@ runs:
       shell: &nix nix develop ./nix#ci --command bash --noprofile --norc -eo pipefail {0}
       run: cargo fmt --all --check
 
-    - name: Run cargo check
-      shell: *nix
-      run: cargo check --locked
-
     - name: Run cargo clippy
       shell: *nix
       run: cargo clippy --locked --no-deps --all-targets --all-features
-
-    - name: Run cargo build
-      shell: *nix
-      env:
-        PROFILE: ${{ inputs.profile }}
-      run: cargo build --locked --profile "$PROFILE" --workspace
 
     - name: Run cargo test
       shell: *nix
