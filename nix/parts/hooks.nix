@@ -109,6 +109,7 @@
             pyright = {
               package = pkgs.basedpyright;
               entry = "${pkgs.basedpyright}/bin/basedpyright";
+              pass_filenames = false;
             };
           }
           // mkHooksWithPriority 20 [ "ci" ] {
@@ -130,7 +131,7 @@
           // mkCustomHooks [ "ci" ] {
             buildifier = {
               name = "buildifier";
-              entry = "${pkgs.bazelisk}/bin/bazelisk test //bazel:buildifier_test";
+              entry = "${pkgs.bazelisk}/bin/bazelisk run //bazel:buildifier";
               types = [ "bazel" ];
               pass_filenames = false;
             };
