@@ -12,11 +12,9 @@
         alwaysEnabled = {
           enable = true;
         };
-        nixManaged = alwaysEnabled // {
-          language = "system";
-        };
 
         withDefaults = defs: builtins.mapAttrs (_: v: defs // v);
+        mkHooks = groups: withDefaults (alwaysEnabled // { raw.groups = groups; });
 
         # Hooks that share the same priority value run concurrently,
         # subject to the global concurrency limit.
@@ -39,9 +37,6 @@
               raw.groups = groups;
             }
           );
-
-        mkHooks = groups: withDefaults (alwaysEnabled // { raw.groups = groups; });
-        mkCustomHooks = groups: withDefaults (nixManaged // { raw.groups = groups; });
       in
       {
         src = ../../.;
@@ -126,20 +121,17 @@
               name = "ruff-check";
               entry = "${pkgs.ruff}/bin/ruff check --diff";
             };
-            # TODO: move Python type checking into Bazel.
             pyright = {
+              package = pkgs.basedpyright;
+              entry = "${pkgs.basedpyright}/bin/basedpyright";
+            };
+            # TODO: move Python type checking into Bazel.
+            pyright-all = {
               name = "pyright-all";
               package = pkgs.basedpyright;
               entry = "${pkgs.basedpyright}/bin/basedpyright";
               pass_filenames = false;
-            };
-          }
-          // mkHooksWithPriority 11 [ "no-ci" "lint" ] {
-            pyright-files = {
-              name = "pyright-files";
-              package = pkgs.basedpyright;
-              entry = "${pkgs.basedpyright}/bin/basedpyright";
-              pass_filenames = true;
+              files = "\\.py$";
               types = ["python"];
             };
           };
