@@ -17,74 +17,80 @@
         nixManaged = {
           language = "system";
         };
+
         mkBuiltinHooks = withDefaults alwaysEnabled;
+        mkBuiltinHooksGroup = priority: withDefaults (alwaysEnabled // { raw.priority = priority; });
+
         mkCustomHooks = withDefaults (alwaysEnabled // nixManaged);
 
-        builtinHooks = mkBuiltinHooks {
-          no-commit-to-branch = {
-            stages = [ "pre-commit" ];
-            raw.groups = [ "no-ci" ];
+        builtinHooks =
+          mkBuiltinHooksGroup 1 {
+            no-commit-to-branch = {
+              stages = [ "pre-commit" ];
+              raw.groups = [ "no-ci" ];
+            };
+            check-added-large-files = {
+              stages = [ "pre-commit" ];
+            };
+            check-case-conflicts = {
+              stages = [ "pre-commit" ];
+            };
+            check-merge-conflicts = {
+              stages = [ "pre-commit" ];
+            };
+          }
+          // mkBuiltinHooks {
+            end-of-file-fixer = {
+              stages = [
+                "pre-commit"
+                "pre-push"
+              ];
+            };
+            trim-trailing-whitespace = {
+              stages = [
+                "pre-commit"
+                "pre-push"
+              ];
+              args = [ "--markdown-linebreak-ext=md" ];
+            };
+            ruff = {
+              package = pkgs.ruff;
+            };
+            ruff-format = {
+              package = pkgs.ruff;
+            };
+            pyright = {
+              package = pkgs.basedpyright;
+              entry = "${pkgs.basedpyright}/bin/basedpyright";
+            };
+            rustfmt = {
+              entry = "${pkgs.rust-toolchain}/bin/rustfmt";
+              pass_filenames = true;
+            };
+            shellcheck = {
+              args = [ "--severity=warning" ];
+              excludes = [ "\\.envrc$" ];
+            };
+            shfmt = {
+              settings.indent = 2;
+              settings.language-dialect = "bash";
+            };
+            clang-format = {
+              types_or = [ "proto" ];
+            };
+            typos = {
+              stages = [ "manual" ];
+              raw.groups = [ "no-ci" ];
+            };
+            zizmor = {
+              args = [
+                "--persona"
+                "pedantic"
+              ];
+              stages = [ "manual" ];
+              raw.groups = [ "no-ci" ];
+            };
           };
-          check-added-large-files = {
-            stages = [ "pre-commit" ];
-          };
-          check-case-conflicts = {
-            stages = [ "pre-commit" ];
-          };
-          check-merge-conflicts = {
-            stages = [ "pre-commit" ];
-          };
-          end-of-file-fixer = {
-            stages = [
-              "pre-commit"
-              "pre-push"
-            ];
-          };
-          trim-trailing-whitespace = {
-            stages = [
-              "pre-commit"
-              "pre-push"
-            ];
-            args = [ "--markdown-linebreak-ext=md" ];
-          };
-          ruff = {
-            package = pkgs.ruff;
-          };
-          ruff-format = {
-            package = pkgs.ruff;
-          };
-          pyright = {
-            package = pkgs.basedpyright;
-            entry = "${pkgs.basedpyright}/bin/basedpyright";
-          };
-          rustfmt = {
-            entry = "${pkgs.rust-toolchain}/bin/rustfmt";
-            pass_filenames = true;
-          };
-          shellcheck = {
-            args = [ "--severity=warning" ];
-            excludes = [ "\\.envrc$" ];
-          };
-          shfmt = {
-            settings.indent = 2;
-            settings.language-dialect = "bash";
-          };
-          clang-format = {
-            types_or = [ "proto" ];
-          };
-          typos = {
-            stages = [ "manual" ];
-            raw.groups = [ "no-ci" ];
-          };
-          zizmor = {
-            args = [
-              "--persona"
-              "pedantic"
-            ];
-            stages = [ "manual" ];
-            raw.groups = [ "no-ci" ];
-          };
-        };
 
         customHooks = mkCustomHooks {
           buildifier = {
