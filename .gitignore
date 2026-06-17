@@ -1,8 +1,11 @@
 /tmp
 /bazel-*
 /bazel/bazelrc/user.bazelrc
-/.direnv
 /target
+
+/.direnv
+/.pre-commit-config.yaml
+
 .env
 .venv
 .mypy_cache
