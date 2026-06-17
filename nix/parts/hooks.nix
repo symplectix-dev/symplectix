@@ -6,10 +6,9 @@
     # `prek run --no-group no-ci` instead.
     pre-commit.check.enable = false;
 
-    # Each hook declares its own package. They are intentionally not shared
-    # with devShells.default so the two can evolve independently.
     pre-commit.settings =
       let
+        noSettings = { };
         alwaysEnabled = {
           enable = true;
         };
@@ -104,7 +103,7 @@
               excludes = [ "\\.envrc$" ];
             };
             ruff = {
-              package = pkgs.ruff;
+              entry = "${pkgs.ruff}/bin/ruff check --diff";
             };
             pyright = {
               package = pkgs.basedpyright;
@@ -117,9 +116,7 @@
               settings.indent = 2;
               settings.language-dialect = "bash";
             };
-            ruff-format = {
-              package = pkgs.ruff;
-            };
+            ruff-format = noSettings;
             clang-format = {
               types_or = [ "proto" ];
             };

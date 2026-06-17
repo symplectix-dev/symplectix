@@ -15,6 +15,7 @@ import datetime as dt
 import os
 import shutil
 import subprocess
+import sys
 from typing import Literal, overload
 from urllib.parse import urlparse, urlunparse
 
