@@ -1,4 +1,4 @@
-module(name = "symplectix")
+module( name = "symplectix")
 
 include("//bazel/bzlmod:bazel_dep.MODULE.bazel")
 
