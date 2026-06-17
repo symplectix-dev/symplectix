@@ -121,10 +121,6 @@
               name = "ruff-check";
               entry = "${pkgs.ruff}/bin/ruff check --diff";
             };
-            pyright = {
-              package = pkgs.basedpyright;
-              entry = "${pkgs.basedpyright}/bin/basedpyright";
-            };
             # TODO: move Python type checking into Bazel.
             pyright-all = {
               name = "pyright-all";
@@ -133,6 +129,12 @@
               pass_filenames = false;
               files = "\\.py$";
               types = ["python"];
+            };
+          }
+          // mkHooksWithPriority 20 [ "no-ci" "lint" ] {
+            pyright = {
+              package = pkgs.basedpyright;
+              entry = "${pkgs.basedpyright}/bin/basedpyright";
             };
           };
       };
