@@ -8,102 +8,104 @@
 
     # Each hook declares its own package. They are intentionally not shared
     # with devShells.default so the two can evolve independently.
-    pre-commit.settings = {
-      src = ../../.;
-      package = pkgs.prek;
-      excludes = [
-        "\\.pyi$"
-        "/testdata/"
-      ];
-      # Run heavy checks at pre-push, not pre-commit. Since PRs are squash-merged,
-      # intermediate commits do not need to pass all checks individually.
-      default_stages = [ "pre-push" ];
-      hooks = {
-        no-commit-to-branch = {
+    pre-commit.settings =
+      let
+        withDefaults = defs: builtins.mapAttrs (_: v: v // defs);
+        alwaysEnabled = {
           enable = true;
-          stages = [ "pre-commit" ];
-          raw.groups = [ "no-ci" ];
         };
-        check-added-large-files = {
-          enable = true;
-          stages = [ "pre-commit" ];
-        };
-        check-case-conflicts = {
-          enable = true;
-          stages = [ "pre-commit" ];
-        };
-        check-merge-conflicts = {
-          enable = true;
-          stages = [ "pre-commit" ];
-        };
-        end-of-file-fixer = {
-          enable = true;
-          stages = [
-            "pre-commit"
-            "pre-push"
-          ];
-        };
-        trim-trailing-whitespace = {
-          enable = true;
-          stages = [
-            "pre-commit"
-            "pre-push"
-          ];
-          args = [ "--markdown-linebreak-ext=md" ];
-        };
-        ruff = {
-          enable = true;
-          package = pkgs.ruff;
-        };
-        ruff-format = {
-          enable = true;
-          package = pkgs.ruff;
-        };
-        pyright = {
-          enable = true;
-          package = pkgs.basedpyright;
-          entry = "${pkgs.basedpyright}/bin/basedpyright";
-        };
-        rustfmt = {
-          enable = true;
-          entry = "${pkgs.rust-toolchain}/bin/rustfmt";
-          pass_filenames = true;
-        };
-        shellcheck = {
-          enable = true;
-          args = [ "--severity=warning" ];
-          excludes = [ "\\.envrc$" ];
-        };
-        shfmt = {
-          enable = true;
-          settings.indent = 2;
-          settings.language-dialect = "bash";
-        };
-        clang-format = {
-          enable = true;
-          types_or = [ "proto" ];
-        };
-        buildifier = {
-          enable = true;
-          name = "buildifier";
-          entry = "${pkgs.bazelisk}/bin/bazelisk run //bazel:buildifier";
-          types = [ "bazel" ];
+        nixManaged = {
           language = "system";
-          pass_filenames = false;
         };
-        typos = {
-          enable = true;
-          stages = [ "manual" ];
-          raw.groups = [ "no-ci" ];
+        mkBuiltinHooks = withDefaults alwaysEnabled;
+        mkCustomHooks = withDefaults (alwaysEnabled // nixManaged);
+
+        builtinHooks = mkBuiltinHooks {
+          no-commit-to-branch = {
+            stages = [ "pre-commit" ];
+            raw.groups = [ "no-ci" ];
+          };
+          check-added-large-files = {
+            stages = [ "pre-commit" ];
+          };
+          check-case-conflicts = {
+            stages = [ "pre-commit" ];
+          };
+          check-merge-conflicts = {
+            stages = [ "pre-commit" ];
+          };
+          end-of-file-fixer = {
+            stages = [
+              "pre-commit"
+              "pre-push"
+            ];
+          };
+          trim-trailing-whitespace = {
+            stages = [
+              "pre-commit"
+              "pre-push"
+            ];
+            args = [ "--markdown-linebreak-ext=md" ];
+          };
+          ruff = {
+            package = pkgs.ruff;
+          };
+          ruff-format = {
+            package = pkgs.ruff;
+          };
+          pyright = {
+            package = pkgs.basedpyright;
+            entry = "${pkgs.basedpyright}/bin/basedpyright";
+          };
+          rustfmt = {
+            entry = "${pkgs.rust-toolchain}/bin/rustfmt";
+            pass_filenames = true;
+          };
+          shellcheck = {
+            args = [ "--severity=warning" ];
+            excludes = [ "\\.envrc$" ];
+          };
+          shfmt = {
+            settings.indent = 2;
+            settings.language-dialect = "bash";
+          };
+          clang-format = {
+            types_or = [ "proto" ];
+          };
+          typos = {
+            stages = [ "manual" ];
+            raw.groups = [ "no-ci" ];
+          };
+          zizmor = {
+            args = [
+              "--persona"
+              "pedantic"
+            ];
+            stages = [ "manual" ];
+            raw.groups = [ "no-ci" ];
+          };
         };
-        zizmor = {
-          enable = true;
-          package = pkgs.zizmor;
-          args = [ "--persona" "pedantic" ];
-          stages = [ "manual" ];
-          raw.groups = [ "no-ci" ];
+
+        customHooks = mkCustomHooks {
+          buildifier = {
+            name = "buildifier";
+            entry = "${pkgs.bazelisk}/bin/bazelisk run //bazel:buildifier";
+            types = [ "bazel" ];
+            pass_filenames = false;
+          };
         };
+      in
+      {
+        src = ../../.;
+        package = pkgs.prek;
+        excludes = [
+          "\\.pyi$"
+          "/testdata/"
+        ];
+        # Run heavy checks at pre-push, not pre-commit. Since PRs are squash-merged,
+        # intermediate commits do not need to pass all checks individually.
+        default_stages = [ "pre-push" ];
+        hooks = builtinHooks // customHooks;
       };
-    };
   };
 }

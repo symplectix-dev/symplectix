@@ -73,18 +73,18 @@
                       };
                     };
                   in
-                    prev.stdenv.mkDerivation {
-                      pname = "prek";
-                      inherit version;
-                      src = prev.fetchurl {
-                        url = "https://github.com/j178/prek/releases/download/v${version}/${binaries.${system}.archive}";
-                        hash = binaries.${system}.hash;
-                      };
-                      installPhase = ''
-                        install -Dm755 prek $out/bin/prek
-                      '';
-                      meta.mainProgram = "prek";
+                  prev.stdenv.mkDerivation {
+                    pname = "prek";
+                    inherit version;
+                    src = prev.fetchurl {
+                      url = "https://github.com/j178/prek/releases/download/v${version}/${binaries.${system}.archive}";
+                      hash = binaries.${system}.hash;
                     };
+                    installPhase = ''
+                      install -Dm755 prek $out/bin/prek
+                    '';
+                    meta.mainProgram = "prek";
+                  };
               })
             ];
           };
