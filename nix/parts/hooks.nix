@@ -10,36 +10,52 @@
     # with devShells.default so the two can evolve independently.
     pre-commit.settings =
       let
-        withDefaults = defs: builtins.mapAttrs (_: v: v // defs);
         alwaysEnabled = {
           enable = true;
         };
-        nixManaged = {
+        nixManaged = alwaysEnabled // {
           language = "system";
         };
 
-        mkBuiltinHooks = withDefaults alwaysEnabled;
-        mkBuiltinHooksGroup = priority: withDefaults (alwaysEnabled // { raw.priority = priority; });
+        withDefaults = defs: builtins.mapAttrs (_: v: defs // v);
 
-        mkCustomHooks = withDefaults (alwaysEnabled // nixManaged);
+        # Hooks that share the same priority value run concurrently,
+        # subject to the global concurrency limit.
+        #
+        # If two hooks run in the same priority group and both mutate the same files
+        # (or depend on shared state), results are undefined.
+        # Use separate priorities to avoid overlap.
+        #
+        # require_serial = true limits a hook to one worker at a time, but other
+        # hooks at the same priority still run alongside it. To isolate a hook
+        # from all others, give it a unique priority.
+        #
+        # https://prek.j178.dev/reference/configuration/#priority
+        mkHooksWithPriority =
+          priority: groups:
+          withDefaults (
+            alwaysEnabled
+            // {
+              raw.priority = priority;
+              raw.groups = groups;
+            }
+          );
 
-        builtinHooks =
-          mkBuiltinHooksGroup 1 {
-            no-commit-to-branch = {
-              stages = [ "pre-commit" ];
-              raw.groups = [ "no-ci" ];
-            };
-            check-added-large-files = {
-              stages = [ "pre-commit" ];
-            };
-            check-case-conflicts = {
-              stages = [ "pre-commit" ];
-            };
-            check-merge-conflicts = {
-              stages = [ "pre-commit" ];
-            };
-          }
-          // mkBuiltinHooks {
+        mkHooks = groups: withDefaults (alwaysEnabled // { raw.groups = groups; });
+        mkCustomHooks = groups: withDefaults (nixManaged // { raw.groups = groups; });
+      in
+      {
+        src = ../../.;
+        package = pkgs.prek;
+        excludes = [
+          "\\.pyi$"
+          "/testdata/"
+        ];
+        # Run heavy checks at pre-push, not pre-commit. Since PRs are squash-merged,
+        # intermediate commits do not need to pass all checks individually.
+        default_stages = [ "pre-push" ];
+        hooks =
+          mkHooks [ "ci" ] {
             end-of-file-fixer = {
               stages = [
                 "pre-commit"
@@ -53,65 +69,72 @@
               ];
               args = [ "--markdown-linebreak-ext=md" ];
             };
-            ruff = {
-              package = pkgs.ruff;
-            };
-            ruff-format = {
-              package = pkgs.ruff;
-            };
-            pyright = {
-              package = pkgs.basedpyright;
-              entry = "${pkgs.basedpyright}/bin/basedpyright";
-            };
-            rustfmt = {
-              entry = "${pkgs.rust-toolchain}/bin/rustfmt";
-              pass_filenames = true;
-            };
-            shellcheck = {
-              args = [ "--severity=warning" ];
-              excludes = [ "\\.envrc$" ];
-            };
-            shfmt = {
-              settings.indent = 2;
-              settings.language-dialect = "bash";
-            };
-            clang-format = {
-              types_or = [ "proto" ];
-            };
-            typos = {
-              stages = [ "manual" ];
-              raw.groups = [ "no-ci" ];
-            };
             zizmor = {
               args = [
                 "--persona"
                 "pedantic"
               ];
               stages = [ "manual" ];
-              raw.groups = [ "no-ci" ];
+            };
+          }
+          // mkHooks [ "no-ci" ] {
+            typos = {
+              stages = [ "manual" ];
+            };
+          }
+          // mkHooksWithPriority 10 [ "no-ci" ] {
+            no-commit-to-branch = {
+              stages = [ "pre-commit" ];
+            };
+          }
+          // mkHooksWithPriority 10 [ "ci" ] {
+            check-added-large-files = {
+              stages = [ "pre-commit" ];
+            };
+            check-case-conflicts = {
+              stages = [ "pre-commit" ];
+            };
+            check-merge-conflicts = {
+              stages = [ "pre-commit" ];
+            };
+          }
+          // mkHooksWithPriority 10 [ "ci" ] {
+            shellcheck = {
+              args = [ "--severity=warning" ];
+              excludes = [ "\\.envrc$" ];
+            };
+            ruff = {
+              package = pkgs.ruff;
+            };
+            pyright = {
+              package = pkgs.basedpyright;
+              entry = "${pkgs.basedpyright}/bin/basedpyright";
+            };
+          }
+          // mkHooksWithPriority 20 [ "ci" ] {
+            shfmt = {
+              settings.indent = 2;
+              settings.language-dialect = "bash";
+            };
+            ruff-format = {
+              package = pkgs.ruff;
+            };
+            clang-format = {
+              types_or = [ "proto" ];
+            };
+            rustfmt = {
+              entry = "${pkgs.rust-toolchain}/bin/rustfmt";
+              pass_filenames = true;
+            };
+          }
+          // mkCustomHooks [ "ci" ] {
+            buildifier = {
+              name = "buildifier";
+              entry = "${pkgs.bazelisk}/bin/bazelisk test //bazel:buildifier_test";
+              types = [ "bazel" ];
+              pass_filenames = false;
             };
           };
-
-        customHooks = mkCustomHooks {
-          buildifier = {
-            name = "buildifier";
-            entry = "${pkgs.bazelisk}/bin/bazelisk run //bazel:buildifier";
-            types = [ "bazel" ];
-            pass_filenames = false;
-          };
-        };
-      in
-      {
-        src = ../../.;
-        package = pkgs.prek;
-        excludes = [
-          "\\.pyi$"
-          "/testdata/"
-        ];
-        # Run heavy checks at pre-push, not pre-commit. Since PRs are squash-merged,
-        # intermediate commits do not need to pass all checks individually.
-        default_stages = [ "pre-push" ];
-        hooks = builtinHooks // customHooks;
       };
   };
 }
