@@ -25,15 +25,15 @@ runs:
         save-if: ${{ inputs.save-cache == 'true' && inputs.profile == 'release' }}
 
     - name: Run cargo fmt
-      shell: &nix nix develop ./nix#ci --command bash --noprofile --norc -eo pipefail {0}
+      shell: nix develop ./nix#ci --command bash --noprofile --norc -eo pipefail {0}
       run: cargo fmt --all --check
 
     - name: Run cargo clippy
-      shell: *nix
+      shell: nix develop ./nix#ci --command bash --noprofile --norc -eo pipefail {0}
       run: cargo clippy --locked --no-deps --all-targets --all-features
 
     - name: Run cargo test
-      shell: *nix
+      shell: nix develop ./nix#ci --command bash --noprofile --norc -eo pipefail {0}
       env:
         PROFILE: ${{ inputs.profile }}
       run: cargo test --locked --profile "$PROFILE" --workspace
