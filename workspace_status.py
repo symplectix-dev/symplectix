@@ -19,8 +19,8 @@ import sys
 from typing import Literal, overload
 from urllib.parse import urlparse, urlunparse
 
-_GIT = shutil.which('git') or 'git'
-_NULL_SHA = '0000000000'
+_GIT = shutil.which("git") or "git"
+_NULL_SHA = "0000000000"
 
 
 @overload
