@@ -122,7 +122,7 @@
               args = [ "--severity=warning" ];
               excludes = [ "\\.envrc$" ];
             };
-            ruff-check = {
+            ruff = {
               name = "ruff-check";
               entry = "${pkgs.ruff}/bin/ruff check --diff";
             };
@@ -140,8 +140,7 @@
               package = pkgs.basedpyright;
               entry = "${pkgs.basedpyright}/bin/basedpyright";
               pass_filenames = true;
-              # files = ["\.py$"];
-              types = ["file" "python"];
+              types = ["python"];
             };
           };
       };
