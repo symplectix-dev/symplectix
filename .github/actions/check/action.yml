@@ -5,6 +5,9 @@ inputs:
   base-sha:
     description: Base SHA used to narrow down affected targets.
     default: ''
+  selective:
+    description: Use bazel-diff to build and test only impacted targets ('true' or 'false').
+    default: 'false'
   save-cache:
     description: Save caches after build ('true' or 'false').
     default: 'false'
@@ -31,7 +34,9 @@ runs:
     - name: Fetch base SHA
       if: ${{ inputs.base-sha != '' }}
       shell: bash
-      run: git fetch --depth=1 origin "${{ inputs.base-sha }}"
+      env:
+        BASE_SHA: ${{ inputs.base-sha }}
+      run: git fetch --depth=1 origin "$BASE_SHA"
 
     - name: Pre-build
       if: ${{ inputs.base-sha != '' }}
@@ -41,13 +46,57 @@ runs:
       run: |
         prek run --group ci --no-group no-ci --from-ref "$BASE_SHA" --show-diff-on-failure --color=always
 
-    - name: Build
+    - name: Compute impacted targets
+      id: impacted-targets
+      if: ${{ inputs.selective == 'true' && inputs.base-sha != '' }}
       shell: nix develop ./nix#ci --command bash --noprofile --norc -eo pipefail {0}
-      run: bazel build //...
+      env:
+        BASE_SHA: ${{ inputs.base-sha }}
+      run: |
+        BAZEL=$(which bazel)
+        git worktree add /tmp/bazel-diff-base "$BASE_SHA"
+        bazel run @bazel-diff//cli:bazel-diff -- generate-hashes \
+          --workspacePath=/tmp/bazel-diff-base \
+          --bazelPath="$BAZEL" \
+          /tmp/base.json
+        git worktree remove --force /tmp/bazel-diff-base
+
+        bazel run @bazel-diff//cli:bazel-diff -- generate-hashes \
+          --workspacePath="$PWD" \
+          --bazelPath="$BAZEL" \
+          /tmp/head.json
+
+        bazel run @bazel-diff//cli:bazel-diff -- get-impacted-targets \
+          --workspacePath="$PWD" \
+          --bazelPath="$BAZEL" \
+          --startingHashes=/tmp/base.json \
+          --finalHashes=/tmp/head.json \
+          --output=/tmp/targets.txt
+
+        mapfile -t targets < /tmp/targets.txt
+        [[ ${#targets[@]} -eq 0 ]] && echo "is-empty=true" >> "$GITHUB_OUTPUT"
+
+    - name: Build
+      if: ${{ !steps.impacted-targets.outputs.is-empty }}
+      shell: nix develop ./nix#ci --command bash --noprofile --norc -eo pipefail {0}
+      run: |
+        if [[ -f /tmp/targets.txt ]]; then
+          mapfile -t targets < /tmp/targets.txt
+          bazel build "${targets[@]}"
+        else
+          bazel build //...
+        fi
 
     - name: Test
+      if: ${{ !steps.impacted-targets.outputs.is-empty }}
       shell: nix develop ./nix#ci --command bash --noprofile --norc -eo pipefail {0}
-      run: bazel test //...
+      run: |
+        if [[ -f /tmp/targets.txt ]]; then
+          mapfile -t targets < /tmp/targets.txt
+          bazel test "${targets[@]}"
+        else
+          bazel test //...
+        fi
 
     - name: Save Bazel repository cache
       if: ${{ inputs.save-cache == 'true' }}

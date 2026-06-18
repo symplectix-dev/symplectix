@@ -5,6 +5,21 @@ bazel_dep(
     dev_dependency = True,
 )
 
+# Bazel target diffing between two git revisions
+bazel_dep(
+    name = "bazel-diff",
+    version = "26.0.1",
+    dev_dependency = True,
+)
+
+# Required to enable pre-built protoc binaries (avoid C++ compilation of protoc,
+# which fails with the Zig/lld toolchain).
+bazel_dep(
+    name = "protobuf",
+    version = "33.4",
+    dev_dependency = True,
+)
+
 # Prebuilt binaries for buildifier and buildozer
 bazel_dep(
     name = "buildifier_prebuilt",
