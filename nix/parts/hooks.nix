@@ -54,9 +54,6 @@
         # Hooks are for lightweight checks or tools not (yet) integrated into
         # Bazel. But of course a hook is better than no check at all: if Bazel
         # integration is too costly, adding a hook is the right pragmatic choice.
-        #
-        # In CI, the "ci" group runs before Bazel caches are restored (for
-        # fail-fast). Hooks in this group must not invoke Bazel.
         hooks =
           mkHooks [ "ci" ] {
             end-of-file-fixer = {

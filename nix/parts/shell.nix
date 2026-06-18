@@ -54,7 +54,16 @@
           prek
         ];
 
-        shellHook = config.pre-commit.shellHook;
+        shellHook = config.pre-commit.shellHook + ''
+          _root=$(git rev-parse --show-toplevel)
+          if [[ ! -d "$_root/.venv" ]]; then
+            bazel run //:create_venv
+          fi
+          if [[ -d "$_root/.venv" ]]; then
+            source "$_root/.venv/bin/activate"
+          fi
+          unset _root
+        '';
       };
     };
 }
