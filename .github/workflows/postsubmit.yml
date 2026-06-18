@@ -1,16 +1,16 @@
 name: Postsubmit
 
 on:
+  workflow_dispatch:
   # Verifies the merged state on main and populates caches. merge_group tests
   # a virtual merge; this run catches any divergence on the actual commit.
   push:
     branches:
       - main
-  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: read # Allow reading contents.
@@ -37,7 +37,6 @@ jobs:
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           persist-credentials: false
-          fetch-depth: 2
 
       - uses: ./.github/actions/setup
         with:
@@ -45,8 +44,8 @@ jobs:
 
       - uses: ./.github/actions/check
         with:
+          # github.event.before is empty on workflow_dispatch.
           base-sha: ${{ github.event.before }}
-          head-sha: ${{ github.sha }}
           save-cache: 'true'
 
       - uses: ./.github/actions/cargo

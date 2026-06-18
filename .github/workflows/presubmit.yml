@@ -28,8 +28,8 @@ jobs:
         env:
           GITHUB_EVENT_PULL_REQUEST_TITLE: ${{ github.event.pull_request.title }}
 
-  check:
-    name: Check
+  ci:
+    name: CI
 
     strategy:
       matrix:
@@ -49,9 +49,6 @@ jobs:
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           persist-credentials: false
-          # fetch-depth: 2 ensures the base SHA is reachable. A PR merge
-          # commit has the base SHA as its direct parent, so depth 2 is sufficient.
-          fetch-depth: 2
 
       - uses: ./.github/actions/setup
         with:
@@ -60,12 +57,7 @@ jobs:
       - uses: ./.github/actions/check
         with:
           base-sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
-          head-sha: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
-          # Save only from merge_group: the key is content-based, so PRs would create
-          # redundant entries; merge_group builds populate the cache for postsubmit.
-          save-cache: ${{ github.event_name == 'merge_group' }}
 
       - uses: ./.github/actions/cargo
         with:
           profile: ${{ matrix.profile }}
-          save-cache: ${{ github.event_name == 'merge_group' }}
