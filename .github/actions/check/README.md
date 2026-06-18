@@ -21,7 +21,7 @@ are generated via a git worktree at the base commit.
 
 ## postsubmit
 
-Builds and tests `//...`. Also saves disk_cache, repository_cache and
+Builds and tests `//...`. Also saves disk cache, repository cache and
 bazel-diff hashes for use by the next presubmit run.
 
 Bazel caches are saved only in postsubmit to prevent short-lived PR branches
