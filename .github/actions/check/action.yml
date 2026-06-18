@@ -5,16 +5,48 @@ inputs:
   base-sha:
     description: Base SHA used to narrow down affected targets.
     default: ''
-  selective:
-    description: Use bazel-diff to build and test only impacted targets ('true' or 'false').
-    default: 'false'
-  save-cache:
-    description: Save caches after build ('true' or 'false').
-    default: 'false'
+  mode:
+    description: "'presubmit' or 'postsubmit'"
 
 runs:
   using: composite
   steps:
+    - name: Validate inputs
+      id: validate-inputs
+      shell: bash
+      env:
+        MODE: ${{ inputs.mode }}
+        BASE_SHA: ${{ inputs.base-sha }}
+      run: |
+        case "$MODE" in
+        postsubmit) ;;
+        presubmit)
+          [[ -n "$BASE_SHA" ]] || { echo "base-sha is required in presubmit mode"; exit 1; }
+          ;;
+        *)
+          echo "mode must be 'presubmit' or 'postsubmit'"; exit 1
+          ;;
+        esac
+        echo "base-sha-short=${BASE_SHA:0:10}"   >> "$GITHUB_OUTPUT"
+        echo "head-sha-short=${GITHUB_SHA:0:10}" >> "$GITHUB_OUTPUT"
+
+    # Skipped on workflow_dispatch where base-sha is empty.
+    - name: Fetch base
+      if: ${{ inputs.base-sha != '' }}
+      shell: bash
+      env:
+        BASE_SHA: ${{ inputs.base-sha }}
+      run: git fetch --depth=1 origin "$BASE_SHA"
+
+    # Runs before Bazel cache restore because pre-build has no Bazel dependency.
+    - name: Pre-build
+      if: ${{ inputs.base-sha != '' }}
+      shell: nix develop ./nix#ci --command bash --noprofile --norc -eo pipefail {0}
+      env:
+        BASE_SHA: ${{ inputs.base-sha }}
+      run: |
+        prek run --group ci --no-group no-ci --from-ref "$BASE_SHA" --show-diff-on-failure --color=always
+
     - name: Restore Bazel repository cache
       uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
       with:
@@ -31,75 +63,97 @@ runs:
         key: bazel-disk-${{ runner.os }}-${{ github.sha }}
         restore-keys: bazel-disk-${{ runner.os }}-
 
-    - name: Fetch base SHA
-      if: ${{ inputs.base-sha != '' }}
+    - name: Run Buildifier
+      shell: nix develop ./nix#ci --command bash --noprofile --norc -eo pipefail {0}
+      run: bazel test //bazel:buildifier_test
+
+    - name: Restore base (${{ steps.validate-inputs.outputs.base-sha-short }}) hashes
+      id: restore-base-hashes
+      if: ${{ inputs.mode == 'presubmit' }}
+      uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+      with:
+        path: ~/.cache/bazel-diff/base.json
+        key: bazel-diff-${{ runner.os }}-${{ inputs.base-sha }}
+
+    - name: Ensure ~/.cache/bazel-diff exists
+      if: ${{ steps.restore-base-hashes.outputs.cache-hit != 'true' }}
       shell: bash
-      env:
-        BASE_SHA: ${{ inputs.base-sha }}
-      run: git fetch --depth=1 origin "$BASE_SHA"
+      run: mkdir -p "$HOME/.cache/bazel-diff"
 
-    - name: Pre-build
-      if: ${{ inputs.base-sha != '' }}
+    - name: Generate base (${{ steps.validate-inputs.outputs.base-sha-short }}) hashes
+      if: ${{ inputs.mode == 'presubmit' && steps.restore-base-hashes.outputs.cache-hit != 'true' }}
       shell: nix develop ./nix#ci --command bash --noprofile --norc -eo pipefail {0}
       env:
         BASE_SHA: ${{ inputs.base-sha }}
       run: |
-        prek run --group ci --no-group no-ci --from-ref "$BASE_SHA" --show-diff-on-failure --color=always
-
-    - name: Compute impacted targets
-      id: impacted-targets
-      if: ${{ inputs.selective == 'true' && inputs.base-sha != '' }}
-      shell: nix develop ./nix#ci --command bash --noprofile --norc -eo pipefail {0}
-      env:
-        BASE_SHA: ${{ inputs.base-sha }}
-      run: |
-        BAZEL=$(which bazel)
-        git worktree add /tmp/bazel-diff-base "$BASE_SHA"
+        git worktree add "$HOME/.cache/bazel-diff/base" "$BASE_SHA"
         bazel run @bazel-diff//cli:bazel-diff -- generate-hashes \
-          --workspacePath=/tmp/bazel-diff-base \
-          --bazelPath="$BAZEL" \
-          /tmp/base.json
-        git worktree remove --force /tmp/bazel-diff-base
+          --workspacePath="$HOME/.cache/bazel-diff/base" \
+          --bazelPath="$(which bazel)" \
+          "$HOME/.cache/bazel-diff/base.json"
+        git worktree remove --force "$HOME/.cache/bazel-diff/base"
 
+    - name: Generate head (${{ steps.validate-inputs.outputs.head-sha-short }}) hashes
+      shell: nix develop ./nix#ci --command bash --noprofile --norc -eo pipefail {0}
+      run: |
         bazel run @bazel-diff//cli:bazel-diff -- generate-hashes \
           --workspacePath="$PWD" \
-          --bazelPath="$BAZEL" \
+          --bazelPath="$(which bazel)" \
           /tmp/head.json
 
+    - name: Stage head (${{ steps.validate-inputs.outputs.head-sha-short }}) hashes as base
+      if: ${{ inputs.mode == 'postsubmit' }}
+      shell: bash
+      run: cp /tmp/head.json "$HOME/.cache/bazel-diff/base.json"
+
+    # Sets is-empty=true when no targets are affected, skipping Build and Test.
+    - name: Compute impacted targets
+      id: impacted-targets
+      if: ${{ inputs.mode == 'presubmit' }}
+      shell: nix develop ./nix#ci --command bash --noprofile --norc -eo pipefail {0}
+      run: |
         bazel run @bazel-diff//cli:bazel-diff -- get-impacted-targets \
           --workspacePath="$PWD" \
-          --bazelPath="$BAZEL" \
-          --startingHashes=/tmp/base.json \
+          --bazelPath="$(which bazel)" \
+          --startingHashes="$HOME/.cache/bazel-diff/base.json" \
           --finalHashes=/tmp/head.json \
           --output=/tmp/targets.txt
 
         mapfile -t targets < /tmp/targets.txt
-        [[ ${#targets[@]} -eq 0 ]] && echo "is-empty=true" >> "$GITHUB_OUTPUT"
+        if [[ ${#targets[@]} -eq 0 ]]; then
+          echo "No impacted targets. Skipping build and test."
+          echo "is-empty=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "Impacted targets (${#targets[@]}):"
+          printf '  %s\n' "${targets[@]}"
+        fi
+
+    # Saved before Build/Test so the cache is populated even if the build fails.
+    - name: Save head (${{ steps.validate-inputs.outputs.head-sha-short }}) hashes
+      if: ${{ inputs.mode == 'postsubmit' }}
+      uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+      with:
+        path: ~/.cache/bazel-diff/base.json
+        key: bazel-diff-${{ runner.os }}-${{ github.sha }}
 
     - name: Build
       if: ${{ !steps.impacted-targets.outputs.is-empty }}
       shell: nix develop ./nix#ci --command bash --noprofile --norc -eo pipefail {0}
       run: |
-        if [[ -f /tmp/targets.txt ]]; then
-          mapfile -t targets < /tmp/targets.txt
-          bazel build "${targets[@]}"
-        else
-          bazel build //...
-        fi
+        targets=(//...)
+        [[ -f /tmp/targets.txt ]] && mapfile -t targets < /tmp/targets.txt
+        bazel build "${targets[@]}"
 
     - name: Test
       if: ${{ !steps.impacted-targets.outputs.is-empty }}
       shell: nix develop ./nix#ci --command bash --noprofile --norc -eo pipefail {0}
       run: |
-        if [[ -f /tmp/targets.txt ]]; then
-          mapfile -t targets < /tmp/targets.txt
-          bazel test "${targets[@]}"
-        else
-          bazel test //...
-        fi
+        targets=(//...)
+        [[ -f /tmp/targets.txt ]] && mapfile -t targets < /tmp/targets.txt
+        bazel test "${targets[@]}"
 
     - name: Save Bazel repository cache
-      if: ${{ inputs.save-cache == 'true' }}
+      if: ${{ inputs.mode == 'postsubmit' }}
       uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
       with:
         path: |
@@ -108,7 +162,7 @@ runs:
         key: bazel-repo-${{ runner.os }}-${{ hashFiles('MODULE.bazel', 'MODULE.bazel.lock') }}
 
     - name: Save Bazel disk cache
-      if: ${{ inputs.save-cache == 'true' }}
+      if: ${{ inputs.mode == 'postsubmit' }}
       uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
       with:
         path: ~/.cache/bazel/disk/
