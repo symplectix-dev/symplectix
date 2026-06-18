@@ -104,8 +104,10 @@
               settings.language-dialect = "bash";
             };
             ruff-format = noSettings;
-            clang-format = {
-              types_or = [ "proto" ];
+            buf-format = {
+              name = "buf-format";
+              entry = "${pkgs.buf}/bin/buf format -w";
+              types = [ "proto" ];
             };
             rustfmt = {
               entry = "${pkgs.rust-toolchain}/bin/rustfmt";

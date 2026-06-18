@@ -6,55 +6,55 @@ import "google/protobuf/any.proto";
 import "google/protobuf/empty.proto";
 
 message Customer {
-    message Id {
-        message Email {
-            string address = 1;
-        }
-
-        message Phone {
-            string number = 1;
-
-            enum PhoneType {
-                UNKNOWN = 0;
-                MOBILE = 1;
-                HOME = 2;
-                WORK = 3;
-            }
-            PhoneType type = 2;
-        }
-
-        oneof id {
-            int32 uid = 1;
-            Email email = 2;
-            Phone phone = 3;
-        }
+  message Id {
+    message Email {
+      string address = 1;
     }
 
-    repeated Id ids = 1;
+    message Phone {
+      string number = 1;
 
-    enum Type {
+      enum PhoneType {
         UNKNOWN = 0;
-        A = 1;
-        B = 2;
+        MOBILE = 1;
+        HOME = 2;
+        WORK = 3;
+      }
+      PhoneType type = 2;
     }
-    Type type = 2;
 
-    google.protobuf.Any payload = 3;
+    oneof id {
+      int32 uid = 1;
+      Email email = 2;
+      Phone phone = 3;
+    }
+  }
 
-    int32 i32 = 4;
-    int64 i64 = 5;
+  repeated Id ids = 1;
 
-    repeated Review reviews = 6;
+  enum Type {
+    UNKNOWN = 0;
+    A = 1;
+    B = 2;
+  }
+  Type type = 2;
 
-    reserved 100 to max;
+  google.protobuf.Any payload = 3;
+
+  int32 i32 = 4;
+  int64 i64 = 5;
+
+  repeated Review reviews = 6;
+
+  reserved 100 to max;
 }
 
 message Product {
-    int32 id = 1;
+  int32 id = 1;
 }
 
 message Review {
-    int32 id = 1;
-    Product product = 2;
-    optional google.protobuf.Empty empty = 3;
+  int32 id = 1;
+  Product product = 2;
+  optional google.protobuf.Empty empty = 3;
 }
