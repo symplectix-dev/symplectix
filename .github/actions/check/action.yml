@@ -119,7 +119,9 @@ runs:
           --bazelPath="$(which bazel)" \
           --startingHashes="$HOME/.cache/bazel-diff/base.json" \
           --finalHashes=/tmp/head.json \
-          --output=/tmp/targets.txt
+          --output=/tmp/impacted.txt
+
+        bazel query "kind(rule, set($(tr '\n' ' ' < /tmp/impacted.txt)))" > /tmp/targets.txt
 
         mapfile -t targets < /tmp/targets.txt
         if [[ ${#targets[@]} -eq 0 ]]; then
