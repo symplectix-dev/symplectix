@@ -43,6 +43,11 @@ common --sandbox_fake_username
 # ETERNAL or LONG as these are much, much too generous.
 test --test_verbose_timeout_warnings
 
+# Use pre-built protoc binaries instead of building protobuf from source.
+# This avoids C++ compilation of protoc, which fails with the Zig/lld toolchain
+# due to lld's --gc-sections behavior with __start_/__stop_ symbols.
+build --@protobuf//bazel/toolchains:prefer_prebuilt_protoc
+
 # Required by hermetic_cc_toolchain: Zig needs a writable cache directory.
 # Override with absolute paths in user.bazelrc for a non-default location:
 #   build --repo_env=HERMETIC_CC_TOOLCHAIN_CACHE_PREFIX=/path/to/cache

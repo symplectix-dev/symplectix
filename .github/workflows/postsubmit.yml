@@ -7,6 +7,10 @@ on:
   push:
     branches:
       - main
+  # Runs the full build weekly as a safety net in case selective build in
+  # presubmit missed affected targets.
+  schedule:
+    - cron: '0 21 * * 0'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -16,8 +20,8 @@ permissions:
   contents: read # Allow reading contents.
 
 jobs:
-  check:
-    name: Check
+  ci:
+    name: CI
 
     strategy:
       matrix:
@@ -46,7 +50,7 @@ jobs:
         with:
           # github.event.before is empty on workflow_dispatch.
           base-sha: ${{ github.event.before }}
-          save-cache: 'true'
+          mode: postsubmit
 
       - uses: ./.github/actions/cargo
         with:

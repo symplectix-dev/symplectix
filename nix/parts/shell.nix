@@ -6,6 +6,17 @@
       bazel = pkgs.writeShellScriptBin "bazel" ''
         exec ${pkgs.bazelisk}/bin/bazelisk "$@"
       '';
+
+      venvHook = ''
+        _root=$(${pkgs.git}/bin/git rev-parse --show-toplevel)
+        if [[ ! -d "$_root/.venv" ]]; then
+          ${bazel}/bin/bazel run //:create_venv
+        fi
+        if [[ -d "$_root/.venv" ]]; then
+          source "$_root/.venv/bin/activate"
+        fi
+        unset _root
+      '';
     in
     {
       # Shell settings for interactive use.
@@ -29,20 +40,9 @@
           RUST_SRC_PATH = "${pkgs.rust-toolchain}/lib/rustlib/src/rust/library";
         };
 
-        shellHook = config.pre-commit.shellHook + ''
-          # Anchor to the repo root so paths are correct even when entering the shell
-          # from a different working directory (e.g., `nix develop path/to/symplectix`).
-          _root=$(git rev-parse --show-toplevel)
-
-          # Guard the activate so a failed bazel run doesn't break the shell.
-          if [[ ! -d "$_root/.venv" ]]; then
-            bazel run //:create_venv
-          fi
-          if [[ -d "$_root/.venv" ]]; then
-            source "$_root/.venv/bin/activate"
-          fi
-
-          unset _root
+        shellHook = ''
+          ${config.pre-commit.shellHook}
+          ${venvHook}
         '';
       };
 
@@ -54,7 +54,10 @@
           prek
         ];
 
-        shellHook = config.pre-commit.shellHook;
+        shellHook = ''
+          ${config.pre-commit.shellHook}
+          ${venvHook}
+        '';
       };
     };
 }

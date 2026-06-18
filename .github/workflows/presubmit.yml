@@ -57,6 +57,7 @@ jobs:
       - uses: ./.github/actions/check
         with:
           base-sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          mode: presubmit
 
       - uses: ./.github/actions/cargo
         with:
