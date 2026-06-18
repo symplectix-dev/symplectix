@@ -46,7 +46,6 @@ jobs:
         with:
           # github.event.before is empty on workflow_dispatch.
           base-sha: ${{ github.event.before }}
-          head-sha: ${{ github.sha }}
           save-cache: 'true'
 
       - uses: ./.github/actions/cargo

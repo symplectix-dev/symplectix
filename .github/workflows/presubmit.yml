@@ -57,7 +57,6 @@ jobs:
       - uses: ./.github/actions/check
         with:
           base-sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
-          head-sha: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
 
       - uses: ./.github/actions/cargo
         with:
