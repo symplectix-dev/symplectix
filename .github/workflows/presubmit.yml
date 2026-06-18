@@ -28,8 +28,8 @@ jobs:
         env:
           GITHUB_EVENT_PULL_REQUEST_TITLE: ${{ github.event.pull_request.title }}
 
-  check:
-    name: Check
+  ci:
+    name: CI
 
     strategy:
       matrix:
@@ -61,11 +61,7 @@ jobs:
         with:
           base-sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
           head-sha: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
-          # Save only from merge_group: the key is content-based, so PRs would create
-          # redundant entries; merge_group builds populate the cache for postsubmit.
-          save-cache: ${{ github.event_name == 'merge_group' }}
 
       - uses: ./.github/actions/cargo
         with:
           profile: ${{ matrix.profile }}
-          save-cache: ${{ github.event_name == 'merge_group' }}

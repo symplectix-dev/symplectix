@@ -1,12 +1,12 @@
 name: Postsubmit
 
 on:
+  workflow_dispatch:
   # Verifies the merged state on main and populates caches. merge_group tests
   # a virtual merge; this run catches any divergence on the actual commit.
   push:
     branches:
       - main
-  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -33,11 +33,18 @@ jobs:
       CARGO_TERM_COLOR: always
 
     steps:
+      - name: Compute fetch depth
+        env:
+          COMMITS: ${{ toJSON(github.event.commits) }}
+        run: |
+          count=$(echo "$COMMITS" | jq 'if . == null then 0 else length end')
+          echo "FETCH_DEPTH=$((count + 1))" >> "$GITHUB_ENV"
+
       - name: Checkout repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           persist-credentials: false
-          fetch-depth: 2
+          fetch-depth: ${{ env.FETCH_DEPTH }}
 
       - uses: ./.github/actions/setup
         with:
@@ -45,6 +52,7 @@ jobs:
 
       - uses: ./.github/actions/check
         with:
+          # github.event.before is empty on workflow_dispatch.
           base-sha: ${{ github.event.before }}
           head-sha: ${{ github.sha }}
           save-cache: 'true'
