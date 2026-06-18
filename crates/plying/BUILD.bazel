@@ -3,6 +3,7 @@ load("//bazel:rust.bzl", "rust")
 rust.library(
     name = "plying",
     srcs = [
+        "src/util.rs",
         "src/beginning.rs",
         "src/completing.rs",
         "src/filter.rs",
