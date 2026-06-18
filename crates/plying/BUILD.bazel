@@ -12,7 +12,6 @@ rust.library(
         "src/par.rs",
         "src/seq.rs",
         "src/take.rs",
-        "src/util.rs",
         "src/xf/comp.rs",
         "src/xf/filter.rs",
         "src/xf/identity.rs",

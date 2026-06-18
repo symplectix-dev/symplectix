@@ -1,11 +1,5 @@
 load("//bazel:py.bzl", "py")
 
-py.binary(
-    name = "main",
-    srcs = ["main.py"],
-    deps = [":plying"],
-)
-
 py.library(
     name = "plying",
     srcs = ["__init__.py"],
