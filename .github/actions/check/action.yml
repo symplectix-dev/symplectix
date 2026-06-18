@@ -27,7 +27,11 @@ runs:
           echo "mode must be 'presubmit' or 'postsubmit'"; exit 1
           ;;
         esac
-        echo "base-sha-short=${BASE_SHA:0:10}"   >> "$GITHUB_OUTPUT"
+        if [[ -n "$BASE_SHA" ]]; then
+          echo "base-sha-short=${BASE_SHA:0:10}" >> "$GITHUB_OUTPUT"
+        else
+          echo "base-sha-short=(none)"           >> "$GITHUB_OUTPUT"
+        fi
         echo "head-sha-short=${GITHUB_SHA:0:10}" >> "$GITHUB_OUTPUT"
 
     # Skipped on workflow_dispatch where base-sha is empty.
@@ -76,7 +80,6 @@ runs:
         key: bazel-diff-${{ runner.os }}-${{ inputs.base-sha }}
 
     - name: Ensure ~/.cache/bazel-diff exists
-      if: ${{ steps.restore-base-hashes.outputs.cache-hit != 'true' }}
       shell: bash
       run: mkdir -p "$HOME/.cache/bazel-diff"
 
@@ -136,6 +139,9 @@ runs:
         path: ~/.cache/bazel-diff/base.json
         key: bazel-diff-${{ runner.os }}-${{ github.sha }}
 
+    # In presubmit with no targets, is-empty is 'true' and !'true' = false (skip).
+    # In postsubmit, impacted-targets is skipped so is-empty is '' and !'' = true (run).
+    # /tmp/targets.txt absent, so falls back to `//...`.
     - name: Build
       if: ${{ !steps.impacted-targets.outputs.is-empty }}
       shell: nix develop ./nix#ci --command bash --noprofile --norc -eo pipefail {0}
