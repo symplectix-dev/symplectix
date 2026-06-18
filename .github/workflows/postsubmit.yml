@@ -10,7 +10,7 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: read # Allow reading contents.
@@ -33,18 +33,10 @@ jobs:
       CARGO_TERM_COLOR: always
 
     steps:
-      - name: Compute fetch depth
-        env:
-          COMMITS: ${{ toJSON(github.event.commits) }}
-        run: |
-          count=$(echo "$COMMITS" | jq 'if . == null then 0 else length end')
-          echo "FETCH_DEPTH=$((count + 1))" >> "$GITHUB_ENV"
-
       - name: Checkout repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           persist-credentials: false
-          fetch-depth: ${{ env.FETCH_DEPTH }}
 
       - uses: ./.github/actions/setup
         with:

@@ -31,6 +31,11 @@ runs:
         key: bazel-disk-${{ runner.os }}-${{ github.sha }}
         restore-keys: bazel-disk-${{ runner.os }}-
 
+    - name: Fetch base SHA
+      if: ${{ inputs.base-sha != '' }}
+      shell: bash
+      run: git fetch --depth=1 origin "${{ inputs.base-sha }}"
+
     - name: Pre-build
       if: ${{ inputs.base-sha != '' }}
       shell: nix develop ./nix#ci --command bash --noprofile --norc -eo pipefail {0}
