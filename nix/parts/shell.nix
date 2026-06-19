@@ -34,6 +34,8 @@
           github-cli
           jq
           protobuf
+          terramate
+          ansible
         ];
 
         env = {

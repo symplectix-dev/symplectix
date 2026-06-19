@@ -1,0 +1,69 @@
+- hosts: all
+  gather_facts: false
+  vars:
+    ansible_user: root
+    ansible_ssh_private_key_file: "{{ playbook_dir }}/../testkey"
+  tasks:
+    - name: Wait for SSH
+      ansible.builtin.wait_for_connection:
+        timeout: 60
+
+    - name: Check default IPv4 route
+      register: route4
+      changed_when: false
+      ansible.builtin.command:
+        cmd: ip route show default
+
+    - name: Add default IPv4 route
+      when: route4.stdout == ""
+      ansible.builtin.command:
+        cmd: ip route add default via {{ tap_ipv4 }}
+
+    - name: Check IPv6 address on eth0
+      register: addr6
+      changed_when: false
+      ansible.builtin.command:
+        cmd: ip -6 addr show dev eth0 to {{ fc_ipv6 }}
+
+    - name: Add IPv6 address
+      when: addr6.stdout == ""
+      ansible.builtin.command:
+        cmd: ip -6 addr add {{ fc_ipv6 }}/{{ tap_prefix6 }} dev eth0
+
+    - name: Check default IPv6 route
+      register: route6
+      changed_when: false
+      ansible.builtin.command:
+        cmd: ip -6 route show default
+
+    - name: Add default IPv6 route
+      when: route6.stdout == ""
+      ansible.builtin.command:
+        cmd: ip -6 route add default via {{ tap_ipv6 }}
+
+    - name: Check IPv4 connectivity to tap
+      changed_when: false
+      ansible.builtin.command:
+        cmd: ping -c 1 -W 2 {{ tap_ipv4 }}
+
+    - name: Check IPv4 connectivity to bridge
+      changed_when: false
+      ansible.builtin.command:
+        cmd: ping -c 1 -W 2 {{ bridge_ipv4 }}
+
+    - name: Check IPv6 connectivity to tap
+      changed_when: false
+      ansible.builtin.command:
+        cmd: ping6 -c 1 -W 2 {{ tap_ipv6 }}
+
+    - name: Check IPv6 connectivity to bridge
+      changed_when: false
+      ansible.builtin.command:
+        cmd: ping6 -c 1 -W 2 {{ bridge_ipv6 }}
+
+    - name: Check fdfc connectivity to peers
+      ignore_errors: true
+      changed_when: false
+      ansible.builtin.command:
+        cmd: ping6 -c 1 -W 2 {{ item }}
+      loop: "{{ fc_peers }}"

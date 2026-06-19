@@ -34,6 +34,12 @@ runs:
         fi
         echo "head-sha-short=${GITHUB_SHA:0:10}" >> "$GITHUB_OUTPUT"
 
+    # For hermetic_cc_toolchain, '/tmp/zig_cache' is specified in .bazelrc.
+    # hermetic_cc_toolchain may fail if the cache directory does not exist.
+    - name: Ensure /tmp/zig_cache exists
+      shell: bash
+      run: mkdir -p /tmp/zig_cache
+
     # Skipped on workflow_dispatch where base-sha is empty.
     - name: Fetch base
       if: ${{ inputs.base-sha != '' }}

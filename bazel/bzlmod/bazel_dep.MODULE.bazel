@@ -28,7 +28,7 @@ bazel_dep(
 )
 
 # Shell rules
-# bazel_dep(name = "rules_shell", version = "0.6.1")
+bazel_dep(name = "rules_shell", version = "0.6.1")
 
 # Python rules for Bazel
 bazel_dep(name = "rules_python", version = "1.9.0")

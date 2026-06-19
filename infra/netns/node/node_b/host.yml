@@ -1,0 +1,15 @@
+"all":
+  "hosts":
+    "node_b":
+      "ansible_host": "node_b"
+      "ansible_ssh_common_args": "-o StrictHostKeyChecking=no -o ProxyCommand='sudo
+        ip netns exec node_b nc 172.16.0.1 %p'"
+      "bridge_ipv4": "10.0.0.1"
+      "bridge_ipv6": "fd10::1"
+      "fc_ipv6": "fdfc:b::1"
+      "fc_peers":
+      - "fdfc:a::1"
+      "node_name": "node_b"
+      "tap_ipv4": "172.16.0.0"
+      "tap_ipv6": "fdfc:b::0"
+      "tap_prefix6": 127

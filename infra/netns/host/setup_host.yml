@@ -1,0 +1,232 @@
+- hosts: localhost
+  connection: local
+  become: true
+  handlers:
+    - name: reload nftables
+      ansible.builtin.systemd:
+        name: nftables
+        state: reloaded
+
+  tasks:
+    - name: Ensure KVM modules are loaded
+      community.general.modprobe:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - kvm
+        - kvm_{{ cpu_vendor }}
+
+    - name: Ensure KVM modules are persistent
+      ansible.builtin.copy:
+        dest: /etc/modules-load.d/{{ item }}.conf
+        content: "{{ item }}\n"
+      loop:
+        - kvm
+        - kvm_{{ cpu_vendor }}
+
+    - name: Ensure nested virtualization is enabled
+      ansible.builtin.copy:
+        dest: /etc/modprobe.d/kvm_{{ cpu_vendor }}.conf
+        content: |
+          options kvm_{{ cpu_vendor }} nested=1
+
+    - name: Check /dev/kvm is available
+      register: dev_kvm
+      ansible.builtin.stat:
+        path: /dev/kvm
+
+    - name: Fail if /dev/kvm is not available
+      when: not dev_kvm.stat.exists
+      ansible.builtin.fail:
+        msg: "/dev/kvm not found; ensure KVM modules are loaded"
+
+    - name: Ensure user is in kvm group
+      ansible.builtin.user:
+        name: "{{ ansible_facts['env']['SUDO_USER'] }}"
+        append: true
+        groups:
+          - kvm
+
+    - name: Ensure required packages are installed
+      community.general.pacman:
+        state: present
+        name:
+          - nftables
+          - squashfs-tools
+          - e2fsprogs
+          - iproute2
+          - curl
+          - openbsd-netcat
+
+    - name: Ensure IP forwarding is enabled
+      ansible.posix.sysctl:
+        name: net.ipv4.ip_forward
+        value: "1"
+        sysctl_set: true
+        state: present
+        reload: true
+
+    - name: Ensure IPv6 forwarding is enabled
+      ansible.posix.sysctl:
+        name: net.ipv6.conf.all.forwarding
+        value: "1"
+        sysctl_set: true
+        state: present
+        reload: true
+
+    - name: Check if Firecracker binary exists
+      register: fc_binary
+      ansible.builtin.stat:
+        path: /usr/local/bin/firecracker
+
+    - name: Download and extract Firecracker
+      when: not fc_binary.stat.exists
+      ansible.builtin.unarchive:
+        src: https://github.com/firecracker-microvm/firecracker/releases/download/v{{ firecracker_version }}/firecracker-v{{ firecracker_version }}-{{ cpu_arch }}.tgz
+        dest: /tmp
+        remote_src: true
+
+    - name: Install Firecracker binary
+      when: not fc_binary.stat.exists
+      ansible.builtin.copy:
+        src: /tmp/release-v{{ firecracker_version }}-{{ cpu_arch }}/firecracker-v{{ firecracker_version }}-{{ cpu_arch }}
+        dest: /usr/local/bin/firecracker
+        mode: "0755"
+        remote_src: true
+
+    - name: Remove Firecracker release directory
+      when: not fc_binary.stat.exists
+      ansible.builtin.file:
+        path: /tmp/release-v{{ firecracker_version }}-{{ cpu_arch }}
+        state: absent
+
+    - name: Ensure /etc/nftables.d exists
+      ansible.builtin.file:
+        path: /etc/nftables.d
+        state: directory
+        mode: "0755"
+
+    - name: Ensure nftables is enabled
+      ansible.builtin.systemd:
+        name: nftables
+        enabled: true
+
+    - name: Ensure nftables.d is included in nftables.conf
+      notify: reload nftables
+      ansible.builtin.lineinfile:
+        path: /etc/nftables.conf
+        line: include "/etc/nftables.d/*.nft"
+        state: present
+
+    - name: Allow forwarding on bridge
+      notify: reload nftables
+      ansible.builtin.copy:
+        dest: /etc/nftables.d/{{ bridge_name }}.nft
+        content: |
+          table inet filter {
+            chain forward {
+              iifname "{{ bridge_name }}" oifname "{{ bridge_name }}" accept
+            }
+          }
+
+    - name: Ensure /data/firecracker exists
+      ansible.builtin.file:
+        path: "{{ fc_data_dir }}"
+        state: directory
+        owner: "{{ ansible_facts['env']['SUDO_USER'] }}"
+        group: "{{ ansible_facts['env']['SUDO_USER'] }}"
+        mode: "0755"
+
+    - name: Ensure vmlinux is downloaded
+      ansible.builtin.get_url:
+        url: "{{ vmlinux_url }}"
+        dest: "{{ fc_data_dir }}/vmlinux"
+        mode: "0644"
+
+    - name: Ensure rootfs.squashfs is downloaded
+      ansible.builtin.get_url:
+        url: "{{ rootfs_squashfs_url }}"
+        dest: "{{ fc_data_dir }}/rootfs.squashfs"
+        mode: "0644"
+
+    - name: Check if rootfs.ext4 is valid
+      register: rootfs_stat
+      failed_when: false
+      changed_when: false
+      ansible.builtin.command:
+        cmd: blkid -o value -s TYPE {{ fc_data_dir }}/{{ rootfs_filename }}
+
+    - name: Unsquash rootfs
+      when: "rootfs_stat.stdout | trim != 'ext4'"
+      ansible.builtin.shell:
+        cmd: |
+          rm -rf /tmp/squashfs-root
+          unsquashfs -d /tmp/squashfs-root {{ fc_data_dir }}/rootfs.squashfs
+
+    - name: Ensure root SSH directory in rootfs
+      when: "rootfs_stat.stdout | trim != 'ext4'"
+      ansible.builtin.file:
+        path: /tmp/squashfs-root/root/.ssh
+        state: directory
+        mode: "0700"
+
+    - name: Copy SSH public key into rootfs
+      when: "rootfs_stat.stdout | trim != 'ext4'"
+      ansible.builtin.copy:
+        content: "{{ ssh_public_key }}\n"
+        dest: /tmp/squashfs-root/root/.ssh/authorized_keys
+        mode: "0600"
+
+    - name: Fix rootfs ownership
+      when: "rootfs_stat.stdout | trim != 'ext4'"
+      ansible.builtin.file:
+        path: /tmp/squashfs-root
+        owner: root
+        group: root
+        recurse: true
+
+    - name: Create ext4 rootfs image
+      when: "rootfs_stat.stdout | trim != 'ext4'"
+      ansible.builtin.shell:
+        cmd: |
+          truncate -s 1G {{ fc_data_dir }}/{{ rootfs_filename }}
+          mkfs.ext4 -d /tmp/squashfs-root -F {{ fc_data_dir }}/{{ rootfs_filename }}
+
+    - name: Set rootfs ownership
+      when: "rootfs_stat.stdout | trim != 'ext4'"
+      ansible.builtin.file:
+        path: "{{ fc_data_dir }}/{{ rootfs_filename }}"
+        owner: "{{ ansible_facts['env']['SUDO_USER'] }}"
+        group: "{{ ansible_facts['env']['SUDO_USER'] }}"
+
+    - name: Remove squashfs temp files
+      when: "rootfs_stat.stdout | trim != 'ext4'"
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /tmp/squashfs-root
+
+    - name: Install service templates
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/{{ item }}@.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description={{ item }} (%i)
+          After=network.target
+
+          [Service]
+          NetworkNamespacePath=/var/run/netns/%i
+          ExecStart=/bin/sleep infinity
+          Restart=on-failure
+
+          [Install]
+          WantedBy=multi-user.target
+      loop:
+        - syxvm
+        - syxgw
+
+    - name: systemctl daemon-reload
+      ansible.builtin.systemd:
+        daemon_reload: true

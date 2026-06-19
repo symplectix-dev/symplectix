@@ -1,0 +1,37 @@
+- hosts: localhost
+  connection: local
+  become: true
+  tasks:
+    - name: Check if bridge exists
+      register: bridge_check
+      failed_when: false
+      changed_when: false
+      ansible.builtin.command:
+        cmd: ip link show {{ bridge_name }}
+
+    - name: Create bridge
+      when: bridge_check.rc != 0
+      ansible.builtin.command:
+        cmd: ip link add {{ bridge_name }} type bridge
+
+    - name: Check bridge addresses
+      register: bridge_addr
+      failed_when: false
+      changed_when: false
+      ansible.builtin.command:
+        cmd: ip addr show dev {{ bridge_name }}
+
+    - name: Add IPv4 address to bridge
+      when: bridge_ipv4 not in bridge_addr.stdout
+      ansible.builtin.command:
+        cmd: ip addr add {{ bridge_ipv4 }}/{{ bridge_prefix4 }} dev {{ bridge_name }}
+
+    - name: Add IPv6 address to bridge
+      when: bridge_ipv6 not in bridge_addr.stdout
+      ansible.builtin.command:
+        cmd: ip addr add {{ bridge_ipv6 }}/{{ bridge_prefix6 }} dev {{ bridge_name }}
+
+    - name: Bring bridge up
+      changed_when: false
+      ansible.builtin.command:
+        cmd: ip link set {{ bridge_name }} up

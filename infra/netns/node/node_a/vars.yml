@@ -1,0 +1,23 @@
+"bridge_ipv4": "10.0.0.1"
+"bridge_ipv6": "fd10::1"
+"bridge_name": "br-fc"
+"fc_data_dir": "/data/firecracker"
+"fc_ipv4": "172.16.0.1"
+"fc_ipv6": "fdfc:a::1"
+"fc_ipv6_prefix": "fdfc:a::"
+"fc_mac": "06:00:AC:10:00:01"
+"fc_node_dir": "/data/firecracker/node_a"
+"fc_peers":
+- "fdfc:b::1"
+"fc_socket": "/tmp/node_a-fc.sock"
+"node_ipv4": "10.0.0.2"
+"node_ipv6": "fd10::2"
+"node_name": "node_a"
+"node_prefix4": 24
+"node_prefix6": 64
+"rootfs_filename": "rootfs.ext4"
+"tap_dev": "tap0"
+"tap_ipv4": "172.16.0.0"
+"tap_ipv6": "fdfc:a::0"
+"tap_prefix4": 31
+"tap_prefix6": 127
