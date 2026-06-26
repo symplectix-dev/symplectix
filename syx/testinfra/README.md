@@ -44,8 +44,8 @@ terramate script run -- up
 Or individually:
 
 ```sh
-terramate script run -C infra/netns/host -- up
-terramate script run -C infra/netns/node/node_a -- up
+terramate script run -C syx/testinfra/host -- up
+terramate script run -C syx/testinfra/node/node_a -- up
 ```
 
 Host `up` runs:
@@ -64,7 +64,7 @@ it only exists inside the node namespace.
 SSH through nc running inside the namespace:
 
 ```sh
-ssh -i infra/netns/testkey \
+ssh -i syx/testinfra/testkey \
     -o ProxyCommand='sudo ip netns exec node_a nc -6 %h %p' \
     root@fdfc:a::1
 ```

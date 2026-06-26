@@ -6,7 +6,9 @@
       ansible.builtin.file:
         path: "{{ fc_node_dir }}"
         state: directory
-        mode: "0755"
+        owner: "{{ ansible_facts['env']['SUDO_USER'] }}"
+        group: data
+        mode: "0775"
 
     - name: Check if node rootfs exists
       register: node_rootfs

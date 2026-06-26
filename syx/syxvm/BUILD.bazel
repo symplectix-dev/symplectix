@@ -1,0 +1,13 @@
+load("//bazel:sh.bzl", "sh")
+
+sh.binary(
+    name = "fc_start",
+    srcs = ["fc_start.sh"],
+    visibility = ["//visibility:public"],
+)
+
+sh.binary(
+    name = "fc_stop",
+    srcs = ["fc_stop.sh"],
+    visibility = ["//visibility:public"],
+)

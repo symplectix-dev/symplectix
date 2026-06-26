@@ -129,24 +129,40 @@
             }
           }
 
+    - name: Ensure data group exists
+      ansible.builtin.group:
+        name: data
+        state: present
+
+    - name: Ensure user is in data group
+      ansible.builtin.user:
+        name: "{{ ansible_facts['env']['SUDO_USER'] }}"
+        append: true
+        groups:
+          - data
+
     - name: Ensure /data/firecracker exists
       ansible.builtin.file:
         path: "{{ fc_data_dir }}"
         state: directory
         owner: "{{ ansible_facts['env']['SUDO_USER'] }}"
-        group: "{{ ansible_facts['env']['SUDO_USER'] }}"
-        mode: "0755"
+        group: data
+        mode: "0775"
 
     - name: Ensure vmlinux is downloaded
       ansible.builtin.get_url:
         url: "{{ vmlinux_url }}"
         dest: "{{ fc_data_dir }}/vmlinux"
+        owner: "{{ ansible_facts['env']['SUDO_USER'] }}"
+        group: data
         mode: "0644"
 
     - name: Ensure rootfs.squashfs is downloaded
       ansible.builtin.get_url:
         url: "{{ rootfs_squashfs_url }}"
         dest: "{{ fc_data_dir }}/rootfs.squashfs"
+        owner: "{{ ansible_facts['env']['SUDO_USER'] }}"
+        group: data
         mode: "0644"
 
     - name: Check if rootfs.ext4 is valid
