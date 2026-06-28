@@ -1,0 +1,19 @@
+fc_data_dir: /data/testbed
+
+packages:
+  - cpio
+  - curl
+  - e2fsprogs
+  - iproute2
+  - nftables
+  - openbsd-netcat
+  - squashfs-tools
+
+cpu_vendor: intel
+cpu_arch: x86_64
+
+vwan_host_forward: true
+
+vwan_ext_ip: 192.168.200.1
+vwan_int_ip: 192.168.200.2
+vwan_prefix: 24

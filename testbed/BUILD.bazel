@@ -1,0 +1,30 @@
+load("//bazel:pkg.bzl", "pkg")
+
+pkg.install(
+    name = "boot_assets_install",
+    srcs = [":boot_assets"],
+)
+
+pkg.filegroup(
+    name = "boot_assets",
+    srcs = [
+        ":private_key",
+        ":public_key",
+        "//boot",
+    ],
+)
+
+pkg.files(
+    name = "public_key",
+    srcs = ["testkey.pub"],
+    prefix = "key",
+)
+
+pkg.files(
+    name = "private_key",
+    srcs = ["testkey"],
+    attributes = pkg.attributes(
+        mode = "0600",
+    ),
+    prefix = "key",
+)

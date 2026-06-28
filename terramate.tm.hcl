@@ -1,5 +1,0 @@
-terramate {
-  config {
-    experiments = ["scripts"]
-  }
-}

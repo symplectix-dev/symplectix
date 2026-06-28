@@ -1,0 +1,22 @@
+- name: Install service templates
+  ansible.builtin.copy:
+    dest: /run/systemd/system/{{ item }}@.service
+    mode: "0644"
+    content: |
+      [Unit]
+      Description={{ item }} (%i)
+      After=network.target
+
+      [Service]
+      NetworkNamespacePath=/var/run/netns/%i
+      ExecStart=/bin/sleep infinity
+      Restart=on-failure
+
+
+  loop:
+    - syxvm
+    - syxgw
+
+- name: systemctl daemon-reload
+  ansible.builtin.systemd:
+    daemon_reload: true

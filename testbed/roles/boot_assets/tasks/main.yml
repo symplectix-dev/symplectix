@@ -1,0 +1,4 @@
+- name: Install boot assets
+  changed_when: false
+  ansible.builtin.command:
+    cmd: bazel run //testbed:boot_assets_install -- --destdir {{ fc_data_dir }}

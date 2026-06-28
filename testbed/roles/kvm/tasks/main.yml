@@ -1,0 +1,38 @@
+- name: Ensure KVM modules are loaded
+  community.general.modprobe:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - kvm
+    - kvm_{{ cpu_vendor }}
+
+- name: Ensure KVM modules are persistent
+  ansible.builtin.copy:
+    dest: /etc/modules-load.d/{{ item }}.conf
+    content: "{{ item }}\n"
+  loop:
+    - kvm
+    - kvm_{{ cpu_vendor }}
+
+- name: Ensure nested virtualization is enabled
+  ansible.builtin.copy:
+    dest: /etc/modprobe.d/kvm_{{ cpu_vendor }}.conf
+    content: |
+      options kvm_{{ cpu_vendor }} nested=1
+
+- name: Check /dev/kvm is available
+  register: dev_kvm
+  ansible.builtin.stat:
+    path: /dev/kvm
+
+- name: Fail if /dev/kvm is not available
+  when: not dev_kvm.stat.exists
+  ansible.builtin.fail:
+    msg: "/dev/kvm not found; ensure KVM modules are loaded"
+
+- name: Ensure user is in kvm group
+  ansible.builtin.user:
+    name: "{{ ansible_facts['env']['SUDO_USER'] }}"
+    append: true
+    groups:
+      - kvm

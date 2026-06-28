@@ -1,0 +1,77 @@
+# netns level
+- name: Ping zone gateway from {{ node_name }} netns (IPv4)
+  changed_when: false
+  ansible.builtin.command:
+    cmd: ip netns exec {{ node_name }} ping -c1 -W2 {{ bridge_ipv4 }}
+
+- name: Ping zone gateway from {{ node_name }} netns (IPv6)
+  changed_when: false
+  ansible.builtin.command:
+    cmd: ip netns exec {{ node_name }} ping -c1 -W2 {{ bridge_ipv6 }}
+
+- name: Ping internet from {{ node_name }} netns (IPv4)
+  changed_when: false
+  ansible.builtin.command:
+    cmd: ip netns exec {{ node_name }} ping -c1 -W2 8.8.8.8
+
+# VM level
+- name: Wait for SSH on {{ node_name }} VM
+  register: ssh_wait
+  until: ssh_wait.rc == 0
+  retries: 15
+  delay: 2
+  changed_when: false
+  ansible.builtin.shell:
+    cmd: >-
+      ssh -i {{ fc_data_dir }}/key/testkey
+      -o ProxyCommand="ip netns exec {{ node_name }} nc {{ fc_ipv4 }} 22"
+      -o UserKnownHostsFile=/dev/null
+      -o StrictHostKeyChecking=no
+      -o ConnectTimeout=5
+      root@{{ node_name }}
+      true
+
+- name: Ping zone gateway from {{ node_name }} VM (IPv4)
+  changed_when: false
+  ansible.builtin.shell:
+    cmd: >-
+      ssh -i {{ fc_data_dir }}/key/testkey
+      -o ProxyCommand="ip netns exec {{ node_name }} nc {{ fc_ipv4 }} 22"
+      -o UserKnownHostsFile=/dev/null
+      -o StrictHostKeyChecking=no
+      root@{{ node_name }}
+      "ping -c1 -W2 {{ bridge_ipv4 }}"
+
+- name: Ping zone gateway from {{ node_name }} VM (IPv6)
+  changed_when: false
+  ansible.builtin.shell:
+    cmd: >-
+      ssh -i {{ fc_data_dir }}/key/testkey
+      -o ProxyCommand="ip netns exec {{ node_name }} nc {{ fc_ipv4 }} 22"
+      -o UserKnownHostsFile=/dev/null
+      -o StrictHostKeyChecking=no
+      root@{{ node_name }}
+      "ping -c1 -W2 {{ bridge_ipv6 }}"
+
+- name: Ping internet from {{ node_name }} VM (IPv4)
+  changed_when: false
+  ansible.builtin.shell:
+    cmd: >-
+      ssh -i {{ fc_data_dir }}/key/testkey
+      -o ProxyCommand="ip netns exec {{ node_name }} nc {{ fc_ipv4 }} 22"
+      -o UserKnownHostsFile=/dev/null
+      -o StrictHostKeyChecking=no
+      root@{{ node_name }}
+      "ping -c1 -W2 8.8.8.8"
+
+- name: Ping peers from {{ node_name }} VM (fdfc IPv6)
+  changed_when: false
+  ansible.builtin.shell:
+    cmd: >-
+      ssh -i {{ fc_data_dir }}/key/testkey
+      -o ProxyCommand="ip netns exec {{ node_name }} nc {{ fc_ipv4 }} 22"
+      -o UserKnownHostsFile=/dev/null
+      -o StrictHostKeyChecking=no
+      root@{{ node_name }}
+      "ping -c1 -W2 {{ item }}"
+  loop: "{{ fc_peers }}"

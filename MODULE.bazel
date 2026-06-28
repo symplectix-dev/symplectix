@@ -48,9 +48,10 @@ use_repo(pip, "pypi")
 
 include("//bazel/bzlmod:crate.MODULE.bazel")
 
-# Static binaries for initramfs build (x86_64; phase 1 only, remove when Rust init is ready).
 http_file = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
 
+# Static binaries for initrd build.
+# Remove once Rust init is ready.
 http_file(
     name = "busybox_static",
     executable = True,
@@ -63,4 +64,16 @@ http_file(
     executable = True,
     sha256 = "5942c9b0934e510ee61eb3e30273f1b3fe2590df93933a93d7c58b81d19c8ff5",
     urls = ["https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-amd64"],
+)
+
+http_file(
+    name = "vmlinux",
+    sha256 = "7f70be51b78157629a019a530bdb8e39cc7bad325e235e75c66cad289e04aecd",
+    urls = ["https://s3.amazonaws.com/spec.ccfc.min/firecracker-ci/20260617-a093a70f7979-0/x86_64/vmlinux-6.1.174"],
+)
+
+http_file(
+    name = "rootfs_squashfs",
+    sha256 = "b3072c50c3638ec36bcbb32ec3c733f204a314e2578c13630b3f2c79dbe35667",
+    urls = ["https://s3.amazonaws.com/spec.ccfc.min/firecracker-ci/20260617-a093a70f7979-0/x86_64/ubuntu-24.04.squashfs"],
 )

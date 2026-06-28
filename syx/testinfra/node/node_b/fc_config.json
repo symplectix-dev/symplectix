@@ -1,1 +1,0 @@
-{"fc_data_dir":"/data/firecracker","fc_ipv4":"172.16.0.1","fc_ipv6":"fdfc:b::1","fc_log":"/data/firecracker/node_b/fc.log","fc_mac":"06:00:AC:10:00:01","fc_memory":1024,"fc_socket":"/tmp/node_b-fc.sock","fc_vcpu":2,"node_name":"node_b","prefix4":31,"prefix6":127,"tap_dev":"tap0","tap_ipv4":"172.16.0.0","tap_ipv6":"fdfc:b::0"}

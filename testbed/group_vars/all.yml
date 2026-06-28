@@ -1,0 +1,11 @@
+firecracker_version: "1.16.0"
+
+fc_node_dir: "{{ fc_data_dir }}/{{ node_name }}"
+fc_socket: "/run/testbed/{{ node_name }}-fc.sock"
+fc_log: "/var/log/testbed/{{ node_name }}/fc.log"
+fc_vcpu: 1
+fc_memory: 512
+
+tap_dev: tap0
+tap_prefix4: 31
+tap_prefix6: 112

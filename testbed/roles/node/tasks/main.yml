@@ -1,0 +1,148 @@
+- name: Setup {{ node_name }} netns
+  ansible.builtin.include_role:
+    name: netns
+  vars:
+    netns_name: "{{ node_name }}"
+
+- name: Setup {{ node_name }} veth pair
+  ansible.builtin.include_role:
+    name: veth_pair
+  vars:
+    veth_endpoints:
+      - name: "{{ node_name }}"
+        netns: vwan
+      - name: vwan
+        netns: "{{ node_name }}"
+        ip4: "{{ node_ipv4 }}"
+        prefix4: "{{ node_prefix4 }}"
+        ip6: "{{ node_ipv6 }}"
+        prefix6: "{{ node_prefix6 }}"
+
+- name: Check veth bridge membership in vwan netns
+  register: veth_master
+  failed_when: false
+  changed_when: false
+  ansible.builtin.command:
+    cmd: ip netns exec vwan ip link show {{ node_name }}
+
+- name: Attach veth to bridge in vwan netns
+  when: veth_master.rc == 0 and ('master ' ~ bridge_name) not in veth_master.stdout
+  ansible.builtin.command:
+    cmd: ip netns exec vwan ip link set {{ node_name }} master {{ bridge_name }}
+
+- name: Bring veth up in vwan netns
+  when: veth_master.rc == 0
+  changed_when: false
+  ansible.builtin.command:
+    cmd: ip netns exec vwan ip link set {{ node_name }} up
+
+- name: Check default IPv4 route in namespace
+  register: ns_route4
+  changed_when: false
+  ansible.builtin.command:
+    cmd: ip netns exec {{ node_name }} ip -4 route show default
+
+- name: Set default IPv4 route in namespace
+  when: ("via " ~ bridge_ipv4 ~ " ") not in ns_route4.stdout
+  ansible.builtin.command:
+    cmd: ip netns exec {{ node_name }} ip -4 route replace default via {{ bridge_ipv4 }}
+
+- name: Check default IPv6 route in namespace
+  register: ns_route6
+  changed_when: false
+  ansible.builtin.command:
+    cmd: ip netns exec {{ node_name }} ip -6 route show default
+
+- name: Set default IPv6 route in namespace
+  when: ("via " ~ bridge_ipv6 ~ " ") not in ns_route6.stdout
+  ansible.builtin.command:
+    cmd: ip netns exec {{ node_name }} ip -6 route replace default via {{ bridge_ipv6 }}
+
+- name: Check if tap exists in namespace
+  register: tap_check
+  failed_when: false
+  changed_when: false
+  ansible.builtin.command:
+    cmd: ip netns exec {{ node_name }} ip link show {{ tap_dev }}
+
+- name: Create tap device in namespace
+  when: tap_check.rc != 0
+  ansible.builtin.command:
+    cmd: ip netns exec {{ node_name }} ip tuntap add {{ tap_dev }} mode tap user "{{ ansible_facts['env']['SUDO_USER'] | default(ansible_user_id, true) }}"
+
+- name: Check IPv4 address on tap
+  register: tap_addr4
+  failed_when: false
+  changed_when: false
+  ansible.builtin.command:
+    cmd: ip netns exec {{ node_name }} ip -4 addr show dev {{ tap_dev }} to {{ tap_ipv4 }}
+
+- name: Add IPv4 address to tap
+  when: tap_addr4.stdout == ""
+  ansible.builtin.command:
+    cmd: ip netns exec {{ node_name }} ip -4 addr add {{ tap_ipv4 }}/{{ tap_prefix4 }} dev {{ tap_dev }}
+
+- name: Check IPv6 address on tap
+  register: tap_addr6
+  failed_when: false
+  changed_when: false
+  ansible.builtin.command:
+    cmd: ip netns exec {{ node_name }} ip -6 addr show dev {{ tap_dev }} to {{ tap_ipv6 }}
+
+- name: Add IPv6 address to tap
+  when: tap_addr6.stdout == ""
+  ansible.builtin.command:
+    cmd: ip netns exec {{ node_name }} ip -6 addr add {{ tap_ipv6 }}/{{ tap_prefix6 }} dev {{ tap_dev }}
+
+- name: Bring tap up
+  changed_when: false
+  ansible.builtin.command:
+    cmd: ip netns exec {{ node_name }} ip link set {{ tap_dev }} up
+
+- name: Check fdfc route for this node in vwan netns
+  register: wan_fdfc_route
+  failed_when: false
+  changed_when: false
+  ansible.builtin.command:
+    cmd: ip netns exec vwan ip -6 route show {{ fc_ipv6_prefix }}/{{ tap_prefix6 }}
+
+- name: Set fdfc route for this node in vwan netns
+  when: ("via " ~ node_ipv6 ~ " ") not in wan_fdfc_route.stdout
+  ansible.builtin.command:
+    cmd: ip netns exec vwan ip -6 route replace {{ fc_ipv6_prefix }}/{{ tap_prefix6 }} via {{ node_ipv6 }}
+
+- name: Apply nftables rules in namespace
+  changed_when: false
+  ansible.builtin.shell:
+    cmd: |
+      ip netns exec {{ node_name }} nft -f - <<'NFTEOF'
+      destroy table inet fc-filter
+      table inet fc-filter {
+        chain prerouting {
+          type nat hook prerouting priority dstnat; policy accept;
+          iifname vwan ip  daddr {{ node_ipv4 }} dnat to {{ fc_ipv4 }}
+          iifname vwan ip6 daddr {{ node_ipv6 }} dnat to {{ fc_ipv6 }}
+        }
+        chain postrouting {
+          type nat hook postrouting priority srcnat; policy accept;
+          ip  saddr {{ fc_ipv4 }} oifname vwan counter masquerade
+          ip6 saddr {{ fc_ipv6 }} oifname vwan ip6 daddr != fdfc::/16 counter masquerade
+        }
+        chain forward {
+          type filter hook forward priority filter; policy drop;
+          ct state established,related accept
+          iifname "tap*" oifname "tap*" accept
+          iifname "tap*" oifname vwan accept
+          iifname vwan oifname "tap*" accept
+        }
+      }
+      NFTEOF
+
+- name: Enable and start services
+  ansible.builtin.systemd:
+    name: "{{ item }}@{{ node_name }}.service"
+    enabled: false
+    state: started
+  loop:
+    - syxvm
+    - syxgw

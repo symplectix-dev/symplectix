@@ -1,0 +1,29 @@
+- name: Setup vwan netns
+  ansible.builtin.include_role:
+    name: netns
+  vars:
+    netns_name: vwan
+
+- name: Setup vwan veth pair
+  ansible.builtin.include_role:
+    name: veth_pair
+  vars:
+    veth_endpoints:
+      - name: vwan
+        ip4: "{{ vwan_ext_ip }}"
+        prefix4: "{{ vwan_prefix }}"
+      - name: host
+        netns: vwan
+        ip4: "{{ vwan_int_ip }}"
+        prefix4: "{{ vwan_prefix }}"
+
+- name: Check default route in vwan netns
+  register: vwan_default_route
+  changed_when: false
+  ansible.builtin.command:
+    cmd: ip netns exec vwan ip -4 route show default
+
+- name: Set default route in vwan netns via host
+  when: ("via " ~ vwan_ext_ip ~ " ") not in vwan_default_route.stdout
+  ansible.builtin.command:
+    cmd: ip netns exec vwan ip -4 route replace default via {{ vwan_ext_ip }}
