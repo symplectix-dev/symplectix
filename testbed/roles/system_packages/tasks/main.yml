@@ -1,0 +1,35 @@
+- name: Show OS family
+  ansible.builtin.debug:
+    msg: "os_family={{ ansible_facts['os_family'] }}"
+
+- name: Install packages (Arch Linux)
+  when: ansible_facts['os_family'] == 'Archlinux'
+  community.general.pacman:
+    state: present
+    name: "{{ packages }}"
+
+- name: Check if Firecracker binary exists
+  register: fc_binary
+  ansible.builtin.stat:
+    path: /usr/local/bin/firecracker
+
+- name: Download and extract Firecracker
+  when: not fc_binary.stat.exists
+  ansible.builtin.unarchive:
+    src: https://github.com/firecracker-microvm/firecracker/releases/download/v{{ firecracker_version }}/firecracker-v{{ firecracker_version }}-{{ cpu_arch }}.tgz
+    dest: /tmp
+    remote_src: true
+
+- name: Install Firecracker binary
+  when: not fc_binary.stat.exists
+  ansible.builtin.copy:
+    src: /tmp/release-v{{ firecracker_version }}-{{ cpu_arch }}/firecracker-v{{ firecracker_version }}-{{ cpu_arch }}
+    dest: /usr/local/bin/firecracker
+    mode: "0755"
+    remote_src: true
+
+- name: Remove Firecracker release directory
+  when: not fc_binary.stat.exists
+  ansible.builtin.file:
+    path: /tmp/release-v{{ firecracker_version }}-{{ cpu_arch }}
+    state: absent

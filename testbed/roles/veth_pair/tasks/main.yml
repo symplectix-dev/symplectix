@@ -1,0 +1,24 @@
+- name: Check if {{ veth_endpoints[1].name }} exists in {{ veth_endpoints[1].netns }}
+  register: veth_check
+  failed_when: false
+  changed_when: false
+  ansible.builtin.shell:
+    cmd: "{{ 'ip netns exec ' ~ veth_endpoints[1].netns if veth_endpoints[1].netns is defined else '' }} ip link show {{ veth_endpoints[1].name }}"
+
+- name: Create veth pair {{ veth_endpoints[0].name }} / {{ veth_endpoints[1].name }}
+  when: veth_check.rc != 0
+  block:
+    - name: Create pair in {{ veth_endpoints[0].netns | default('host') }}
+      ansible.builtin.shell:
+        cmd: "{{ 'ip netns exec ' ~ veth_endpoints[0].netns if veth_endpoints[0].netns is defined else '' }} ip link add {{ veth_endpoints[0].name }} type veth peer name {{ veth_endpoints[1].name }}"
+
+    - name: Move {{ veth_endpoints[1].name }} into {{ veth_endpoints[1].netns }}
+      when: veth_endpoints[1].netns is defined
+      ansible.builtin.shell:
+        cmd: "{{ 'ip netns exec ' ~ veth_endpoints[0].netns if veth_endpoints[0].netns is defined else '' }} ip link set {{ veth_endpoints[1].name }} netns {{ veth_endpoints[1].netns }}"
+
+- name: Set IPs
+  ansible.builtin.include_tasks: set_ips.yml
+  loop: "{{ veth_endpoints }}"
+  loop_control:
+    loop_var: ep

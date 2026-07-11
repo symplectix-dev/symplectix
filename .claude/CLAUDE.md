@@ -21,9 +21,3 @@ Read [examples] for more information.
 
 [examples]: https://example.com
 ```
-
-### Directory layout
-
-- `crates/`: Rust libraries and binaries
-- `syx/`: Python packages and pyo3 bindings
-- `nix/`: Nix flake for teh develop environment

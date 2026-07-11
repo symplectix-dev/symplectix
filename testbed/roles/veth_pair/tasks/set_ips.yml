@@ -1,0 +1,32 @@
+- name: Set IPv4 on {{ ep.name }}
+  when: ep.ip4 is defined
+  block:
+    - name: Check IPv4 on {{ ep.name }}
+      register: ep_addr4
+      failed_when: false
+      changed_when: false
+      ansible.builtin.shell:
+        cmd: "{{ 'ip netns exec ' ~ ep.netns if ep.netns is defined else '' }} ip -4 addr show dev {{ ep.name }} to {{ ep.ip4 }}"
+    - name: Add IPv4 to {{ ep.name }}
+      when: ep_addr4.stdout == ''
+      ansible.builtin.shell:
+        cmd: "{{ 'ip netns exec ' ~ ep.netns if ep.netns is defined else '' }} ip -4 addr add {{ ep.ip4 }}/{{ ep.prefix4 }} dev {{ ep.name }}"
+
+- name: Set IPv6 on {{ ep.name }}
+  when: ep.ip6 is defined
+  block:
+    - name: Check IPv6 on {{ ep.name }}
+      register: ep_addr6
+      failed_when: false
+      changed_when: false
+      ansible.builtin.shell:
+        cmd: "{{ 'ip netns exec ' ~ ep.netns if ep.netns is defined else '' }} ip -6 addr show dev {{ ep.name }} to {{ ep.ip6 }}"
+    - name: Add IPv6 to {{ ep.name }}
+      when: ep_addr6.stdout == ''
+      ansible.builtin.shell:
+        cmd: "{{ 'ip netns exec ' ~ ep.netns if ep.netns is defined else '' }} ip -6 addr add {{ ep.ip6 }}/{{ ep.prefix6 }} dev {{ ep.name }}"
+
+- name: Bring {{ ep.name }} up
+  changed_when: false
+  ansible.builtin.shell:
+    cmd: "{{ 'ip netns exec ' ~ ep.netns if ep.netns is defined else '' }} ip link set {{ ep.name }} up"

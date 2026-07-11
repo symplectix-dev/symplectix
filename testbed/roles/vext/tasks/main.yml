@@ -1,0 +1,29 @@
+- name: Setup vext netns
+  ansible.builtin.include_role:
+    name: netns
+  vars:
+    netns_name: vext
+
+- name: Setup vext veth pair
+  ansible.builtin.include_role:
+    name: veth_pair
+  vars:
+    veth_endpoints:
+      - name: vext
+        ip4: "{{ vext_ext_ip }}"
+        prefix4: "{{ vext_prefix }}"
+      - name: host
+        netns: vext
+        ip4: "{{ vext_int_ip }}"
+        prefix4: "{{ vext_prefix }}"
+
+- name: Check default route in vext netns
+  register: vext_default_route
+  changed_when: false
+  ansible.builtin.command:
+    cmd: ip netns exec vext ip -4 route show default
+
+- name: Set default route in vext netns via host
+  when: ("via " ~ vext_ext_ip ~ " ") not in vext_default_route.stdout
+  ansible.builtin.command:
+    cmd: ip netns exec vext ip -4 route replace default via {{ vext_ext_ip }}

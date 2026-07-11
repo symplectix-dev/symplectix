@@ -1,0 +1,59 @@
+- name: Ensure nftables is enabled and started
+  ansible.builtin.systemd:
+    name: nftables
+    enabled: true
+    state: started
+
+- name: Apply masquerade in vext netns (host)
+  changed_when: false
+  ansible.builtin.shell:
+    cmd: |
+      ip netns exec vext nft -f - <<'NFTEOF'
+      destroy table inet host-filter
+      table inet host-filter {
+        chain postrouting {
+          type nat hook postrouting priority srcnat; policy accept;
+          oifname "host" counter masquerade
+        }
+      }
+      NFTEOF
+
+- name: Apply masquerade on host (vext)
+  changed_when: false
+  ansible.builtin.shell:
+    cmd: |
+      nft -f - <<'NFTEOF'
+      destroy table inet vext-filter
+      table inet vext-filter {
+        chain postrouting {
+          type nat hook postrouting priority srcnat; policy accept;
+          iifname "vext" counter masquerade
+        }
+      }
+      NFTEOF
+
+# vext_host_forward:
+# Set to true if the host has an existing inet filter forward chain
+# Set to false if the host does not have this chain to skip these tasks.
+- name: Check inet filter forward chain exists on host
+  when: vext_host_forward
+  changed_when: false
+  ansible.builtin.command:
+    cmd: nft list chain inet filter forward
+
+- name: Check vext forward rules on host
+  when: vext_host_forward
+  register: vext_fwd_check
+  changed_when: false
+  failed_when: false
+  ansible.builtin.shell:
+    cmd: nft list chain inet filter forward | grep -cF '"vext"'
+
+- name: Apply vext forward rules on host
+  when: vext_host_forward and (vext_fwd_check.stdout | int) == 0
+  ansible.builtin.shell:
+    cmd: |
+      nft -f - <<'NFTEOF'
+      add rule inet filter forward oifname "vext" ct state established,related accept
+      add rule inet filter forward iifname "vext" accept
+      NFTEOF

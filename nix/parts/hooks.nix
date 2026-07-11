@@ -129,8 +129,8 @@
               entry = "${pkgs.basedpyright}/bin/basedpyright";
               pass_filenames = false;
               files = "\\.py$";
-              types = ["python"];
-              stages = ["manual"];
+              types = [ "python" ];
+              stages = [ "manual" ];
             };
           }
           // mkHooksWithPriority 20 [ "no-ci" "lint" ] {

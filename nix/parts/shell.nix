@@ -34,6 +34,7 @@
           github-cli
           jq
           protobuf
+          ansible
         ];
 
         env = {

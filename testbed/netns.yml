@@ -1,0 +1,78 @@
+- hosts: all
+  become: true
+  pre_tasks:
+    - ansible.builtin.assert:
+        that: ansible_play_hosts | length == 1
+        fail_msg: "This playbook must target exactly one host"
+
+  roles:
+    - kvm
+    - ip_forwarding
+    - system_packages
+    - system_services
+    - vext
+    - nftables
+
+    - role: boot_assets
+      become: false
+
+    - role: zone
+      vars:
+        zone_name: nrt
+        bridge_name: br-nrt
+        bridge_ipv4: 10.0.0.1
+        bridge_prefix4: 24
+        bridge_ipv6: "fd10:6e72:74::1"
+        bridge_prefix6: 64
+
+    - role: node
+      vars: &nrt_1
+        zone_name: nrt
+        bridge_name: br-nrt
+        bridge_ipv4: 10.0.0.1
+        bridge_ipv6: "fd10:6e72:74::1"
+        node_name: nrt-1
+        node_ipv4: 10.0.0.2
+        node_prefix4: 24
+        node_ipv6: "fd10:6e72:74::2"
+        node_prefix6: 64
+        fc_mac: "06:00:AC:10:00:01"
+        tap_ipv4: 172.16.0.0
+        tap_ipv6: "fdfc:abad:face:6e72:7400:0:0:1"
+        fc_ipv4: 172.16.0.1
+        fc_ipv6: "fdfc:abad:face:6e72:7400:0:0:2"
+        fc_ipv6_prefix: "fdfc:abad:face:6e72:7400:0:0::"
+        fc_peers:
+          - "fdfc:abad:face:6e72:7401:0:0:2"
+
+    - role: firecracker
+      vars: *nrt_1
+
+    - role: node
+      vars: &nrt_2
+        zone_name: nrt
+        bridge_name: br-nrt
+        bridge_ipv4: 10.0.0.1
+        bridge_ipv6: "fd10:6e72:74::1"
+        node_name: nrt-2
+        node_ipv4: 10.0.0.3
+        node_prefix4: 24
+        node_ipv6: "fd10:6e72:74::3"
+        node_prefix6: 64
+        fc_mac: "06:00:AC:10:00:02"
+        tap_ipv4: 172.16.0.0
+        tap_ipv6: "fdfc:abad:face:6e72:7401:0:0:1"
+        fc_ipv4: 172.16.0.1
+        fc_ipv6: "fdfc:abad:face:6e72:7401:0:0:2"
+        fc_ipv6_prefix: "fdfc:abad:face:6e72:7401:0:0::"
+        fc_peers:
+          - "fdfc:abad:face:6e72:7400:0:0:2"
+
+    - role: firecracker
+      vars: *nrt_2
+
+    - role: ping
+      vars: *nrt_1
+
+    - role: ping
+      vars: *nrt_2

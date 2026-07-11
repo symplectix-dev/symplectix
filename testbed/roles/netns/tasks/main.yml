@@ -1,0 +1,25 @@
+- name: Check if {{ netns_name }} netns exists
+  register: netns_list
+  changed_when: false
+  ansible.builtin.command:
+    cmd: ip netns list
+
+- name: Create {{ netns_name }} netns
+  when: netns_name not in (netns_list.stdout_lines | map('split') | map('first') | list)
+  ansible.builtin.command:
+    cmd: ip netns add {{ netns_name }}
+
+- name: Bring loopback up in {{ netns_name }}
+  changed_when: false
+  ansible.builtin.command:
+    cmd: ip netns exec {{ netns_name }} ip link set lo up
+
+- name: Enable IPv4 forwarding in {{ netns_name }}
+  changed_when: false
+  ansible.builtin.command:
+    cmd: ip netns exec {{ netns_name }} sysctl -qw net.ipv4.ip_forward=1
+
+- name: Enable IPv6 forwarding in {{ netns_name }}
+  changed_when: false
+  ansible.builtin.command:
+    cmd: ip netns exec {{ netns_name }} sysctl -qw net.ipv6.conf.all.forwarding=1
