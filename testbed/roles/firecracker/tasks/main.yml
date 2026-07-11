@@ -32,7 +32,6 @@
       node_name: "{{ node_name }}"
       fc_socket: "{{ fc_socket }}"
       fc_data_dir: "{{ fc_data_dir }}"
-      fc_log: "{{ fc_log }}"
       fc_vcpu: "{{ fc_vcpu }}"
       fc_memory: "{{ fc_memory }}"
       fc_mac: "{{ fc_mac }}"

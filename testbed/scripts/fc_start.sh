@@ -12,7 +12,6 @@ jq_get() { jq -r ".$1" "$CONFIG"; }
 NODE=$(jq_get node_name)
 FC_SOCKET=$(jq_get fc_socket)
 FC_DATA_DIR=$(jq_get fc_data_dir)
-FC_LOG=$(jq_get fc_log)
 FC_VCPU=$(jq_get fc_vcpu)
 FC_MEMORY=$(jq_get fc_memory)
 FC_MAC=$(jq_get fc_mac)
@@ -32,15 +31,14 @@ if sudo pkill -0 -f "firecracker.*$FC_SOCKET_PAT" 2>/dev/null; then
 fi
 
 sudo rm -f "$FC_SOCKET"
-sudo ip netns exec "$NODE" /usr/local/bin/firecracker \
-  --api-sock "$FC_SOCKET" >> "$FC_LOG" 2>&1 &
+sudo ip netns exec "$NODE" /usr/local/bin/firecracker --api-sock "$FC_SOCKET" &
 FC_PID=$!
 
 for _ in $(seq 1 30); do
   [[ -S $FC_SOCKET ]] && break
   if ! sudo kill -0 "$FC_PID" 2>/dev/null; then
     rm -f "$FC_SOCKET"
-    echo "error: firecracker exited, check $FC_LOG" >&2
+    echo "error: firecracker exited" >&2
     exit 1
   fi
   sleep 0.5
@@ -48,7 +46,7 @@ done
 if [[ ! -S $FC_SOCKET ]]; then
   sudo kill "$FC_PID" 2>/dev/null || true
   rm -f "$FC_SOCKET"
-  echo "error: firecracker socket not created after 15s, check $FC_LOG" >&2
+  echo "error: firecracker socket not created after 15s" >&2
   exit 1
 fi
 
