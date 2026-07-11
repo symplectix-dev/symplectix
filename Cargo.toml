@@ -13,7 +13,6 @@ members = [
   "crates/fenwicktree",
   "crates/mdcstpp",
   "crates/protoc_plugin",
-  "crates/shtok",
   "crates/streamvbyte",
   "crates/subreaper",
   "crates/subreaper_test",

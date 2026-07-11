@@ -1,0 +1,14 @@
+load("//bazel:rust.bzl", "rust")
+
+rust.build_script(
+    name = "build_script",
+    srcs = ["build.rs"],
+    data = ["orphan.c"],
+)
+
+rust.library(
+    name = "subreaper_test",
+    srcs = ["src/lib.rs"],
+    visibility = ["//visibility:public"],
+    deps = [":build_script"],
+)

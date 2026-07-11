@@ -1,0 +1,25 @@
+load("//bazel:rust.bzl", "rust")
+
+rust.library(
+    name = "streamvbyte",
+    srcs = [
+        "src/streamvbyte.rs",
+        "src/streamvbyte_test.rs",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        "@crates//:byteorder",
+    ],
+)
+
+rust.test(
+    name = "streamvbyte_test",
+    size = "small",
+    crate = ":streamvbyte",
+    proc_macro_deps = [
+        "@crates//:quickcheck_macros",
+    ],
+    deps = [
+        "@crates//:quickcheck",
+    ],
+)

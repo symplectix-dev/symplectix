@@ -1,0 +1,12 @@
+load("//bazel:rust.bzl", "rust")
+
+rust.binary(
+    name = "mdcstpp",
+    srcs = ["src/main.rs"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "@crates//:clap",
+        "@crates//:tree-sitter",
+        "@crates//:tree-sitter-md",
+    ],
+)

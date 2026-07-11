@@ -1,0 +1,40 @@
+load("//bazel:rust.bzl", "rust")
+
+rust.library(
+    name = "bitcomp_core",
+    srcs = [
+        "src/and.rs",
+        "src/bits.rs",
+        "src/bits_mut.rs",
+        "src/block.rs",
+        "src/lib.rs",
+        "src/mask.rs",
+        "src/not.rs",
+        "src/or.rs",
+        "src/page.rs",
+        "src/word.rs",
+        "src/xor.rs",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        "@crates//:num",
+    ],
+)
+
+rust.test(
+    name = "bitcomp_core_test",
+    size = "small",
+    crate = ":bitcomp_core",
+)
+
+rust.test_suite(
+    name = "bitcomp_core_test_suite",
+    size = "small",
+    srcs = [
+        "tests/mask.rs",
+        "tests/page.rs",
+        "tests/similarity.rs",
+        "tests/union_find.rs",
+    ],
+    deps = [":bitcomp_core"],
+)

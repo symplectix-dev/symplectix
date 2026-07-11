@@ -1,0 +1,55 @@
+load("//bazel:rust.bzl", "rust")
+
+# NOTE: src/bits/fixed_bits.rs, src/bits/bin.rs and src/bits/roaring/** are not
+# reachable from src/lib.rs via any `mod` declaration, so they are excluded
+# here just as Cargo excludes them from the crate.
+rust.library(
+    name = "compacts",
+    srcs = [
+        "src/bits.rs",
+        "src/bits/bit_array.rs",
+        "src/bits/bit_vec.rs",
+        "src/bits/map.rs",
+        "src/bits/mask.rs",
+        "src/bits/pop_vec.rs",
+        "src/fenwick.rs",
+        "src/lib.rs",
+        "src/num.rs",
+        "src/ops.rs",
+        "src/ops/private.rs",
+        "src/text.rs",
+        "src/text/wavelet_matrix.rs",
+        "src/text/wavelet_matrix/search.rs",
+        "src/text/wavelet_matrix/trace.rs",
+        "src/text/wavelet_tree.rs",
+    ],
+    # Matches `[profile.dev.package.compacts] overflow-checks = false` in the
+    # root Cargo.toml: fenwick.rs relies on wraparound behavior.
+    rustc_flags = ["-Coverflow-checks=off"],
+    visibility = ["//visibility:public"],
+)
+
+rust.test(
+    name = "compacts_test",
+    size = "small",
+    crate = ":compacts",
+    rustc_flags = ["-Coverflow-checks=off"],
+    deps = [
+        "@crates//:quickcheck",
+    ],
+)
+
+rust.test_suite(
+    name = "compacts_test_suite",
+    size = "small",
+    srcs = [
+        "tests/bits.rs",
+        "tests/wm.rs",
+    ],
+    deps = [
+        ":compacts",
+        "@crates//:lazy_static",
+        "@crates//:quickcheck",
+        "@crates//:rand",
+    ],
+)

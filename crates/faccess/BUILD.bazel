@@ -1,0 +1,23 @@
+load("//bazel:rust.bzl", "rust")
+
+rust.library(
+    name = "faccess",
+    srcs = ["src/faccess.rs"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "@crates//:bitflags",
+        "@crates//:bon",
+        "@crates//:libc",
+    ],
+)
+
+# The test reads `$CARGO_MANIFEST_DIR/Cargo.toml` at run time (baked in at
+# compile time via `env!("CARGO_MANIFEST_DIR")`), which only resolves
+# correctly if the compile and test-run actions share the same exec root.
+rust.test_suite(
+    name = "faccess_test_suite",
+    size = "small",
+    srcs = ["tests/faccess.rs"],
+    tags = ["no-sandbox"],
+    deps = [":faccess"],
+)

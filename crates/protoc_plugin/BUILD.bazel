@@ -1,0 +1,24 @@
+load("//bazel:rust.bzl", "rust")
+
+rust.library(
+    name = "protoc_plugin",
+    srcs = ["src/lib.rs"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "@crates//:anyhow",
+        "@crates//:prost",
+        "@crates//:prost-reflect",
+        "@crates//:prost-types",
+    ],
+)
+
+rust.binary(
+    name = "protoc-gen-message-descriptor-dump",
+    srcs = ["examples/protoc-gen-message-descriptor-dump.rs"],
+    deps = [
+        ":protoc_plugin",
+        "@crates//:anyhow",
+        "@crates//:prost-reflect",
+        "@crates//:prost-types",
+    ],
+)
