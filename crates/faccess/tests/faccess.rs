@@ -2,10 +2,6 @@
 use std::io;
 
 use faccess::faccess;
-use runfiles::{
-    Runfiles,
-    rlocation,
-};
 
 fn check_ok(result: io::Result<()>) {
     result.unwrap_or_else(|err| panic!("check_ok: {err}"));
@@ -17,8 +13,7 @@ fn check_err(result: io::Result<()>) {
 
 #[test]
 fn runfiles() {
-    let r = Runfiles::create().expect("failed to create Runfiles");
-    let path = rlocation!(r, "_main/.rustfmt.toml").unwrap();
+    let path = testing::rlocation("_main/.rustfmt.toml");
 
     check_ok(faccess().at(&path));
     check_ok(faccess().r_ok().at(&path));

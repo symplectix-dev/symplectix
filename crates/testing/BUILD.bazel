@@ -6,6 +6,7 @@ rust.library(
     srcs = ["src/lib.rs"],
     visibility = ["//visibility:public"],
     deps = [
+        "@crates//:runfiles",
         "@crates//:tempfile",
     ],
 )

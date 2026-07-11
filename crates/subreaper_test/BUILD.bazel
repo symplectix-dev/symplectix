@@ -13,6 +13,6 @@ rust.library(
     data = [":orphan"],
     visibility = ["//visibility:public"],
     deps = [
-        "@rules_rust//rust/runfiles",
+        "//crates/testing",
     ],
 )

@@ -88,6 +88,10 @@ crate.spec(
     version = "0.10",
 )
 crate.spec(
+    package = "runfiles",
+    version = "0.2",
+)
+crate.spec(
     features = ["derive"],
     package = "serde",
     version = "1",

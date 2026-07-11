@@ -37,7 +37,7 @@ rust.binary(
 )
 
 # tests/run.rs locates the `subreaper` binary and subreaper_test's `orphan`
-# helper at runtime via the runfiles library, so no CARGO_BIN_EXE_* trick and
+# helper at runtime via testing::rlocation(), so no CARGO_BIN_EXE_* trick and
 # no no-sandbox/no-cache tags are needed.
 rust.test_suite(
     name = "subreaper_test_suite",
@@ -47,7 +47,7 @@ rust.test_suite(
     deps = [
         "//crates/faccess",
         "//crates/subreaper_test",
+        "//crates/testing",
         "@crates//:libc",
-        "@rules_rust//rust/runfiles",
     ],
 )

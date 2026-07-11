@@ -12,12 +12,21 @@ use std::{
     io,
 };
 
+use runfiles::Runfiles;
 pub use tempfile::TempDir;
 
 /// Absolute path to a private writable directory.
 pub static TMPDIR: Lazy<PathBuf> = Lazy::new(|| {
     env::var("TEST_TMPDIR").map(PathBuf::from).unwrap_or_else(|_var_err| env::temp_dir())
 });
+
+static RUNFILES: Lazy<Runfiles> =
+    Lazy::new(|| Runfiles::create().expect("failed to create Runfiles"));
+
+/// Returns the runtime path of a runfile, e.g. `rlocation("_main/path/to/file")`.
+pub fn rlocation(path: impl AsRef<Path>) -> PathBuf {
+    runfiles::rlocation!(RUNFILES, path.as_ref()).expect("failed to resolve the runfile")
+}
 
 /// Create a new temporary directory in [`TMPDIR`].
 /// The directory is automatically removed when the `TempDir` [drop](std::ops::Drop)s.

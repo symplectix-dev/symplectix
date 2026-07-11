@@ -46,6 +46,9 @@ build:debuginfo --@rules_rust//rust/settings:extra_rustc_flag=-Cdebug-assertions
 build:nodebuginfo --@rules_rust//rust/settings:extra_rustc_flag=-Cdebuginfo=0
 build:nodebuginfo --@rules_rust//rust/settings:extra_rustc_flag=-Cdebug-assertions=off
 
+# Embed LLVM bitcode in each compiled crate so the linker has IR available to
+# perform cross-crate optimization. Required for :lto=thin/fat below to do
+# anything; without it those settings are silently ineffective.
 common:lto --@rules_rust//rust/settings:extra_rustc_flag=-Cembed-bitcode=yes
 
 common:ltothin --config=lto

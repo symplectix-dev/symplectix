@@ -18,6 +18,6 @@ rust.test_suite(
     data = ["//:.rustfmt.toml"],
     deps = [
         ":faccess",
-        "@rules_rust//rust/runfiles",
+        "//crates/testing",
     ],
 )

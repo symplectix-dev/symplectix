@@ -31,9 +31,9 @@ rust.test(
         "@crates//:quickcheck_macros",
     ],
     deps = [
+        "//crates/testing",
         "@crates//:quickcheck",
         "@crates//:serde",
         "@crates//:serde_json",
-        "@rules_rust//rust/runfiles",
     ],
 )
