@@ -9,8 +9,8 @@ rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
 rust.toolchain(
     edition = "2024",
     versions = [
-        "1.94.1",
-        "nightly/2026-06-10",
+        "1.96.1",
+        "nightly/2026-07-01",
     ],
 )
 use_repo(rust, "rust_toolchains")
@@ -30,12 +30,9 @@ register_toolchains(
     # used with --platforms=@zig_sdk//libc_aware/platform:linux_<arch>_gnu.<version>
     "@zig_sdk//libc_aware/toolchain:linux_amd64_gnu.2.28",
     "@zig_sdk//libc_aware/toolchain:linux_arm64_gnu.2.28",
-    "//bazel/pyo3:toolchain",
-    "//bazel/pyo3:rust_toolchain",
-    # TODO: when rules_rust_pyo3 ships pyo3 0.29+, delete //bazel/pyo3/ and
-    # restore the two @rules_rust_pyo3 entries below.
-    # "@rules_rust_pyo3//toolchains:toolchain",
-    # "@rules_rust_pyo3//toolchains:rust_toolchain",
+    # For py.extension.
+    "@rules_rust_pyo3//toolchains:toolchain",
+    "@rules_rust_pyo3//toolchains:rust_toolchain",
 )
 
 pip = use_extension("@rules_python//python/extensions:pip.bzl", "pip")
