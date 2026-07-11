@@ -2,6 +2,5 @@ crate = use_extension(
     "@rules_rust//crate_universe:extension.bzl",
     "crate",
 )
-
 crate.from_specs()
 use_repo(crate, "crates")
