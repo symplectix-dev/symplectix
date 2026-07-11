@@ -5,10 +5,10 @@ bazel_dep(
     dev_dependency = True,
 )
 
-# Bazel target diffing between two git revisions
+# Prebuilt binaries for buildifier and buildozer
 bazel_dep(
-    name = "bazel-diff",
-    version = "26.0.1",
+    name = "buildifier_prebuilt",
+    version = "8.5.1.2",
     dev_dependency = True,
 )
 
@@ -20,22 +20,26 @@ bazel_dep(
     dev_dependency = True,
 )
 
-# Prebuilt binaries for buildifier and buildozer
+# Bazel target diffing between two git revisions
 bazel_dep(
-    name = "buildifier_prebuilt",
-    version = "8.5.1.2",
+    name = "bazel-diff",
+    version = "32.0.1",
     dev_dependency = True,
 )
 
-# Shell rules
-bazel_dep(name = "rules_shell", version = "0.6.1")
+# Hermetic C/C++ toolchain using Zig-bundled Clang
+bazel_dep(name = "hermetic_cc_toolchain", version = "4.1.0")
 
-# Python rules for Bazel
-bazel_dep(name = "rules_python", version = "1.9.0")
-bazel_dep(name = "rules_uv", version = "0.89.2")
+# C++ rules
+# An auto-detecting toolchain that expects to find tools installed on the host machine.
+# bazel_dep(name = "rules_cc", version = "0.2.16")
+
+# Build rules for interfacing with "foreign" (non-Bazel) build systems
+# (CMake, configure-make, GNU Make, boost, ninja, Meson).
+# bazel_dep(name = "rules_foreign_cc", version = "0.14.0")
 
 # Rust rules for Bazel
-rules_rust_version = "0.70.0"
+rules_rust_version = "0.71.3"
 
 bazel_dep(name = "rules_rust", version = rules_rust_version)
 bazel_dep(name = "rules_rust_pyo3", version = rules_rust_version)
@@ -44,11 +48,15 @@ bazel_dep(name = "rules_rust_pyo3", version = rules_rust_version)
 # bazel_dep(name = "rules_rust_prost", version = rules_rust_version)
 # bazel_dep(name = "rules_rust_protobuf", version = rules_rust_version)
 
-# Hermetic C/C++ toolchain using Zig-bundled Clang
-bazel_dep(name = "hermetic_cc_toolchain", version = "4.1.0")
+# Python rules for Bazel
+bazel_dep(name = "rules_python", version = "2.2.0")
+bazel_dep(name = "rules_uv", version = "0.89.2")
+
+# Shell rules
+bazel_dep(name = "rules_shell", version = "0.8.0")
 
 # Constraint values for specifying platforms and toolchains
-bazel_dep(name = "platforms", version = "1.0.0")
+bazel_dep(name = "platforms", version = "1.1.0")
 
 # # Common functions and rules for Bazel
 # bazel_dep(name = "bazel_skylib", version = "1.9.0")
@@ -57,26 +65,15 @@ bazel_dep(name = "platforms", version = "1.0.0")
 bazel_dep(name = "aspect_bazel_lib", version = "2.22.5")
 
 # Rules for creating packages (zip, tar, deb, rpm, ...)
-bazel_dep(name = "rules_pkg", version = "1.1.0")
+bazel_dep(name = "rules_pkg", version = "1.2.0")
 
-# # Rules for building OCI containers
-# # bazel_dep(name = "rules_oci", version = "2.2.6")
+# Rules for building OCI containers
+# bazel_dep(name = "rules_oci", version = "2.2.6")
 
-# # Protocol Buffers - Google's data interchange format
-# bazel_dep(name = "protobuf", version = "31.1")
-
-# # Build Protobuf and gRPC code from proto_library
+# Build Protobuf and gRPC code from proto_library
 # bazel_dep(name = "rules_proto_grpc", version = "5.5.0")
-# # bazel_dep(name = "rules_proto_grpc_doc", version = "<version number here>")
-# # bazel_dep(name = "rules_proto_grpc_grpcgateway", version = "<version number here>")
-# # bazel_dep(name = "rules_proto_grpc_buf", version = "<version number here>")
-# # bazel_dep(name = "rules_proto_grpc_cc", version = "<version number here>")
-# # bazel_dep(name = "rules_proto_grpc_go", version = "<version number here>")
-
-# # C++ rules
-# # An auto-detecting toolchain that expects to find tools installed on the host machine.
-# bazel_dep(name = "rules_cc", version = "0.2.16")
-
-# # Build rules for interfacing with "foreign" (non-Bazel) build systems
-# # (CMake, configure-make, GNU Make, boost, ninja, Meson).
-# # bazel_dep(name = "rules_foreign_cc", version = "0.14.0")
+# bazel_dep(name = "rules_proto_grpc_doc", version = "<version number here>")
+# bazel_dep(name = "rules_proto_grpc_grpcgateway", version = "<version number here>")
+# bazel_dep(name = "rules_proto_grpc_buf", version = "<version number here>")
+# bazel_dep(name = "rules_proto_grpc_cc", version = "<version number here>")
+# bazel_dep(name = "rules_proto_grpc_go", version = "<version number here>")
