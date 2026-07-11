@@ -4,11 +4,11 @@
     enabled: true
     state: started
 
-- name: Apply masquerade in vwan netns (host)
+- name: Apply masquerade in vext netns (host)
   changed_when: false
   ansible.builtin.shell:
     cmd: |
-      ip netns exec vwan nft -f - <<'NFTEOF'
+      ip netns exec vext nft -f - <<'NFTEOF'
       destroy table inet host-filter
       table inet host-filter {
         chain postrouting {
@@ -18,42 +18,42 @@
       }
       NFTEOF
 
-- name: Apply masquerade on host (vwan)
+- name: Apply masquerade on host (vext)
   changed_when: false
   ansible.builtin.shell:
     cmd: |
       nft -f - <<'NFTEOF'
-      destroy table inet vwan-filter
-      table inet vwan-filter {
+      destroy table inet vext-filter
+      table inet vext-filter {
         chain postrouting {
           type nat hook postrouting priority srcnat; policy accept;
-          iifname "vwan" counter masquerade
+          iifname "vext" counter masquerade
         }
       }
       NFTEOF
 
-# vwan_host_forward:
+# vext_host_forward:
 # Set to true if the host has an existing inet filter forward chain
 # Set to false if the host does not have this chain to skip these tasks.
 - name: Check inet filter forward chain exists on host
-  when: vwan_host_forward
+  when: vext_host_forward
   changed_when: false
   ansible.builtin.command:
     cmd: nft list chain inet filter forward
 
-- name: Check vwan forward rules on host
-  when: vwan_host_forward
-  register: vwan_fwd_check
+- name: Check vext forward rules on host
+  when: vext_host_forward
+  register: vext_fwd_check
   changed_when: false
   failed_when: false
   ansible.builtin.shell:
-    cmd: nft list chain inet filter forward | grep -cF '"vwan"'
+    cmd: nft list chain inet filter forward | grep -cF '"vext"'
 
-- name: Apply vwan forward rules on host
-  when: vwan_host_forward and (vwan_fwd_check.stdout | int) == 0
+- name: Apply vext forward rules on host
+  when: vext_host_forward and (vext_fwd_check.stdout | int) == 0
   ansible.builtin.shell:
     cmd: |
       nft -f - <<'NFTEOF'
-      add rule inet filter forward oifname "vwan" ct state established,related accept
-      add rule inet filter forward iifname "vwan" accept
+      add rule inet filter forward oifname "vext" ct state established,related accept
+      add rule inet filter forward iifname "vext" accept
       NFTEOF

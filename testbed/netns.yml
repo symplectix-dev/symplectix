@@ -10,7 +10,7 @@
     - ip_forwarding
     - system_packages
     - system_services
-    - vwan
+    - vext
     - nftables
 
     - role: boot_assets

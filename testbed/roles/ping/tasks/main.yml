@@ -54,6 +54,10 @@
       "ping -c1 -W2 {{ bridge_ipv6 }}"
 
 - name: Ping internet from {{ node_name }} VM (IPv4)
+  register: vm_ping_internet
+  retries: 3
+  delay: 1
+  until: vm_ping_internet.rc == 0
   changed_when: false
   ansible.builtin.shell:
     cmd: >-

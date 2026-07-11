@@ -10,31 +10,31 @@
   vars:
     veth_endpoints:
       - name: "{{ node_name }}"
-        netns: vwan
-      - name: vwan
+        netns: vext
+      - name: vext
         netns: "{{ node_name }}"
         ip4: "{{ node_ipv4 }}"
         prefix4: "{{ node_prefix4 }}"
         ip6: "{{ node_ipv6 }}"
         prefix6: "{{ node_prefix6 }}"
 
-- name: Check veth bridge membership in vwan netns
+- name: Check veth bridge membership in vext netns
   register: veth_master
   failed_when: false
   changed_when: false
   ansible.builtin.command:
-    cmd: ip netns exec vwan ip link show {{ node_name }}
+    cmd: ip netns exec vext ip link show {{ node_name }}
 
-- name: Attach veth to bridge in vwan netns
+- name: Attach veth to bridge in vext netns
   when: veth_master.rc == 0 and ('master ' ~ bridge_name) not in veth_master.stdout
   ansible.builtin.command:
-    cmd: ip netns exec vwan ip link set {{ node_name }} master {{ bridge_name }}
+    cmd: ip netns exec vext ip link set {{ node_name }} master {{ bridge_name }}
 
-- name: Bring veth up in vwan netns
+- name: Bring veth up in vext netns
   when: veth_master.rc == 0
   changed_when: false
   ansible.builtin.command:
-    cmd: ip netns exec vwan ip link set {{ node_name }} up
+    cmd: ip netns exec vext ip link set {{ node_name }} up
 
 - name: Check default IPv4 route in namespace
   register: ns_route4
@@ -99,17 +99,17 @@
   ansible.builtin.command:
     cmd: ip netns exec {{ node_name }} ip link set {{ tap_dev }} up
 
-- name: Check fdfc route for this node in vwan netns
-  register: wan_fdfc_route
+- name: Check fdfc route for this node in vext netns
+  register: ext_fdfc_route
   failed_when: false
   changed_when: false
   ansible.builtin.command:
-    cmd: ip netns exec vwan ip -6 route show {{ fc_ipv6_prefix }}/{{ tap_prefix6 }}
+    cmd: ip netns exec vext ip -6 route show {{ fc_ipv6_prefix }}/{{ tap_prefix6 }}
 
-- name: Set fdfc route for this node in vwan netns
-  when: ("via " ~ node_ipv6 ~ " ") not in wan_fdfc_route.stdout
+- name: Set fdfc route for this node in vext netns
+  when: ("via " ~ node_ipv6 ~ " ") not in ext_fdfc_route.stdout
   ansible.builtin.command:
-    cmd: ip netns exec vwan ip -6 route replace {{ fc_ipv6_prefix }}/{{ tap_prefix6 }} via {{ node_ipv6 }}
+    cmd: ip netns exec vext ip -6 route replace {{ fc_ipv6_prefix }}/{{ tap_prefix6 }} via {{ node_ipv6 }}
 
 - name: Apply nftables rules in namespace
   changed_when: false
@@ -120,20 +120,20 @@
       table inet fc-filter {
         chain prerouting {
           type nat hook prerouting priority dstnat; policy accept;
-          iifname vwan ip  daddr {{ node_ipv4 }} dnat to {{ fc_ipv4 }}
-          iifname vwan ip6 daddr {{ node_ipv6 }} dnat to {{ fc_ipv6 }}
+          iifname vext ip  daddr {{ node_ipv4 }} dnat to {{ fc_ipv4 }}
+          iifname vext ip6 daddr {{ node_ipv6 }} dnat to {{ fc_ipv6 }}
         }
         chain postrouting {
           type nat hook postrouting priority srcnat; policy accept;
-          ip  saddr {{ fc_ipv4 }} oifname vwan counter masquerade
-          ip6 saddr {{ fc_ipv6 }} oifname vwan ip6 daddr != fdfc::/16 counter masquerade
+          ip  saddr {{ fc_ipv4 }} oifname vext counter masquerade
+          ip6 saddr {{ fc_ipv6 }} oifname vext ip6 daddr != fdfc::/16 counter masquerade
         }
         chain forward {
           type filter hook forward priority filter; policy drop;
           ct state established,related accept
           iifname "tap*" oifname "tap*" accept
-          iifname "tap*" oifname vwan accept
-          iifname vwan oifname "tap*" accept
+          iifname "tap*" oifname vext accept
+          iifname vext oifname "tap*" accept
         }
       }
       NFTEOF

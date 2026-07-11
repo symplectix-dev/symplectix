@@ -12,8 +12,8 @@ packages:
 cpu_vendor: intel
 cpu_arch: x86_64
 
-vwan_host_forward: true
+vext_host_forward: true
 
-vwan_ext_ip: 192.168.200.1
-vwan_int_ip: 192.168.200.2
-vwan_prefix: 24
+vext_ext_ip: 192.168.200.1
+vext_int_ip: 192.168.200.2
+vext_prefix: 24

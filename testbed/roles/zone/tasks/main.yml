@@ -3,38 +3,38 @@
   failed_when: false
   changed_when: false
   ansible.builtin.command:
-    cmd: ip netns exec vwan ip link show {{ bridge_name }}
+    cmd: ip netns exec vext ip link show {{ bridge_name }}
 
 - name: Create bridge in wan netns
   when: bridge_check.rc != 0
   ansible.builtin.command:
-    cmd: ip netns exec vwan ip link add {{ bridge_name }} type bridge
+    cmd: ip netns exec vext ip link add {{ bridge_name }} type bridge
 
 - name: Check bridge IPv4 address
   register: bridge_addr4
   failed_when: false
   changed_when: false
   ansible.builtin.command:
-    cmd: ip netns exec vwan ip -4 addr show dev {{ bridge_name }} to {{ bridge_ipv4 }}
+    cmd: ip netns exec vext ip -4 addr show dev {{ bridge_name }} to {{ bridge_ipv4 }}
 
 - name: Add IPv4 address to bridge
   when: bridge_addr4.stdout == ""
   ansible.builtin.command:
-    cmd: ip netns exec vwan ip -4 addr add {{ bridge_ipv4 }}/{{ bridge_prefix4 }} dev {{ bridge_name }}
+    cmd: ip netns exec vext ip -4 addr add {{ bridge_ipv4 }}/{{ bridge_prefix4 }} dev {{ bridge_name }}
 
 - name: Check bridge IPv6 address
   register: bridge_addr6
   failed_when: false
   changed_when: false
   ansible.builtin.command:
-    cmd: ip netns exec vwan ip -6 addr show dev {{ bridge_name }} to {{ bridge_ipv6 }}
+    cmd: ip netns exec vext ip -6 addr show dev {{ bridge_name }} to {{ bridge_ipv6 }}
 
 - name: Add IPv6 address to bridge
   when: bridge_addr6.stdout == ""
   ansible.builtin.command:
-    cmd: ip netns exec vwan ip -6 addr add {{ bridge_ipv6 }}/{{ bridge_prefix6 }} dev {{ bridge_name }}
+    cmd: ip netns exec vext ip -6 addr add {{ bridge_ipv6 }}/{{ bridge_prefix6 }} dev {{ bridge_name }}
 
 - name: Bring bridge up
   changed_when: false
   ansible.builtin.command:
-    cmd: ip netns exec vwan ip link set {{ bridge_name }} up
+    cmd: ip netns exec vext ip link set {{ bridge_name }} up
