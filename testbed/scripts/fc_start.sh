@@ -33,7 +33,7 @@ fi
 
 sudo rm -f "$FC_SOCKET"
 sudo ip netns exec "$NODE" /usr/local/bin/firecracker \
-  --api-sock "$FC_SOCKET" 2>&1 | sudo tee -a "$FC_LOG" >/dev/null &
+  --api-sock "$FC_SOCKET" >> "$FC_LOG" 2>&1 &
 FC_PID=$!
 
 for _ in $(seq 1 30); do
