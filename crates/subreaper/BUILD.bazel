@@ -36,19 +36,18 @@ rust.binary(
     deps = [":subreaper_lib"],
 )
 
-# tests/run.rs shells out to the `subreaper` binary via CARGO_BIN_EXE_subreaper
-# (populated automatically by rules_rust from a "bin"-typed `data` dep) and to
-# subreaper_test's `orphan` helper, whose path is baked in at compile time
-# from `env!("OUT_DIR")`. Needs the real exec root, hence no-sandbox.
+# tests/run.rs locates the `subreaper` binary and subreaper_test's `orphan`
+# helper at runtime via the runfiles library, so no CARGO_BIN_EXE_* trick and
+# no no-sandbox/no-cache tags are needed.
 rust.test_suite(
     name = "subreaper_test_suite",
     size = "small",
     srcs = ["tests/run.rs"],
     data = [":subreaper"],
-    tags = ["no-sandbox"],
     deps = [
         "//crates/faccess",
         "//crates/subreaper_test",
         "@crates//:libc",
+        "@rules_rust//rust/runfiles",
     ],
 )

@@ -1,4 +1,5 @@
 import %workspace%/bazel/bazelrc/preset.bazelrc
+import %workspace%/bazel/bazelrc/profile.bazelrc
 import %workspace%/bazel/bazelrc/remote.bazelrc
 
 # Build metadata is custom key-value string pairs

@@ -1,26 +1,18 @@
+load("//bazel:cc.bzl", "cc")
 load("//bazel:rust.bzl", "rust")
 
-rust.build_script(
-    name = "build_script",
-    srcs = ["build.rs"],
-    data = ["orphan.c"],
+cc.binary(
+    name = "orphan",
+    srcs = ["orphan.c"],
 )
 
-# `env!("OUT_DIR")` (used by `orphan()`) is baked in at compile time as an
-# absolute path derived from this action's `pwd`. With sandboxing on, that
-# path points into an ephemeral per-action sandbox that is gone by the time
-# any consumer runs, so `orphan()`'s `path.exists()` check fails downstream.
-# no-sandbox makes `pwd` the real exec root instead. no-cache is required too:
-# the baked path also embeds this machine's output_base hash, so a cached
-# artifact built elsewhere (or built sandboxed before this tag existed) would
-# silently serve a bogus path -- this action must always execute fresh.
 rust.library(
     name = "subreaper_test",
+    testonly = True,
     srcs = ["src/lib.rs"],
-    tags = [
-        "no-cache",
-        "no-sandbox",
-    ],
+    data = [":orphan"],
     visibility = ["//visibility:public"],
-    deps = [":build_script"],
+    deps = [
+        "@rules_rust//rust/runfiles",
+    ],
 )

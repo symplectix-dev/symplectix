@@ -14,9 +14,14 @@ use std::thread;
 use std::time::Duration;
 
 use faccess::faccess;
+use runfiles::{
+    Runfiles,
+    rlocation,
+};
 
 fn subreaper() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_subreaper"))
+    let r = Runfiles::create().expect("failed to create Runfiles");
+    rlocation!(r, "_main/crates/subreaper/subreaper").expect("failed to resolve the subreaper runfile")
 }
 
 fn orphan() -> PathBuf {

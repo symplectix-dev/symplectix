@@ -19,9 +19,6 @@ rust.library(
     deps = [":build_script"],
 )
 
-# The test reads `testdata/*.json` at run time via a path baked in at compile
-# time from `env!("CARGO_MANIFEST_DIR")`, which only resolves correctly if the
-# compile and test-run actions share the same exec root.
 rust.test(
     name = "bitcomp_rrr_test",
     size = "small",
@@ -33,10 +30,10 @@ rust.test(
     proc_macro_deps = [
         "@crates//:quickcheck_macros",
     ],
-    tags = ["no-sandbox"],
     deps = [
         "@crates//:quickcheck",
         "@crates//:serde",
         "@crates//:serde_json",
+        "@rules_rust//rust/runfiles",
     ],
 )

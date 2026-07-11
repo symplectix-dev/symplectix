@@ -1,8 +1,11 @@
 #![allow(missing_docs)]
 use std::io;
-use std::path::Path;
 
 use faccess::faccess;
+use runfiles::{
+    Runfiles,
+    rlocation,
+};
 
 fn check_ok(result: io::Result<()>) {
     result.unwrap_or_else(|err| panic!("check_ok: {err}"));
@@ -13,19 +16,16 @@ fn check_err(result: io::Result<()>) {
 }
 
 #[test]
-fn cargo_manifest() {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
+fn runfiles() {
+    let r = Runfiles::create().expect("failed to create Runfiles");
+    let path = rlocation!(r, "_main/.rustfmt.toml").unwrap();
 
     check_ok(faccess().at(&path));
     check_ok(faccess().r_ok().at(&path));
     check_ok(faccess().real().at(&path));
     check_ok(faccess().real().r_ok().at(&path));
 
-    check_ok(faccess().r_ok().w_ok().at(&path));
-    check_ok(faccess().real().w_ok().at(&path));
-
-    check_err(faccess().x_ok().at(&path));
-    check_err(faccess().real().x_ok().at(&path));
+    // Results vary depending on spawn_strategy, so w_ok/x_ok are not checked here.
 }
 
 #[test]

@@ -3,14 +3,14 @@ name = "bitcomp_test"
 version.workspace = true
 edition.workspace = true
 publish = false
+# benches/rrr_encode_decode.rs depends on bitcomp_rrr, which is Bazel-only
+# (left the Cargo workspace). Disable autodiscovery so Cargo doesn't pick it
+# up, and declare the remaining benches explicitly below.
+autobenches = false
 
 [[bench]]
 harness = false
 name = "rank_select"
-
-[[bench]]
-harness = false
-name = "rrr_encode_decode"
 
 [[bench]]
 harness = false
@@ -21,7 +21,6 @@ name = "compint"
 [dev-dependencies]
 bitcomp_poppy.workspace = true
 bitcomp_roaring.workspace = true
-bitcomp_rrr.workspace = true
 bitcomp_slicing.workspace = true
 bitpacking.workspace = true
 bitcomp_core.workspace = true

@@ -4,18 +4,14 @@ members = [
   "crates/bitcomp_core",
   "crates/bitcomp_poppy",
   "crates/bitcomp_roaring",
-  "crates/bitcomp_rrr",
   "crates/bitcomp_slicing",
   "crates/bitcomp_test",
   "crates/bitfunnel",
   "crates/compacts",
-  "crates/faccess",
   "crates/fenwicktree",
   "crates/mdcstpp",
   "crates/protoc_plugin",
   "crates/streamvbyte",
-  "crates/subreaper",
-  "crates/subreaper_test",
   "crates/testing",
   "crates/unionfind",
   "crates/varint",
@@ -29,7 +25,6 @@ edition = "2024"
 bitcomp_core = { path = "crates/bitcomp_core" }
 bitcomp_poppy = { path = "crates/bitcomp_poppy" }
 bitcomp_roaring = { path = "crates/bitcomp_roaring" }
-bitcomp_rrr = { path = "crates/bitcomp_rrr" }
 bitcomp_slicing = { path = "crates/bitcomp_slicing" }
 compacts = { path = "crates/compacts" }
 fenwicktree = { path = "crates/fenwicktree" }
@@ -37,11 +32,7 @@ fenwicktree = { path = "crates/fenwicktree" }
 streamvbyte = { path = "crates/streamvbyte" }
 varint = { path = "crates/varint" }
 
-faccess = { path = "crates/faccess" }
 protoc_plugin = { path = "crates/protoc_plugin" }
-shtok = { path = "crates/shtok" }
-subreaper = { path = "crates/subreaper" }
-subreaper_test = { path = "crates/subreaper_test" }
 testing = { path = "crates/testing" }
 
 anyhow = { version = "1" }

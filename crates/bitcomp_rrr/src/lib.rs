@@ -47,11 +47,16 @@ macro_rules! rrr_decode {
 #[cfg(test)]
 mod test_helper {
     use std::fs;
-    use std::path::Path;
+
+    use runfiles::{
+        Runfiles,
+        rlocation,
+    };
 
     pub(crate) fn read_json(n: usize) -> fs::File {
-        let testdata = Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/testdata"));
-        let path = testdata.join(format!("comb_table_{n}.json"));
+        let r = Runfiles::create().expect("failed to create Runfiles");
+        let path = rlocation!(r, format!("_main/crates/bitcomp_rrr/testdata/comb_table_{n}.json"))
+            .expect("failed to resolve the testdata runfile");
         fs::OpenOptions::new().read(true).open(path).expect("failed to open a json file")
     }
 }
