@@ -8,27 +8,6 @@ vext netns acts as a mesh hub. Each zone has a bridge inside vext, and
 nodes connect to it directly. VM-to-VM traffic (fdfc::) stays within
 vext; external traffic exits via the host.
 
-### TODO: MMDS tap
-
-Add a dedicated tap for MMDS so that the metadata endpoint (169.254.169.254)
-is served on a separate interface from VM traffic.
-
-The MMDS tap has only a link-local address (169.254.169.254 on the tap side,
-no IP on the host side, no routing). This ensures metadata packets never
-enter the data path. With a shared tap, packets destined for 169.254.169.254
-could accidentally reach the host side and be forwarded or leak outside the
-node netns.
-
-### TODO: Remove IPv4 DNAT from node_ipv4 to VM
-
-Currently the fc nftables table DNATs traffic destined for node_ipv4
-(e.g. 10.0.0.2) to the VM's tap IP. This creates an unintended path where
-any host on the internal network can reach a VM via the node's IP.
-
-node_ipv4 should be used only for node-to-node and node-to-vext routing,
-not as a reachable address for VM traffic. Remove the DNAT prerouting rule
-and rely solely on fdfc:: for VM-to-VM communication.
-
 ## IPv6 prefix scheme
 
 ```
@@ -73,3 +52,26 @@ ssh -i testbed/testkey \
     -o "ProxyCommand=sudo ip netns exec nrt-1 nc 172.16.0.1 22" \
     root@nrt-1
 ```
+
+## TODOs
+
+### A dedicated MMDS tap
+
+Add a dedicated tap for MMDS so that the metadata endpoint (169.254.169.254)
+is served on a separate interface from VM traffic.
+
+The MMDS tap has only a link-local address (169.254.169.254 on the tap side,
+no IP on the host side, no routing). This ensures metadata packets never
+enter the data path. With a shared tap, packets destined for 169.254.169.254
+could accidentally reach the host side and be forwarded or leak outside the
+node netns.
+
+### Remove IPv4 DNAT from node_ipv4 to VM
+
+Currently the fc nftables table DNATs traffic destined for node_ipv4
+(e.g. 10.0.0.2) to the VM's tap IP. This creates an unintended path where
+any host on the internal network can reach a VM via the node's IP.
+
+node_ipv4 should be used only for node-to-node and node-to-vext routing,
+not as a reachable address for VM traffic. Remove the DNAT prerouting rule
+and rely solely on fdfc:: for VM-to-VM communication.
