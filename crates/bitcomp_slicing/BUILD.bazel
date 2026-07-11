@@ -1,0 +1,25 @@
+load("//bazel:rust.bzl", "rust")
+
+rust.library(
+    name = "bitcomp_slicing",
+    srcs = [
+        "src/block.rs",
+        "src/block_test.rs",
+        "src/build.rs",
+        "src/build_test.rs",
+        "src/chunk.rs",
+        "src/chunk_test.rs",
+        "src/lib.rs",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//crates/bitcomp_core",
+        "@crates//:bytemuck",
+    ],
+)
+
+rust.test(
+    name = "bitcomp_slicing_test",
+    size = "small",
+    crate = ":bitcomp_slicing",
+)

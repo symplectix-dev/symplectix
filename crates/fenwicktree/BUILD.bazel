@@ -1,0 +1,28 @@
+load("//bazel:rust.bzl", "rust")
+
+rust.library(
+    name = "fenwicktree",
+    srcs = ["src/lib.rs"],
+    # Matches `[profile.dev.package.fenwicktree] overflow-checks = false` in
+    # the root Cargo.toml: this crate relies on wraparound behavior.
+    rustc_flags = ["-Coverflow-checks=off"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//crates/bitcomp_core",
+    ],
+)
+
+rust.test_suite(
+    name = "fenwicktree_test_suite",
+    size = "small",
+    srcs = ["tests/fenwicktree_test.rs"],
+    rustc_flags = ["-Coverflow-checks=off"],
+    proc_macro_deps = [
+        "@crates//:quickcheck_macros",
+    ],
+    deps = [
+        ":fenwicktree",
+        "//crates/bitcomp_core",
+        "@crates//:quickcheck",
+    ],
+)
