@@ -1,7 +1,5 @@
 load("//bazel:rust.bzl", "rust")
 
-# NOTE: benches/ (rank_select.rs, rrr_encode_decode.rs, compint.rs) are out of
-# scope for this migration and are not built here.
 rust.library(
     name = "bitcomp_test",
     srcs = ["src/lib.rs"],
@@ -17,5 +15,41 @@ rust.test_suite(
     deps = [
         "//crates/bitcomp_core",
         "@crates//:quickcheck",
+    ],
+)
+
+# `[[bench]] harness = false` in Cargo.toml: plain binaries providing their
+# own `main` via `criterion_main!`. Run with e.g.:
+#   bazel run //crates/bitcomp_test:compint_bench -- --bench
+rust.binary(
+    name = "compint_bench",
+    srcs = ["benches/compint.rs"],
+    deps = [
+        "//crates/streamvbyte",
+        "//crates/varint",
+        "@crates//:bitpacking",
+        "@crates//:criterion",
+    ],
+)
+
+rust.binary(
+    name = "rank_select_bench",
+    srcs = ["benches/rank_select.rs"],
+    deps = [
+        "//crates/bitcomp_core",
+        "//crates/bitcomp_poppy",
+        "//crates/bitcomp_roaring",
+        "@crates//:criterion",
+        "@crates//:rand",
+    ],
+)
+
+rust.binary(
+    name = "rrr_encode_decode_bench",
+    srcs = ["benches/rrr_encode_decode.rs"],
+    deps = [
+        "//crates/bitcomp_rrr",
+        "@crates//:criterion",
+        "@crates//:rand",
     ],
 )

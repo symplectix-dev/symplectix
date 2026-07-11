@@ -53,3 +53,29 @@ rust.test_suite(
         "@crates//:rand",
     ],
 )
+
+# `[[bench]] harness = false` in Cargo.toml: plain binaries providing their
+# own `main` via `criterion_main!`. Run with e.g.:
+#   bazel run //crates/compacts:bits_bench -- --bench
+rust.binary(
+    name = "bits_bench",
+    srcs = ["benches/bits.rs"],
+    rustc_flags = ["-Coverflow-checks=off"],
+    deps = [
+        ":compacts",
+        "@crates//:criterion",
+        "@crates//:rand",
+    ],
+)
+
+rust.binary(
+    name = "wm_bench",
+    srcs = ["benches/wm.rs"],
+    rustc_flags = ["-Coverflow-checks=off"],
+    deps = [
+        ":compacts",
+        "@crates//:criterion",
+        "@crates//:lazy_static",
+        "@crates//:rand",
+    ],
+)
