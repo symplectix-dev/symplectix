@@ -16,12 +16,12 @@ META=$(wget -q -T 10 -O - --header "Accept: application/json" http://169.254.169
 ip -4 addr del 169.254.0.2/16 dev eth0
 
 FC_IPV4=$(echo "$META" | jq -r '.fc_ipv4')
-PREFIX4=$(echo "$META"  | jq -r '.prefix4')
-FC_IPV6=$(echo "$META"  | jq -r '.fc_ipv6')
-PREFIX6=$(echo "$META"  | jq -r '.prefix6')
+PREFIX4=$(echo "$META" | jq -r '.prefix4')
+FC_IPV6=$(echo "$META" | jq -r '.fc_ipv6')
+PREFIX6=$(echo "$META" | jq -r '.prefix6')
 TAP_IPV4=$(echo "$META" | jq -r '.tap_ipv4')
 TAP_IPV6=$(echo "$META" | jq -r '.tap_ipv6')
-SSH_KEY=$(echo "$META"  | jq -r '.ssh_public_key')
+SSH_KEY=$(echo "$META" | jq -r '.ssh_public_key')
 
 ip -4 addr add "$FC_IPV4/$PREFIX4" dev eth0
 ip -6 addr add "$FC_IPV6/$PREFIX6" dev eth0
@@ -41,7 +41,7 @@ mount -t overlay overlay \
 
 # Write through the overlay mount, not directly into `upper/`.
 mkdir -p /mnt/root/root/.ssh
-printf '%s\n' "$SSH_KEY" > /mnt/root/root/.ssh/authorized_keys
+printf '%s\n' "$SSH_KEY" >/mnt/root/root/.ssh/authorized_keys
 chmod 700 /mnt/root/root/.ssh
 chmod 600 /mnt/root/root/.ssh/authorized_keys
 

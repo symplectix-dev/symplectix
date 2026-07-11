@@ -33,11 +33,11 @@ fi
 
 sudo rm -f "$FC_SOCKET"
 sudo ip netns exec "$NODE" /usr/local/bin/firecracker \
-  --api-sock "$FC_SOCKET" >> "$FC_LOG" 2>&1 &
+  --api-sock "$FC_SOCKET" 2>&1 | sudo tee -a "$FC_LOG" >/dev/null &
 FC_PID=$!
 
-for i in $(seq 1 30); do
-  [[ -S "$FC_SOCKET" ]] && break
+for _ in $(seq 1 30); do
+  [[ -S $FC_SOCKET ]] && break
   if ! sudo kill -0 "$FC_PID" 2>/dev/null; then
     rm -f "$FC_SOCKET"
     echo "error: firecracker exited, check $FC_LOG" >&2
@@ -45,7 +45,7 @@ for i in $(seq 1 30); do
   fi
   sleep 0.5
 done
-if [[ ! -S "$FC_SOCKET" ]]; then
+if [[ ! -S $FC_SOCKET ]]; then
   sudo kill "$FC_PID" 2>/dev/null || true
   rm -f "$FC_SOCKET"
   echo "error: firecracker socket not created after 15s, check $FC_LOG" >&2
@@ -71,7 +71,7 @@ fc_api -X PUT http://localhost/network-interfaces/eth0 -d \
 fc_api -X PUT http://localhost/mmds/config -d \
   '{"version": "V1", "network_interfaces": ["eth0"]}'
 
-SSH_KEY="$(tr -d '\n' < "$SSH_KEY_FILE")"
+SSH_KEY="$(tr -d '\n' <"$SSH_KEY_FILE")"
 fc_api -X PUT http://localhost/mmds -d \
   "$(jq -n \
     --arg fc_ipv4 "$FC_IPV4" \
