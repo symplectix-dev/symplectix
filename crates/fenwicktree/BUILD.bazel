@@ -16,10 +16,10 @@ rust.test_suite(
     name = "fenwicktree_test_suite",
     size = "small",
     srcs = ["tests/fenwicktree_test.rs"],
-    rustc_flags = ["-Coverflow-checks=off"],
     proc_macro_deps = [
         "@crates//:quickcheck_macros",
     ],
+    rustc_flags = ["-Coverflow-checks=off"],
     deps = [
         ":fenwicktree",
         "//crates/bitcomp_core",

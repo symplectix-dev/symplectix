@@ -7,6 +7,10 @@ crate.spec(
     version = "1",
 )
 crate.spec(
+    package = "arc-swap",
+    version = "1.9",
+)
+crate.spec(
     package = "bitflags",
     version = "2",
 )
@@ -26,6 +30,14 @@ crate.spec(
     features = ["derive"],
     package = "clap",
     version = "4.6",
+)
+crate.spec(
+    package = "futures",
+    version = "0.3",
+)
+crate.spec(
+    package = "humantime",
+    version = "2",
 )
 crate.spec(
     package = "itertools",
@@ -79,6 +91,24 @@ crate.spec(
 crate.spec(
     package = "tempfile",
     version = "3",
+)
+crate.spec(
+    package = "thiserror",
+    version = "1",
+)
+crate.spec(
+    features = ["full"],
+    package = "tokio",
+    version = "1.52",
+)
+crate.spec(
+    package = "tracing",
+    version = "0.1",
+)
+crate.spec(
+    features = ["env-filter"],
+    package = "tracing-subscriber",
+    version = "0.3",
 )
 crate.spec(
     package = "tree-sitter",

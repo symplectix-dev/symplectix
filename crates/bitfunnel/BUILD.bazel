@@ -1,0 +1,29 @@
+load("//bazel:rust.bzl", "rust")
+
+rust.library(
+    name = "bitfunnel",
+    srcs = [
+        "src/lib.rs",
+        "src/signatures.rs",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//crates/bitcomp_roaring",
+    ],
+)
+
+rust.test(
+    name = "bitfunnel_test",
+    size = "small",
+    crate = ":bitfunnel",
+)
+
+rust.test_suite(
+    name = "bitfunnel_test_suite",
+    size = "small",
+    srcs = ["tests/signatures.rs"],
+    deps = [
+        ":bitfunnel",
+        "@crates//:rand",
+    ],
+)

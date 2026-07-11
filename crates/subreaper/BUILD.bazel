@@ -1,0 +1,54 @@
+load("//bazel:rust.bzl", "rust")
+
+rust.library(
+    name = "subreaper_lib",
+    srcs = [
+        "src/lib.rs",
+        "src/tests.rs",
+    ],
+    crate_name = "subreaper",
+    deps = [
+        "@crates//:anyhow",
+        "@crates//:arc-swap",
+        "@crates//:clap",
+        "@crates//:futures",
+        "@crates//:humantime",
+        "@crates//:libc",
+        "@crates//:thiserror",
+        "@crates//:tokio",
+        "@crates//:tracing",
+        "@crates//:tracing-subscriber",
+    ],
+)
+
+rust.test(
+    name = "subreaper_lib_test",
+    size = "small",
+    crate = ":subreaper_lib",
+    deps = [
+        "//crates/testing",
+    ],
+)
+
+rust.binary(
+    name = "subreaper",
+    srcs = ["src/bin/subreaper.rs"],
+    deps = [":subreaper_lib"],
+)
+
+# tests/run.rs shells out to the `subreaper` binary via CARGO_BIN_EXE_subreaper
+# (populated automatically by rules_rust from a "bin"-typed `data` dep) and to
+# subreaper_test's `orphan` helper, whose path is baked in at compile time
+# from `env!("OUT_DIR")`. Needs the real exec root, hence no-sandbox.
+rust.test_suite(
+    name = "subreaper_test_suite",
+    size = "small",
+    srcs = ["tests/run.rs"],
+    data = [":subreaper"],
+    tags = ["no-sandbox"],
+    deps = [
+        "//crates/faccess",
+        "//crates/subreaper_test",
+        "@crates//:libc",
+    ],
+)
