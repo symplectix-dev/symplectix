@@ -3,6 +3,8 @@ load("//bazel:rust.bzl", "rust")
 rust.library(
     name = "ply",
     srcs = [
+        "src/function.rs",
+        "src/hash.rs",
         "src/lib.rs",
     ],
     deps = [
@@ -14,6 +16,8 @@ rust.test(
     name = "ply_test",
     size = "small",
     crate = ":ply",
+    data = ["//:.rustfmt.toml"],
+    deps = ["//syx/testing"],
 )
 
 # rust.test_suite(
