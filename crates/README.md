@@ -40,10 +40,12 @@ libFuzzer/ASan binary from a `#![no_main]` crate using `libfuzzer_sys::fuzz_targ
 See `//fuzz_examples` for working examples. Run one with:
 
 ```sh
-bazel run --config=fuzz //fuzz_examples:buffer_overflow
+bazel run //fuzz_examples:buffer_overflow
 ```
 
-### Why `--config=fuzz` doesn't use the hermetic zig toolchain
+No `--config=fuzz` needed -- see below.
+
+### Toolchain: transitioned away from zig cc, not via `--config`
 
 `zig cc` (0.12.0, bundled by hermetic_cc_toolchain 4.1.0) errors out on some
 linker flags rustc passes for sanitizer builds:
@@ -55,17 +57,29 @@ error: unsupported linker arg: .../librustc-nightly_rt.asan.a
 This is a `zig cc` driver limitation (known upstream: [ziglang/zig#16813],
 still open), not a bug in this repo's Bazel config.
 
-Fixed instead by steering `--config=fuzz` to the host's autodetected cc
-toolchain (via `rules_cc`'s `cc_configure_extension`, not registered by
-default so it doesn't affect normal builds) with `--extra_toolchains`, which
-outranks `register_toolchains` order:
+`rust.fuzz_binary` works around it with a Starlark transition
+(`//bazel/internal:fuzz_transition.bzl`) applied to the underlying
+`rust_binary`, rather than requiring callers to pass `--config=fuzz`:
 
-- `MODULE.bazel`: `cc_configure = use_extension("@rules_cc//cc:extensions.bzl", "cc_configure_extension")`
-  + `use_repo(cc_configure, "local_config_cc_toolchains")`
-- `bazel/bazelrc/profile.bazelrc`: `build:fuzz --extra_toolchains=@local_config_cc_toolchains//:cc-toolchain-k8`
+- `extra_toolchains` is transitioned to the host's autodetected cc toolchain
+  (`rules_cc`'s `cc_configure_extension`, aliased in `MODULE.bazel` as
+  `local_config_cc_toolchains`; not registered by default, so it doesn't
+  affect normal builds).
+- the rust toolchain channel is transitioned to `nightly`, since
+  `-Zsanitizer=...` requires it.
 
-Verified with `bazel run --config=fuzz //fuzz_examples:buffer_overflow`: links
-successfully and AddressSanitizer correctly reports the injected
+The transitioned `rust_binary` can't be exposed directly (an outgoing-edge
+transition needs a wrapping rule), so `rust.fuzz_binary` generates
+`<name>_fuzz_target_impl` (the real `rust_binary`) plus `<name>_fuzz_target`
+(a thin forwarding rule -- `fuzz_transition_wrapper` -- that applies the
+transition and symlinks through the executable and runfiles).
+
+`--config=fuzz` still exists for optimization settings (opt, LTO, codegen
+units) that aren't required for correctness, only for less painfully slow
+fuzzing runs -- toolchain selection no longer depends on it.
+
+Verified with `bazel run //fuzz_examples:buffer_overflow` (no config flags):
+links successfully and AddressSanitizer correctly reports the injected
 heap-buffer-overflow. Requires a working host clang/gcc in dev and CI
 environments -- sanitizer fuzzing is inherently a single-machine,
 non-hermetic activity anyway, so this is a small trade-off.

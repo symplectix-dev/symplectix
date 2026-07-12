@@ -1,5 +1,6 @@
 load("@rules_python//python:defs.bzl", "py_binary")
 load("@rules_rust//rust:defs.bzl", "rust_binary")
+load(":fuzz_transition.bzl", "fuzz_transition_wrapper")
 
 visibility("//bazel")
 
@@ -70,10 +71,18 @@ def _rust_fuzz_binary_impl(
 
     # if you change the suffix '_fuzz_target', you must update fuzztest.py too.
     rust_binary(
-        name = "{}_fuzz_target".format(name),
+        name = "{}_fuzz_target_impl".format(name),
         rustc_flags = _rustc_flags + rustc_flags,
         tags = _tags + tags,
         **kwargs
+    )
+
+    # zig cc can't link rustc's sanitizer runtimes (see crates/README.md#fuzzing);
+    # transition to the host cc toolchain instead of requiring --config=fuzz.
+    fuzz_transition_wrapper(
+        name = "{}_fuzz_target".format(name),
+        actual = ":{}_fuzz_target_impl".format(name),
+        tags = _tags + tags,
     )
     py_binary(
         name = name,
