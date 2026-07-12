@@ -110,7 +110,12 @@
               types = [ "proto" ];
             };
             rustfmt = {
-              entry = "${pkgs.rustfmt}/bin/rustfmt";
+              # Uses the Bazel-pinned rustfmt (nightly by default; see
+              # rust.toolchain in MODULE.bazel), not nixpkgs' pkgs.rustfmt.
+              # .rustfmt.toml relies on several unstable options (e.g.
+              # imports_layout, imports_granularity) that stable rustfmt
+              # silently ignores, producing different output.
+              entry = "${pkgs.bazelisk}/bin/bazelisk run @rules_rust//tools/upstream_wrapper:rustfmt --";
               pass_filenames = true;
             };
           }
