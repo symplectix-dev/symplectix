@@ -13,7 +13,7 @@ rust.library(
     ],
     visibility = ["//visibility:public"],
     deps = [
-        "//crates/bitcomp_core",
+        "//syx/bitcomp_core",
         "@crates//:bytemuck",
     ],
 )

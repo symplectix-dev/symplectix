@@ -13,6 +13,6 @@ rust.library(
     data = [":orphan"],
     visibility = ["//visibility:public"],
     deps = [
-        "//crates/testing",
+        "//syx/testing",
     ],
 )

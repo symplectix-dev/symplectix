@@ -16,7 +16,7 @@ use std::time::Duration;
 use faccess::faccess;
 
 fn subreaper() -> PathBuf {
-    testing::rlocation("_main/crates/subreaper/subreaper")
+    testing::rlocation("_main/syx/subreaper/subreaper")
 }
 
 fn orphan() -> PathBuf {

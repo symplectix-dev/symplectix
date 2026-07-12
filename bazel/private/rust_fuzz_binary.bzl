@@ -77,7 +77,7 @@ def _rust_fuzz_binary_impl(
         **kwargs
     )
 
-    # zig cc can't link rustc's sanitizer runtimes (see crates/README.md#fuzzing);
+    # zig cc can't link rustc's sanitizer runtimes (see syx/README.md#fuzzing);
     # transition to the host cc toolchain instead of requiring --config=fuzz.
     fuzz_transition_wrapper(
         name = "{}_fuzz_target".format(name),

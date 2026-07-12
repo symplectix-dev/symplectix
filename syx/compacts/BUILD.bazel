@@ -56,7 +56,7 @@ rust.test_suite(
 
 # `[[bench]] harness = false` in Cargo.toml: plain binaries providing their
 # own `main` via `criterion_main!`. Run with e.g.:
-#   bazel run //crates/compacts:bits_bench -- --bench
+#   bazel run //syx/compacts:bits_bench -- --bench
 rust.binary(
     name = "bits_bench",
     srcs = ["benches/bits.rs"],

@@ -50,7 +50,7 @@ mod test_helper {
 
     pub(crate) fn read_json(n: usize) -> fs::File {
         let path =
-            testing::rlocation(format!("_main/crates/bitcomp_rrr/testdata/comb_table_{n}.json"));
+            testing::rlocation(format!("_main/syx/bitcomp_rrr/testdata/comb_table_{n}.json"));
         fs::OpenOptions::new().read(true).open(path).expect("failed to open a json file")
     }
 }

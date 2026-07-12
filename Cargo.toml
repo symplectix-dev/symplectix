@@ -1,20 +1,19 @@
 [workspace]
 resolver = "3"
 members = [
-  "crates/bitcomp_core",
-  "crates/bitcomp_poppy",
-  "crates/bitcomp_roaring",
-  "crates/bitcomp_slicing",
-  "crates/bitcomp_test",
-  "crates/bitfunnel",
-  "crates/compacts",
-  "crates/fenwicktree",
-  "crates/mdcstpp",
-  "crates/protoc_plugin",
-  "crates/streamvbyte",
-  "crates/testing",
-  "crates/unionfind",
-  "crates/varint",
+  "syx/bitcomp_core",
+  "syx/bitcomp_poppy",
+  "syx/bitcomp_roaring",
+  "syx/bitcomp_slicing",
+  "syx/bitcomp_test",
+  "syx/bitfunnel",
+  "syx/compacts",
+  "syx/fenwicktree",
+  "syx/mdcstpp",
+  "syx/protoc_plugin",
+  "syx/streamvbyte",
+  "syx/unionfind",
+  "syx/varint",
 ]
 
 [workspace.package]
@@ -22,18 +21,17 @@ version = "0.0.0"
 edition = "2024"
 
 [workspace.dependencies]
-bitcomp_core = { path = "crates/bitcomp_core" }
-bitcomp_poppy = { path = "crates/bitcomp_poppy" }
-bitcomp_roaring = { path = "crates/bitcomp_roaring" }
-bitcomp_slicing = { path = "crates/bitcomp_slicing" }
-compacts = { path = "crates/compacts" }
-fenwicktree = { path = "crates/fenwicktree" }
+bitcomp_core = { path = "syx/bitcomp_core" }
+bitcomp_poppy = { path = "syx/bitcomp_poppy" }
+bitcomp_roaring = { path = "syx/bitcomp_roaring" }
+bitcomp_slicing = { path = "syx/bitcomp_slicing" }
+compacts = { path = "syx/compacts" }
+fenwicktree = { path = "syx/fenwicktree" }
 
-streamvbyte = { path = "crates/streamvbyte" }
-varint = { path = "crates/varint" }
+streamvbyte = { path = "syx/streamvbyte" }
+varint = { path = "syx/varint" }
 
-protoc_plugin = { path = "crates/protoc_plugin" }
-testing = { path = "crates/testing" }
+protoc_plugin = { path = "syx/protoc_plugin" }
 
 anyhow = { version = "1" }
 arc-swap = { version = "1.9" }

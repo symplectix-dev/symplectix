@@ -64,7 +64,7 @@ rust.test(
         "@crates//:quickcheck_macros",
     ],
     deps = [
-        "//crates/testing",
+        "//syx/testing",
         "@crates//:quickcheck",
         "@crates//:serde",
         "@crates//:serde_json",

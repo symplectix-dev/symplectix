@@ -13,20 +13,20 @@ rust.test_suite(
         "@crates//:quickcheck_macros",
     ],
     deps = [
-        "//crates/bitcomp_core",
+        "//syx/bitcomp_core",
         "@crates//:quickcheck",
     ],
 )
 
 # `[[bench]] harness = false` in Cargo.toml: plain binaries providing their
 # own `main` via `criterion_main!`. Run with e.g.:
-#   bazel run //crates/bitcomp_test:compint_bench -- --bench
+#   bazel run //syx/bitcomp_test:compint_bench -- --bench
 rust.binary(
     name = "compint_bench",
     srcs = ["benches/compint.rs"],
     deps = [
-        "//crates/streamvbyte",
-        "//crates/varint",
+        "//syx/streamvbyte",
+        "//syx/varint",
         "@crates//:bitpacking",
         "@crates//:criterion",
     ],
@@ -36,9 +36,9 @@ rust.binary(
     name = "rank_select_bench",
     srcs = ["benches/rank_select.rs"],
     deps = [
-        "//crates/bitcomp_core",
-        "//crates/bitcomp_poppy",
-        "//crates/bitcomp_roaring",
+        "//syx/bitcomp_core",
+        "//syx/bitcomp_poppy",
+        "//syx/bitcomp_roaring",
         "@crates//:criterion",
         "@crates//:rand",
     ],
@@ -48,7 +48,7 @@ rust.binary(
     name = "rrr_encode_decode_bench",
     srcs = ["benches/rrr_encode_decode.rs"],
     deps = [
-        "//crates/bitcomp_rrr",
+        "//syx/bitcomp_rrr",
         "@crates//:criterion",
         "@crates//:rand",
     ],

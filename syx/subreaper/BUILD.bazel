@@ -26,7 +26,7 @@ rust.test(
     size = "small",
     crate = ":subreaper_lib",
     deps = [
-        "//crates/testing",
+        "//syx/testing",
     ],
 )
 
@@ -45,9 +45,9 @@ rust.test_suite(
     srcs = ["tests/run.rs"],
     data = [":subreaper"],
     deps = [
-        "//crates/faccess",
-        "//crates/subreaper_test",
-        "//crates/testing",
+        "//syx/faccess",
+        "//syx/subreaper_test",
+        "//syx/testing",
         "@crates//:libc",
     ],
 )

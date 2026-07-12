@@ -8,7 +8,7 @@ rust.library(
     rustc_flags = ["-Coverflow-checks=off"],
     visibility = ["//visibility:public"],
     deps = [
-        "//crates/bitcomp_core",
+        "//syx/bitcomp_core",
     ],
 )
 
@@ -22,7 +22,7 @@ rust.test_suite(
     rustc_flags = ["-Coverflow-checks=off"],
     deps = [
         ":fenwicktree",
-        "//crates/bitcomp_core",
+        "//syx/bitcomp_core",
         "@crates//:quickcheck",
     ],
 )

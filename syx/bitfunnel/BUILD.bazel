@@ -8,7 +8,7 @@ rust.library(
     ],
     visibility = ["//visibility:public"],
     deps = [
-        "//crates/bitcomp_roaring",
+        "//syx/bitcomp_roaring",
     ],
 )
 
