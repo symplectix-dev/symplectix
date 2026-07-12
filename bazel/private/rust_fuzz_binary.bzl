@@ -2,7 +2,7 @@ load("@rules_python//python:defs.bzl", "py_binary")
 load("@rules_rust//rust:defs.bzl", "rust_binary")
 load(":fuzz_transition.bzl", "fuzz_transition_wrapper")
 
-visibility("//bazel")
+visibility(["//bazel:__pkg__"])
 
 def _rust_fuzz_binary_impl(
         name,

@@ -35,12 +35,12 @@ Report ends up at `$CRITERION_HOME/report/index.html`.
 
 ## Fuzzing
 
-`rust.fuzz_binary` (`//bazel/internal:rust_fuzz_binary.bzl`) builds a
+`rust.fuzz_binary` (`//bazel/private:rust_fuzz_binary.bzl`) builds a
 libFuzzer/ASan binary from a `#![no_main]` crate using `libfuzzer_sys::fuzz_target!`.
-See `//fuzz_examples` for working examples. Run one with:
+See `//crates/fuzz_examples` for working examples. Run one with:
 
 ```sh
-bazel run //fuzz_examples:buffer_overflow
+bazel run //crates/fuzz_examples:buffer_overflow
 ```
 
 No `--config=fuzz` needed -- see below.
@@ -58,7 +58,7 @@ This is a `zig cc` driver limitation (known upstream: [ziglang/zig#16813],
 still open), not a bug in this repo's Bazel config.
 
 `rust.fuzz_binary` works around it with a Starlark transition
-(`//bazel/internal:fuzz_transition.bzl`) applied to the underlying
+(`//bazel/private:fuzz_transition.bzl`) applied to the underlying
 `rust_binary`, rather than requiring callers to pass `--config=fuzz`:
 
 - `extra_toolchains` is transitioned to the host's autodetected cc toolchain
@@ -78,7 +78,7 @@ transition and symlinks through the executable and runfiles).
 units) that aren't required for correctness, only for less painfully slow
 fuzzing runs -- toolchain selection no longer depends on it.
 
-Verified with `bazel run //fuzz_examples:buffer_overflow` (no config flags):
+Verified with `bazel run //crates/fuzz_examples:buffer_overflow` (no config flags):
 links successfully and AddressSanitizer correctly reports the injected
 heap-buffer-overflow. Requires a working host clang/gcc in dev and CI
 environments -- sanitizer fuzzing is inherently a single-machine,
