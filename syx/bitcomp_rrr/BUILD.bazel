@@ -1,0 +1,72 @@
+load("//bazel:lib.bzl", "lib")
+load("//bazel:py.bzl", "py")
+load("//bazel:rust.bzl", "rust")
+
+rust.build_script(
+    name = "build_script",
+    srcs = ["build.rs"],
+)
+
+py.binary(
+    name = "comb",
+    srcs = ["testdata/comb.py"],
+    main = "testdata/comb.py",
+    deps = [py.requirement("pydantic")],
+)
+
+lib.run_binary(
+    name = "comb_table_16_json",
+    outs = ["testdata/comb_table_16.json"],
+    args = [
+        "--size",
+        "16",
+        "--path",
+        "$(execpath :testdata/comb_table_16.json)",
+    ],
+    tool = ":comb",
+)
+
+lib.run_binary(
+    name = "comb_table_32_json",
+    outs = ["testdata/comb_table_32.json"],
+    args = [
+        "--size",
+        "32",
+        "--path",
+        "$(execpath :testdata/comb_table_32.json)",
+    ],
+    tool = ":comb",
+)
+
+rust.library(
+    name = "bitcomp_rrr",
+    srcs = [
+        "src/lib.rs",
+        "src/rrr04.rs",
+        "src/rrr15.rs",
+        "src/rrr31.rs",
+        "src/rrr63.rs",
+    ],
+    compile_data = ["README.md"],
+    visibility = ["//visibility:public"],
+    deps = [":build_script"],
+)
+
+rust.test(
+    name = "bitcomp_rrr_test",
+    size = "small",
+    crate = ":bitcomp_rrr",
+    data = [
+        ":comb_table_16_json",
+        ":comb_table_32_json",
+    ],
+    proc_macro_deps = [
+        "@crates//:quickcheck_macros",
+    ],
+    deps = [
+        "//syx/testing",
+        "@crates//:quickcheck",
+        "@crates//:serde",
+        "@crates//:serde_json",
+    ],
+)

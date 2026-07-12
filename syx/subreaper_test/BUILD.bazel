@@ -1,0 +1,18 @@
+load("//bazel:cc.bzl", "cc")
+load("//bazel:rust.bzl", "rust")
+
+cc.binary(
+    name = "orphan",
+    srcs = ["orphan.c"],
+)
+
+rust.library(
+    name = "subreaper_test",
+    testonly = True,
+    srcs = ["src/lib.rs"],
+    data = [":orphan"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//syx/testing",
+    ],
+)

@@ -1,0 +1,53 @@
+load("//bazel:rust.bzl", "rust")
+
+rust.library(
+    name = "subreaper_lib",
+    srcs = [
+        "src/lib.rs",
+        "src/tests.rs",
+    ],
+    crate_name = "subreaper",
+    deps = [
+        "@crates//:anyhow",
+        "@crates//:arc-swap",
+        "@crates//:clap",
+        "@crates//:futures",
+        "@crates//:humantime",
+        "@crates//:libc",
+        "@crates//:thiserror",
+        "@crates//:tokio",
+        "@crates//:tracing",
+        "@crates//:tracing-subscriber",
+    ],
+)
+
+rust.test(
+    name = "subreaper_lib_test",
+    size = "small",
+    crate = ":subreaper_lib",
+    deps = [
+        "//syx/testing",
+    ],
+)
+
+rust.binary(
+    name = "subreaper",
+    srcs = ["src/bin/subreaper.rs"],
+    deps = [":subreaper_lib"],
+)
+
+# tests/run.rs locates the `subreaper` binary and subreaper_test's `orphan`
+# helper at runtime via testing::rlocation(), so no CARGO_BIN_EXE_* trick and
+# no no-sandbox/no-cache tags are needed.
+rust.test_suite(
+    name = "subreaper_test_suite",
+    size = "small",
+    srcs = ["tests/run.rs"],
+    data = [":subreaper"],
+    deps = [
+        "//syx/faccess",
+        "//syx/subreaper_test",
+        "//syx/testing",
+        "@crates//:libc",
+    ],
+)

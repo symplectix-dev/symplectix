@@ -1,0 +1,14 @@
+load("//bazel:rust.bzl", "rust")
+
+rust.library(
+    name = "bitcomp_poppy",
+    srcs = [
+        "src/l1l2.rs",
+        "src/lib.rs",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//syx/bitcomp_core",
+        "//syx/fenwicktree",
+    ],
+)

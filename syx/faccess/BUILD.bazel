@@ -1,0 +1,23 @@
+load("//bazel:rust.bzl", "rust")
+
+rust.library(
+    name = "faccess",
+    srcs = ["src/faccess.rs"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "@crates//:bitflags",
+        "@crates//:bon",
+        "@crates//:libc",
+    ],
+)
+
+rust.test_suite(
+    name = "faccess_test_suite",
+    size = "small",
+    srcs = ["tests/faccess.rs"],
+    data = ["//:.rustfmt.toml"],
+    deps = [
+        ":faccess",
+        "//syx/testing",
+    ],
+)

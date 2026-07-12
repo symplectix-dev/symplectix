@@ -1,0 +1,40 @@
+load("//bazel:rust.bzl", "rust")
+
+rust.library(
+    name = "bitcomp_roaring",
+    srcs = [
+        "src/bit_set.rs",
+        "src/bit_set/mask/and.rs",
+        "src/bit_set/mask/mod.rs",
+        "src/bit_set/mask/not.rs",
+        "src/bit_set/mask/or.rs",
+        "src/bit_set/mask/padding.rs",
+        "src/bit_set/mask/range.rs",
+        "src/bit_set/mask/xor.rs",
+        "src/bit_set/ops/access.rs",
+        "src/bit_set/ops/count.rs",
+        "src/bit_set/ops/insert.rs",
+        "src/bit_set/ops/mod.rs",
+        "src/bit_set/ops/rank.rs",
+        "src/bit_set/ops/remove.rs",
+        "src/bit_set/ops/select.rs",
+        "src/bit_set/raw_vec.rs",
+        "src/bit_set/tests.rs",
+        "src/bit_set/tests/primitive.rs",
+        "src/bit_set/word.rs",
+        "src/lib.rs",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//syx/bitcomp_core",
+    ],
+)
+
+# NOTE: src/bit_set/tests/prim.rs is not reachable from
+# src/bit_set/tests.rs via any `mod` declaration (only `mod primitive;` is),
+# so it is excluded here just as Cargo excludes it from the crate.
+rust.test(
+    name = "bitcomp_roaring_test",
+    size = "small",
+    crate = ":bitcomp_roaring",
+)

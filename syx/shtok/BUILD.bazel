@@ -1,0 +1,27 @@
+load("//bazel:rust.bzl", "rust")
+
+rust.library(
+    name = "shtok",
+    srcs = ["src/lib.rs"],
+    visibility = ["//visibility:public"],
+    deps = ["@crates//:itertools"],
+)
+
+rust.binary(
+    name = "shtok_bin",
+    srcs = ["src/main.rs"],
+    deps = [":shtok"],
+)
+
+rust.test(
+    name = "shtok_test",
+    size = "small",
+    crate = ":shtok",
+)
+
+rust.test_suite(
+    name = "shtok_test_suite",
+    size = "small",
+    srcs = ["tests/tests.rs"],
+    deps = [":shtok"],
+)

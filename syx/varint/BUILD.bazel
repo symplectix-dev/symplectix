@@ -1,0 +1,19 @@
+load("//bazel:rust.bzl", "rust")
+
+rust.library(
+    name = "varint",
+    srcs = [
+        "src/varint.rs",
+        "src/varint_test.rs",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+rust.test(
+    name = "varint_test",
+    size = "small",
+    crate = ":varint",
+    deps = [
+        "@crates//:quickcheck",
+    ],
+)

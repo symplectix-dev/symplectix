@@ -1,0 +1,79 @@
+# Set the compiler settings, influencing things like optimizations and debugging symbols.
+#
+# https://bazelbuild.github.io/rules_rust/rust_settings.html
+# https://bazelbuild.github.io/rules_rust/cargo_settings.html
+
+# rustfmt
+common:rustfmt --aspects=@rules_rust//rust:defs.bzl%rustfmt_aspect
+common:rustfmt --output_groups=+rustfmt_checks
+common:rustfmt --@rules_rust//rust/settings:rustfmt.toml=//:.rustfmt.toml
+
+# Enable clippy lints.
+common:clippy --aspects=@rules_rust//rust:defs.bzl%rust_clippy_aspect
+common:clippy --output_groups=+clippy_checks
+common:clippy --@rules_rust//rust/settings:clippy.toml=//:.clippy.toml
+
+# Enable rustc lints.
+# https://doc.rust-lang.org/rustc/lints/index.html
+common:clippy --@rules_rust//rust/settings:clippy_flag=-Dmissing-docs
+
+# Controls whether Bazel will strip debugging information from all binaries and shared libraries,
+# by invoking the linker with the -Wl,--strip-debug option.
+build:strip --strip=always
+# Controls stripping of debuginfo and similar auxiliary data from binaries during linking.
+# * debuginfo
+#   debuginfo sections and debuginfo symbols from the symbol table section are stripped at link time
+#   and are not copied to the produced binary or separate files.
+#
+# * symbols
+#   same as debuginfo, but the rest of the symbol table section is stripped
+#   as well if the linker supports it.
+build:strip --@rules_rust//rust/settings:extra_rustc_flag=-Cstrip=debuginfo
+
+# compilation_mode to rustc codegen options
+# fastbuild: -Copt-level=0 -Cdebuginfo=0
+# dbg:       -Copt-level=0 -Cdebuginfo=2
+# opt:       -Copt-level=3 -Cdebuginfo=0
+
+build:debuginfo --@rules_rust//rust/settings:extra_rustc_flag=-Cdebuginfo=2
+build:debuginfo --@rules_rust//rust/settings:extra_rustc_flag=-Cdebug-assertions=on
+
+build:nodebuginfo --@rules_rust//rust/settings:extra_rustc_flag=-Cdebuginfo=0
+build:nodebuginfo --@rules_rust//rust/settings:extra_rustc_flag=-Cdebug-assertions=off
+
+# Embed LLVM bitcode in each compiled crate so the linker has IR available to
+# perform cross-crate optimization. Required for :lto=thin/fat below to do
+# anything; without it those settings are silently ineffective.
+common:lto --@rules_rust//rust/settings:extra_rustc_flag=-Cembed-bitcode=yes
+
+common:ltothin --config=lto
+common:ltothin --@rules_rust//rust/settings:lto=thin
+
+common:ltofat  --config=lto
+common:ltofat  --@rules_rust//rust/settings:lto=fat
+
+build:debug --compilation_mode=dbg
+build:debug --config=debuginfo
+build:debug --@rules_rust//rust/settings:codegen_units=16
+
+build:release --compilation_mode=opt
+build:release --config=nodebuginfo
+build:release --config=ltofat
+build:release --@rules_rust//rust/settings:codegen_units=1
+build:release --@rules_rust//rust/settings:extra_rustc_flag=-Coverflow-checks=off
+
+# Pass extra options to rustc in exec configuration.
+# It applies across all targets whereas the rustc_flags option on targets
+# applies only to that target. This can be useful for passing build-wide options such as LTO.
+build:release --@rules_rust//rust/settings:extra_exec_rustc_flag=-Copt-level=3
+
+build:fuzz --compilation_mode=opt
+build:fuzz --config=debuginfo
+build:fuzz --config=ltothin
+build:fuzz --@rules_rust//rust/settings:codegen_units=1
+build:fuzz --@rules_rust//rust/settings:extra_rustc_flag=-Coverflow-checks=off
+build:fuzz --@rules_rust//rust/settings:extra_exec_rustc_flag=-Copt-level=3
+
+# Toolchain selection (host cc instead of zig, nightly rustc) is handled by
+# rust.fuzz_binary itself via a transition, not this config. See
+# //bazel/private:fuzz_transition.bzl and syx/README.md#rust-fuzzing.

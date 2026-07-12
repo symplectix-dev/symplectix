@@ -1,0 +1,13 @@
+load("//bazel:rust.bzl", "rust")
+
+rust.library(
+    name = "unionfind",
+    srcs = ["src/lib.rs"],
+    visibility = ["//visibility:public"],
+)
+
+rust.test(
+    name = "unionfind_test",
+    size = "small",
+    crate = ":unionfind",
+)

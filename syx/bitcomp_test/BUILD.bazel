@@ -1,0 +1,55 @@
+load("//bazel:rust.bzl", "rust")
+
+rust.library(
+    name = "bitcomp_test",
+    srcs = ["src/lib.rs"],
+)
+
+rust.test_suite(
+    name = "bitcomp_test_test_suite",
+    size = "small",
+    srcs = ["tests/word.rs"],
+    proc_macro_deps = [
+        "@crates//:quickcheck_macros",
+    ],
+    deps = [
+        "//syx/bitcomp_core",
+        "@crates//:quickcheck",
+    ],
+)
+
+# `[[bench]] harness = false` in Cargo.toml: plain binaries providing their
+# own `main` via `criterion_main!`. Run with e.g.:
+#   bazel run //syx/bitcomp_test:compint_bench -- --bench
+rust.binary(
+    name = "compint_bench",
+    srcs = ["benches/compint.rs"],
+    deps = [
+        "//syx/streamvbyte",
+        "//syx/varint",
+        "@crates//:bitpacking",
+        "@crates//:criterion",
+    ],
+)
+
+rust.binary(
+    name = "rank_select_bench",
+    srcs = ["benches/rank_select.rs"],
+    deps = [
+        "//syx/bitcomp_core",
+        "//syx/bitcomp_poppy",
+        "//syx/bitcomp_roaring",
+        "@crates//:criterion",
+        "@crates//:rand",
+    ],
+)
+
+rust.binary(
+    name = "rrr_encode_decode_bench",
+    srcs = ["benches/rrr_encode_decode.rs"],
+    deps = [
+        "//syx/bitcomp_rrr",
+        "@crates//:criterion",
+        "@crates//:rand",
+    ],
+)

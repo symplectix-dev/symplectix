@@ -1,0 +1,12 @@
+load("//bazel:rust.bzl", "rust")
+
+rust.library(
+    name = "testing",
+    testonly = True,
+    srcs = ["src/lib.rs"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "@crates//:runfiles",
+        "@crates//:tempfile",
+    ],
+)
