@@ -76,8 +76,15 @@ common:ci --experimental_disk_cache_gc_max_size=2G
 common:ci --experimental_disk_cache_gc_max_age=5d
 
 # Allow skipping build/test targets on CI.
-common:ci --build_tag_filters=-no-ci
-common:ci --test_tag_filters=-no-ci
+#
+# -manual matters here specifically because bazel-diff's impacted-targets
+# query names targets explicitly; the "manual" tag by itself only excludes a
+# target from wildcard expansion (//..., :all), not from an explicit build
+# invocation. Without this, rust.fuzz_binary's untransitioned *_fuzz_target_impl
+# targets (see //bazel/private:fuzz_transition.bzl) get built directly and fail,
+# since only the transitioned wrapper target compiles with a nightly rustc.
+common:ci --build_tag_filters=-no-ci,-manual
+common:ci --test_tag_filters=-no-ci,-manual
 
 common:ci --config=clippy
 common:ci --config=rustfmt
