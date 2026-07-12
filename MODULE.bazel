@@ -6,8 +6,8 @@ zig_sdk = use_extension("@hermetic_cc_toolchain//toolchain:ext.bzl", "toolchains
 use_repo(zig_sdk, "zig_sdk")
 
 # Non-hermetic host cc toolchain, not registered by default (zig takes
-# priority for all normal builds). Used only via --config=fuzz, since zig cc
-# cannot link rustc's ASan runtime archive. See crates/README.md#fuzzing.
+# priority for all normal builds). Selected only by fuzz_transition, since
+# zig cc cannot link rustc's ASan runtime archive. See syx/README.md#rust-fuzzing.
 cc_configure = use_extension("@rules_cc//cc:extensions.bzl", "cc_configure_extension")
 use_repo(cc_configure, "local_config_cc_toolchains")
 
