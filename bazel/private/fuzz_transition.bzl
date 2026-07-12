@@ -1,6 +1,6 @@
 visibility(["//bazel:__pkg__"])
 
-def _fuzz_transition_impl(settings, attr):
+def _fuzz_transition_impl(_settings, _attr):
     return {
         # Keeps zig out of the picture.
         #
