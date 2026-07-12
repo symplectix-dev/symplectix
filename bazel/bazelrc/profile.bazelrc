@@ -3,11 +3,6 @@
 # https://bazelbuild.github.io/rules_rust/rust_settings.html
 # https://bazelbuild.github.io/rules_rust/cargo_settings.html
 
-build:stable --@rules_rust//rust/toolchain/channel=stable
-# Some tools like sanitizers depend on nightly.
-# https://github.com/bazelbuild/rules_rust/blob/main/rust/toolchain/channel/BUILD.bazel
-build:nightly --@rules_rust//rust/toolchain/channel=nightly
-
 # rustfmt
 common:rustfmt --aspects=@rules_rust//rust:defs.bzl%rustfmt_aspect
 common:rustfmt --output_groups=+rustfmt_checks
@@ -72,7 +67,6 @@ build:release --@rules_rust//rust/settings:extra_rustc_flag=-Coverflow-checks=of
 # applies only to that target. This can be useful for passing build-wide options such as LTO.
 build:release --@rules_rust//rust/settings:extra_exec_rustc_flag=-Copt-level=3
 
-build:fuzz --config=nightly
 build:fuzz --compilation_mode=opt
 build:fuzz --config=debuginfo
 build:fuzz --config=ltothin

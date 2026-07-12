@@ -81,8 +81,14 @@ common:ci --test_tag_filters=-no-ci
 
 common:ci --config=clippy
 common:ci --config=rustfmt
-common:ci --config=stable
-common:ci --config=release
+
+# clippy/rustfmt above are common: configs, so they apply fine to every
+# command including `bazel query` (used by bazel-diff). release expands to
+# a build:-only config, which `bazel query` rejects with "Config value ...
+# is not defined" if applied via common:; scoping it to build: instead
+# means it still applies to build/test/run (what CI's Build/Test steps
+# use) without breaking the query-based selective-build step.
+build:ci --config=release
 
 # Embeds workspace status (commit SHA, version tag, etc.) into build outputs.
 # Targets depending on STABLE_* keys are rebuilt when the status changes.
