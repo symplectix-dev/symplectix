@@ -1,0 +1,15 @@
+load("//bazel:py.bzl", "py")
+
+package(default_visibility = ["//:__subpackages__"])
+
+exports_files(
+    [
+        "fuzztest.py",
+    ],
+)
+
+py.binary(
+    name = "fuzztest",
+    srcs = ["fuzztest.py"],
+    main = "fuzztest.py",
+)

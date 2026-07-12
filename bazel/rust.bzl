@@ -7,11 +7,10 @@ load(
     "rust_test",
     "rust_test_suite",
 )
-# TODO: fuzz test
-# load(
-#     "//bazel/internal:rust_fuzz_binary.bzl",
-#     "rust_fuzz_binary",
-# )
+load(
+    "//bazel/internal:rust_fuzz_binary.bzl",
+    "rust_fuzz_binary",
+)
 
 # TODO: benchmark
 # https://github.com/criterion-rs/criterion.rs/blob/master/src/lib.rs
@@ -23,5 +22,5 @@ rust = struct(
     doc_test = rust_doc_test,
     test = rust_test,
     test_suite = rust_test_suite,
-    # fuzz_binary = rust_fuzz_binary,
+    fuzz_binary = rust_fuzz_binary,
 )

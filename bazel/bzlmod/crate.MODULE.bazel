@@ -60,6 +60,10 @@ crate.spec(
     version = "0.2",
 )
 crate.spec(
+    package = "libfuzzer-sys",
+    version = "0.4",
+)
+crate.spec(
     package = "num",
     version = "0.4",
 )
