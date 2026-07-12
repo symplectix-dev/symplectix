@@ -1,3 +1,5 @@
+//! Python bindings for the plying crate.
+
 use std::ops::ControlFlow::Continue;
 
 use plying::Fold;

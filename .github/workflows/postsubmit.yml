@@ -27,14 +27,8 @@ jobs:
       matrix:
         os:
           - ubuntu-latest
-        profile:
-          - release
 
     runs-on: ${{ matrix.os }}
-
-    env:
-      # Always use colored output.
-      CARGO_TERM_COLOR: always
 
     steps:
       - name: Checkout repository
@@ -51,8 +45,3 @@ jobs:
           # github.event.before is empty on workflow_dispatch.
           base-sha: ${{ github.event.before }}
           mode: postsubmit
-
-      - uses: ./.github/actions/cargo
-        with:
-          profile: ${{ matrix.profile }}
-          save-cache: 'true'

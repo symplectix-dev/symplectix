@@ -79,10 +79,10 @@ common:ci --experimental_disk_cache_gc_max_age=5d
 common:ci --build_tag_filters=-no-ci
 common:ci --test_tag_filters=-no-ci
 
-# common:ci --config=clippy
-# common:ci --config=rustfmt
-# common:ci --config=stable
-# common:ci --config=release
+common:ci --config=clippy
+common:ci --config=rustfmt
+common:ci --config=stable
+common:ci --config=release
 
 # Embeds workspace status (commit SHA, version tag, etc.) into build outputs.
 # Targets depending on STABLE_* keys are rebuilt when the status changes.

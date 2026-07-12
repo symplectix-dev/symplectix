@@ -9,20 +9,6 @@ updates:
     cooldown:
       default-days: 7
 
-  - package-ecosystem: "cargo"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    commit-message:
-      prefix: "chore"
-    groups:
-      cargo-dependencies:
-        update-types:
-          - "minor"
-          - "patch"
-    cooldown:
-      default-days: 7
-
   # Dependabot has announced support for uv,
   # but there are some use cases that are not yet working.
   # See https://github.com/astral-sh/uv/issues/2512.
