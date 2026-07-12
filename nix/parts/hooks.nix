@@ -110,7 +110,7 @@
               types = [ "proto" ];
             };
             rustfmt = {
-              entry = "${pkgs.rust-toolchain}/bin/rustfmt";
+              entry = "${pkgs.rustfmt}/bin/rustfmt";
               pass_filenames = true;
             };
           }

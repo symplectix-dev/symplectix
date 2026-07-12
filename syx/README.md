@@ -10,6 +10,21 @@ bazel build //syx/...
 bazel test //syx/...
 ```
 
+## Rust Analyzer
+
+Set up an editor to use rust-analyzer against the Bazel-built toolchain
+(matches the pinned rustc, no separate Cargo project needed):
+
+```sh
+bazel run @rules_rust//tools/rust_analyzer:setup -- vscode
+bazel run @rules_rust//tools/rust_analyzer:setup -- neovim
+bazel run @rules_rust//tools/rust_analyzer:setup -- helix
+bazel run @rules_rust//tools/rust_analyzer:setup -- print   # editor-agnostic JSON, e.g. for coc.nvim
+```
+
+Re-run after adding/removing crates or changing deps. See `-- --help` (and
+each subcommand's own `--help`) for options.
+
 ## Rust Benchmarks
 
 Some crates have `criterion` benchmarks, built as plain `rust.binary`

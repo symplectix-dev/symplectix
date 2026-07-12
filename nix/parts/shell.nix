@@ -27,8 +27,6 @@
         packages = with pkgs; [
           bazel
           bazel-buildtools
-          rust-toolchain
-          rust-analyzer
           ruff
           basedpyright
           github-cli
@@ -36,10 +34,6 @@
           protobuf
           ansible
         ];
-
-        env = {
-          RUST_SRC_PATH = "${pkgs.rust-toolchain}/lib/rustlib/src/rust/library";
-        };
 
         shellHook = ''
           ${config.pre-commit.shellHook}
@@ -51,7 +45,6 @@
       devShells.ci = pkgs.mkShellNoCC {
         packages = with pkgs; [
           bazel
-          rust-toolchain # can be removed once all crates/ are built by Bazel
           prek
         ];
 
