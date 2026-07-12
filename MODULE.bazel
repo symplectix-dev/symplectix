@@ -43,11 +43,11 @@ register_toolchains(
 
 pip = use_extension("@rules_python//python/extensions:pip.bzl", "pip")
 pip.parse(
-    hub_name = "pypi",
+    hub_name = "symplectix_pypi",
     python_version = "3.14",
     requirements_lock = "@//:requirements.txt",
 )
-use_repo(pip, "pypi")
+use_repo(pip, "symplectix_pypi")
 
 include("//bazel/bzlmod:crate.MODULE.bazel")
 

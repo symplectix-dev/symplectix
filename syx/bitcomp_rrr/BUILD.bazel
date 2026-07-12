@@ -11,7 +11,7 @@ py.binary(
     name = "comb",
     srcs = ["testdata/comb.py"],
     main = "testdata/comb.py",
-    deps = ["@pypi//pydantic"],
+    deps = [py.requirement("pydantic")],
 )
 
 lib.run_binary(
