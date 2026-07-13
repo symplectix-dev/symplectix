@@ -29,6 +29,7 @@ impl Default for Hasher {
 }
 
 impl Hasher {
+    /// A fresh `Hasher` with no parts folded in yet.
     pub fn new() -> Self {
         Hasher { hasher: sha2::Sha256::new() }
     }
@@ -82,20 +83,31 @@ impl Hasher {
 
     /// Finalize and return the digest's bytes.
     pub fn digest(self) -> Digest {
-        Digest(self.hasher.finalize().to_vec())
+        Digest(self.hasher.finalize().into())
     }
 }
 
+/// Digest of `value`'s canonical CBOR encoding (RFC 8949 deterministic
+/// encoding: smallest integer forms, definite-length items, sorted map
+/// keys). Two values that are `==` always serialize to the same bytes, so
+/// they always produce the same digest; use this to content-address a
+/// `Serialize` type instead of hand-folding its fields with `Hasher`.
+///
+/// Plain `cbor2::to_vec` is not guaranteed deterministic (RFC 8949 allows
+/// non-canonical encodings of the same value), so this must go through
+/// `to_canonical_vec` specifically.
+pub fn digest_of<T: serde::Serialize>(value: &T) -> Digest {
+    let bytes = cbor2::to_canonical_vec(value).expect("serializing to CBOR should not fail");
+    let mut h = Hasher::new();
+    h.part(bytes);
+    h.digest()
+}
+
 /// A digest's raw bytes.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Digest(Vec<u8>);
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
+pub struct Digest(#[serde(with = "serde_bytes")] [u8; 32]);
 
 impl Digest {
-    /// The digest's raw bytes.
-    pub fn as_bytes(&self) -> &[u8] {
-        &self.0
-    }
-
     /// Format as a sharded hex string: `depth` leading two-character
     /// segments, then the rest, joined by `/`. For example, depth=3
     /// gives "ab/cd/ef/<remaining 58 hex chars>". depth=0 means no
@@ -104,12 +116,24 @@ impl Digest {
         assert!(depth < 32, "depth must be less than 32, got {depth}");
         let mut out = String::with_capacity(self.0.len() * 2 + depth);
         for (i, b) in self.0.iter().enumerate() {
-            write!(out, "{b:02x}").unwrap();
+            write!(out, "{b:02x}").expect("writing to a String never fails");
             if i < depth {
                 out.push('/');
             }
         }
         out
+    }
+}
+
+impl AsRef<[u8]> for Digest {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+impl From<[u8; 32]> for Digest {
+    fn from(bytes: [u8; 32]) -> Self {
+        Digest(bytes)
     }
 }
 
@@ -138,6 +162,59 @@ mod tests {
         let mut h = Hasher::new();
         h.parts(parts);
         h.digest()
+    }
+
+    #[test]
+    fn digest_byte_buf() {
+        let d = digest([b"hello"]);
+        let d_bytes = serde_bytes::ByteBuf::from(d.as_ref());
+        assert_eq!(cbor2::to_vec(&d_bytes).unwrap(), cbor2::to_vec(&d).unwrap());
+    }
+
+    #[test]
+    fn digest_round_trips_through_cbor() {
+        let want = digest([b"hello"]);
+        let bytes = cbor2::to_canonical_vec(&want).unwrap();
+        let got: Digest = cbor2::from_slice(&bytes).unwrap();
+        assert_eq!(got, want);
+    }
+
+    #[test]
+    fn digest_from_array_round_trips() {
+        let want = digest([b"hello"]);
+        let bytes: [u8; 32] = want.as_ref().try_into().unwrap();
+        assert_eq!(Digest::from(bytes), want);
+    }
+
+    #[derive(serde::Serialize)]
+    struct Example {
+        name: String,
+        count: u32,
+    }
+
+    #[test]
+    fn digest_of_is_deterministic() {
+        let a = Example { name: "foo".to_string(), count: 1 };
+        let b = Example { name: "foo".to_string(), count: 1 };
+        assert_eq!(digest_of(&a), digest_of(&b));
+    }
+
+    #[test]
+    fn digest_of_depends_on_every_field() {
+        let base = Example { name: "foo".to_string(), count: 1 };
+        let other_name = Example { name: "bar".to_string(), count: 1 };
+        let other_count = Example { name: "foo".to_string(), count: 2 };
+        assert_ne!(digest_of(&base), digest_of(&other_name));
+        assert_ne!(digest_of(&base), digest_of(&other_count));
+    }
+
+    #[test]
+    fn digest_of_matches_canonical_cbor_hash() {
+        let value = Example { name: "foo".to_string(), count: 1 };
+        let bytes = cbor2::to_canonical_vec(&value).unwrap();
+        let mut h = Hasher::new();
+        h.part(bytes);
+        assert_eq!(digest_of(&value), h.digest());
     }
 
     #[test]

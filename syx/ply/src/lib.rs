@@ -1,11 +1,17 @@
 //! ply: content addressing.
 
-mod function;
+mod action;
+mod blob;
 mod hash;
 
-pub use function::{
-    Config,
+pub use action::{
+    Action,
     Function,
+    Manifest,
+};
+pub use blob::{
+    Collection,
+    Node,
 };
 pub use hash::{
     Digest,

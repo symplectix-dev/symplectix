@@ -1,0 +1,377 @@
+//! Collection: content-addressed file content and collections.
+//!
+//! `Tree` and `Bag` are internal representations, reached only through
+//! `Collection`.
+
+use std::collections::BTreeMap;
+
+use crate::hash::{
+    self,
+    Digest,
+    Hasher,
+};
+
+/// What a `Tree` entry's name points to: a file's content, or a nested
+/// `Tree`, each referenced by digest rather than embedded.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum Node {
+    Blob(Digest),
+    Tree(Digest),
+}
+
+/// A content-addressed directory: names mapped to a `Blob` (file) or a
+/// nested `Tree` (subdirectory). Backed by a `BTreeMap`, so entries are
+/// always sorted by name and a name can't appear twice, meaning the same
+/// entries built in any order produce the same `Tree` and the same digest.
+///
+/// `interns` are additional blobs a producer created while building this
+/// tree but that aren't reachable from any entry's name (e.g. images
+/// extracted from a PDF that a member only references opaquely). Recording
+/// them here keeps them from looking unreferenced to a GC walking the CAS
+/// from live roots.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct Tree {
+    entries: BTreeMap<String, Node>,
+    interns: Vec<Digest>,
+}
+
+/// A content-addressed, unordered multiset of blobs: no names, duplicates
+/// kept, so the same members built in any order produce the same `Bag` and
+/// the same digest. Use this instead of `Tree` when items have no
+/// meaningful name or path -- once they do, use `Tree` instead.
+///
+/// `interns` serve the same purpose as on `Tree`: extra blobs to keep
+/// reachable that aren't themselves members.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct Bag {
+    members: Vec<Digest>,
+    interns: Vec<Digest>,
+}
+
+impl Tree {
+    /// Build a `Tree` from `entries` and `interns`.
+    pub fn new(
+        entries: impl IntoIterator<Item = (String, Node)>,
+        interns: impl IntoIterator<Item = Digest>,
+    ) -> Self {
+        let mut interns: Vec<Digest> = interns.into_iter().collect();
+        interns.sort();
+        Tree { entries: entries.into_iter().collect(), interns }
+    }
+
+    /// The tree's entries, sorted by name.
+    pub fn entries(&self) -> &BTreeMap<String, Node> {
+        &self.entries
+    }
+
+    /// Blobs this tree's production depends on but that aren't reachable
+    /// from any entry's name, sorted.
+    pub fn interns(&self) -> &[Digest] {
+        &self.interns
+    }
+
+    /// Digest of the tree's content. `entries`' field name, each entry's
+    /// name/kind, and `interns`' field name are all part of what gets
+    /// serialized, so this can never collide with a `Bag`'s digest (whose
+    /// fields are named differently), and a `Blob` entry can never
+    /// collide with a nested `Tree` entry (different enum variant names).
+    pub fn digest(&self) -> Digest {
+        hash::digest_of(self)
+    }
+}
+
+impl Bag {
+    /// Build a `Bag` from `members` and `interns`.
+    pub fn new(
+        members: impl IntoIterator<Item = Digest>,
+        interns: impl IntoIterator<Item = Digest>,
+    ) -> Self {
+        let mut members: Vec<Digest> = members.into_iter().collect();
+        members.sort();
+        let mut interns: Vec<Digest> = interns.into_iter().collect();
+        interns.sort();
+        Bag { members, interns }
+    }
+
+    /// The bag's members, sorted (duplicates kept).
+    pub fn members(&self) -> &[Digest] {
+        &self.members
+    }
+
+    /// Blobs this bag's production depends on but that aren't themselves
+    /// members, sorted.
+    pub fn interns(&self) -> &[Digest] {
+        &self.interns
+    }
+
+    /// Digest of the bag's content. `members`' and `interns`' field names
+    /// are part of what gets serialized, so this can never collide with a
+    /// `Tree`'s digest (whose fields are named differently).
+    pub fn digest(&self) -> Digest {
+        hash::digest_of(self)
+    }
+}
+
+/// A content-addressed collection: either a `Tree` (named, hierarchical)
+/// or a `Bag` (unnamed, duplicate-tolerant multiset). Which one it is, and
+/// how it's represented internally, is deliberately not exposed -- callers
+/// (e.g. `Action`) just build one and read its digest.
+#[derive(Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(transparent)]
+pub struct Collection {
+    inner: Inner,
+}
+
+#[derive(Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+enum Inner {
+    Tree(Tree),
+    Bag(Bag),
+}
+
+impl Collection {
+    /// A `Collection` backed by a `Tree`.
+    pub fn tree(
+        entries: impl IntoIterator<Item = (String, Node)>,
+        interns: impl IntoIterator<Item = Digest>,
+    ) -> Self {
+        Collection { inner: Inner::Tree(Tree::new(entries, interns)) }
+    }
+
+    /// A `Collection` backed by a `Bag`.
+    pub fn bag(
+        members: impl IntoIterator<Item = Digest>,
+        interns: impl IntoIterator<Item = Digest>,
+    ) -> Self {
+        Collection { inner: Inner::Bag(Bag::new(members, interns)) }
+    }
+
+    /// Digest of the collection's content. Delegates to the inner `Tree`
+    /// or `Bag`, which each tag their own digest by kind, so a `Collection`
+    /// built from a `Tree` never collides with one built from a `Bag`.
+    pub fn digest(&self) -> Digest {
+        match &self.inner {
+            Inner::Tree(t) => t.digest(),
+            Inner::Bag(b) => b.digest(),
+        }
+    }
+}
+
+impl From<Collection> for Digest {
+    fn from(collection: Collection) -> Self {
+        collection.digest()
+    }
+}
+
+impl TryFrom<&[u8]> for Collection {
+    type Error = cbor2::de::Error;
+
+    /// Deserialize `bytes` (a CBOR encoding, canonical or not) as a
+    /// `Collection`.
+    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+        cbor2::from_slice(bytes)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn digest(bytes: &[u8]) -> Digest {
+        let mut h = Hasher::new();
+        h.part(bytes);
+        h.digest()
+    }
+
+    #[test]
+    fn empty_tree_digest_is_deterministic() {
+        assert_eq!(Tree::new([], []).digest(), Tree::new([], []).digest());
+    }
+
+    #[test]
+    fn tree_digest_ignores_build_order() {
+        let a = ("a".to_string(), Node::Blob(digest(b"a")));
+        let b = ("b".to_string(), Node::Blob(digest(b"b")));
+
+        let forward = Tree::new([a.clone(), b.clone()], []);
+        let backward = Tree::new([b, a], []);
+
+        assert_eq!(forward.digest(), backward.digest());
+        assert_eq!(forward.entries(), backward.entries());
+    }
+
+    #[test]
+    fn tree_digest_depends_on_entry_names() {
+        let blob = digest(b"content");
+        let a = Tree::new([("a".to_string(), Node::Blob(blob))], []);
+        let b = Tree::new([("b".to_string(), Node::Blob(blob))], []);
+        assert_ne!(a.digest(), b.digest());
+    }
+
+    #[test]
+    fn tree_digest_distinguishes_blob_from_tree() {
+        // A blob and a nested tree that happen to wrap the same inner
+        // digest must not collide.
+        let inner = digest(b"same");
+        let a = Tree::new([("x".to_string(), Node::Blob(inner))], []);
+        let b = Tree::new([("x".to_string(), Node::Tree(inner))], []);
+        assert_ne!(a.digest(), b.digest());
+    }
+
+    #[test]
+    fn tree_digest_depends_on_nested_tree_content() {
+        let inner_a = Tree::new([("f".to_string(), Node::Blob(digest(b"a")))], []);
+        let inner_b = Tree::new([("f".to_string(), Node::Blob(digest(b"b")))], []);
+
+        let a = Tree::new([("dir".to_string(), Node::Tree(inner_a.digest()))], []);
+        let b = Tree::new([("dir".to_string(), Node::Tree(inner_b.digest()))], []);
+        assert_ne!(a.digest(), b.digest());
+    }
+
+    #[test]
+    fn duplicate_name_keeps_last_write() {
+        let first = Node::Blob(digest(b"first"));
+        let second = Node::Blob(digest(b"second"));
+
+        let tree = Tree::new([("x".to_string(), first), ("x".to_string(), second)], []);
+
+        assert_eq!(tree.entries().len(), 1);
+        assert_eq!(tree.entries().get("x"), Some(&second));
+    }
+
+    #[test]
+    fn tree_digest_depends_on_interns() {
+        let a = Tree::new([], [digest(b"intern-a")]);
+        let b = Tree::new([], [digest(b"intern-b")]);
+        assert_ne!(a.digest(), b.digest());
+    }
+
+    #[test]
+    fn tree_interns_are_sorted() {
+        let a = digest(b"a");
+        let b = digest(b"b");
+        assert_eq!(Tree::new([], [a, b]).interns(), Tree::new([], [b, a]).interns());
+    }
+
+    #[test]
+    fn empty_bag_digest_is_deterministic() {
+        assert_eq!(Bag::new([], []).digest(), Bag::new([], []).digest());
+    }
+
+    #[test]
+    fn bag_digest_ignores_build_order() {
+        let a = digest(b"a");
+        let b = digest(b"b");
+        assert_eq!(Bag::new([a, b], []).digest(), Bag::new([b, a], []).digest());
+    }
+
+    #[test]
+    fn bag_keeps_duplicate_members() {
+        let a = digest(b"a");
+        let bag = Bag::new([a, a], []);
+        assert_eq!(bag.members(), [a, a]);
+    }
+
+    #[test]
+    fn bag_interns_are_sorted() {
+        let a = digest(b"a");
+        let b = digest(b"b");
+        assert_eq!(Bag::new([], [a, b]).interns(), Bag::new([], [b, a]).interns());
+    }
+
+    #[test]
+    fn bag_digest_depends_on_member_count() {
+        // Two members vs. one member "shared" as both a member and an
+        // intern must not collide: the member-count prefix disambiguates.
+        let a = digest(b"a");
+        let b = digest(b"b");
+        let two_members = Bag::new([a, b], []);
+        let one_member_one_intern = Bag::new([a], [b]);
+        assert_ne!(two_members.digest(), one_member_one_intern.digest());
+    }
+
+    #[test]
+    fn bag_digest_depends_on_interns() {
+        let a = Bag::new([], [digest(b"intern-a")]);
+        let b = Bag::new([], [digest(b"intern-b")]);
+        assert_ne!(a.digest(), b.digest());
+    }
+
+    #[test]
+    fn empty_tree_and_empty_bag_with_same_interns_do_not_collide() {
+        // Same shape once framed (a count of 0, then the same interns) --
+        // only the kind tag keeps these apart.
+        let interns = [digest(b"x"), digest(b"y")];
+        let tree = Tree::new([], interns);
+        let bag = Bag::new([], interns);
+        assert_ne!(tree.digest(), bag.digest());
+    }
+
+    #[test]
+    fn collection_tree_digest_matches_tree() {
+        let entries = [("a".to_string(), Node::Blob(digest(b"a")))];
+        let interns = [digest(b"intern")];
+        let want = Tree::new(entries.clone(), interns).digest();
+        assert_eq!(Collection::tree(entries, interns).digest(), want);
+    }
+
+    #[test]
+    fn collection_bag_digest_matches_bag() {
+        let members = [digest(b"a"), digest(b"b")];
+        let interns = [digest(b"intern")];
+        let want = Bag::new(members, interns).digest();
+        assert_eq!(Collection::bag(members, interns).digest(), want);
+    }
+
+    #[test]
+    fn collection_tree_and_bag_do_not_collide() {
+        let interns = [digest(b"x"), digest(b"y")];
+        let tree = Collection::tree([], interns);
+        let bag = Collection::bag([], interns);
+        assert_ne!(tree.digest(), bag.digest());
+    }
+
+    #[test]
+    fn node_round_trips_through_cbor() {
+        let want = Node::Blob(digest(b"a"));
+        let bytes = cbor2::to_canonical_vec(&want).unwrap();
+        let got: Node = cbor2::from_slice(&bytes).unwrap();
+        assert_eq!(got, want);
+    }
+
+    #[test]
+    fn tree_round_trips_through_cbor() {
+        let want = Tree::new([("a".to_string(), Node::Blob(digest(b"a")))], [digest(b"intern")]);
+        let bytes = cbor2::to_canonical_vec(&want).unwrap();
+        let got: Tree = cbor2::from_slice(&bytes).unwrap();
+        assert_eq!(got, want);
+    }
+
+    #[test]
+    fn bag_round_trips_through_cbor() {
+        let want = Bag::new([digest(b"a"), digest(b"b")], [digest(b"intern")]);
+        let bytes = cbor2::to_canonical_vec(&want).unwrap();
+        let got: Bag = cbor2::from_slice(&bytes).unwrap();
+        assert_eq!(got, want);
+    }
+
+    #[test]
+    fn collection_tree_try_from_bytes_round_trips() {
+        let want = Collection::tree([("a".to_string(), Node::Blob(digest(b"a")))], []);
+        let bytes = cbor2::to_canonical_vec(&want).unwrap();
+        let got = Collection::try_from(bytes.as_slice()).unwrap();
+        assert_eq!(got.digest(), want.digest());
+    }
+
+    #[test]
+    fn collection_bag_try_from_bytes_round_trips() {
+        let want = Collection::bag([digest(b"a"), digest(b"b")], []);
+        let bytes = cbor2::to_canonical_vec(&want).unwrap();
+        let got = Collection::try_from(bytes.as_slice()).unwrap();
+        assert_eq!(got.digest(), want.digest());
+    }
+
+    #[test]
+    fn collection_try_from_rejects_garbage_bytes() {
+        assert!(Collection::try_from(&b"not cbor"[..]).is_err());
+    }
+}
