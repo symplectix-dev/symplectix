@@ -7,8 +7,7 @@ mod store;
 
 pub use action::{
     Action,
-    Function,
-    Manifest,
+    Command,
 };
 pub use blob::{
     Collection,

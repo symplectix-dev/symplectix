@@ -145,14 +145,14 @@ impl Collection {
         Collection { inner: Inner::Bag(Bag::new(members, interns)) }
     }
 
-    /// Digest of the collection's content. Delegates to the inner `Tree`
-    /// or `Bag`, which each tag their own digest by kind, so a `Collection`
-    /// built from a `Tree` never collides with one built from a `Bag`.
+    /// Digest of the collection's own canonical CBOR encoding (like every
+    /// other content-addressed type here), so this always matches the
+    /// digest `Store` computes when storing/retrieving this value's
+    /// bytes. `inner`'s variant tag is part of that encoding, so a
+    /// `Collection` built from a `Tree` never collides with one built
+    /// from a `Bag`.
     pub fn digest(&self) -> Digest {
-        match &self.inner {
-            Inner::Tree(t) => t.digest(),
-            Inner::Bag(b) => b.digest(),
-        }
+        hash::digest_of(self)
     }
 }
 
@@ -307,19 +307,30 @@ mod tests {
     }
 
     #[test]
-    fn collection_tree_digest_matches_tree() {
+    fn collection_tree_digest_matches_hash_of_its_own_canonical_cbor() {
+        // The invariant `Store` relies on: a `Collection`'s digest equals
+        // the digest of its own canonical CBOR bytes, same as every other
+        // content-addressed type here.
         let entries = [("a".to_string(), Node::Blob(digest(b"a")))];
         let interns = [digest(b"intern")];
-        let want = Tree::new(entries.clone(), interns).digest();
-        assert_eq!(Collection::tree(entries, interns).digest(), want);
+        let collection = Collection::tree(entries, interns);
+
+        let bytes = cbor2::to_canonical_vec(&collection).unwrap();
+        let mut h = Hasher::new();
+        h.part(bytes);
+        assert_eq!(collection.digest(), h.digest());
     }
 
     #[test]
-    fn collection_bag_digest_matches_bag() {
+    fn collection_bag_digest_matches_hash_of_its_own_canonical_cbor() {
         let members = [digest(b"a"), digest(b"b")];
         let interns = [digest(b"intern")];
-        let want = Bag::new(members, interns).digest();
-        assert_eq!(Collection::bag(members, interns).digest(), want);
+        let collection = Collection::bag(members, interns);
+
+        let bytes = cbor2::to_canonical_vec(&collection).unwrap();
+        let mut h = Hasher::new();
+        h.part(bytes);
+        assert_eq!(collection.digest(), h.digest());
     }
 
     #[test]

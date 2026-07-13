@@ -1,26 +1,35 @@
 //! Action: a content-addressed reference to something runnable.
 
+use std::collections::BTreeMap;
+
 use crate::hash::{
     self,
     Digest,
     Hasher,
 };
 
-/// A content-addressed reference to something runnable:
-/// a function and the manifest to invoke it with, each referenced by
-/// digest rather than embedded. Identical function + manifest always produce
-/// the same `Action` digest, so identical runs dedup, and any change to
-/// either input changes it, so a recorded digest is tamper-evident.
+/// A content-addressed reference to something runnable: a `Command` and
+/// the input it runs against, each referenced by digest rather than
+/// embedded. Identical command + input always produce the same `Action`
+/// digest, so identical runs dedup, and any change to either changes it,
+/// so a recorded digest is tamper-evident.
+///
+/// Scheduling concerns (which worker, which OS/container image to run in)
+/// are deliberately not part of this: they're metadata an orchestrator
+/// carries alongside an Action's digest when dispatching it, not part of
+/// what gets cached/addressed here.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Action {
-    /// Digest of the `Function` to run.
-    pub func: Digest,
-    /// Digest of the `Manifest` to run the function with.
-    pub conf: Digest,
+    /// Digest of the `Command` to run.
+    pub command: Digest,
+    /// Digest of the input (a `Tree` or `Bag`, via `Collection`) to run
+    /// the command against.
+    pub input: Digest,
 }
 
 impl Action {
-    /// Digest of the action itself, combining `func` and `conf` in order.
+    /// Digest of the action itself, combining `command` and `input` in
+    /// order.
     pub fn digest(&self) -> Digest {
         hash::digest_of(self)
     }
@@ -42,67 +51,32 @@ impl TryFrom<&[u8]> for Action {
     }
 }
 
-/// Something an `Action` can run, referenced by digest. Serde's enum
-/// encoding tags each variant by name, so two `Function`s that happen to
-/// wrap the same inner digest but mean different things (e.g. an OCI image
-/// vs. some other artifact format) never fold into the same bytes.
+/// What an `Action` runs: an argv and the environment variables to invoke
+/// it with.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub enum Function {
-    /// An OCI image, referenced by its manifest digest.
-    Oci(Digest),
+pub struct Command {
+    pub arguments: Vec<String>,
+    pub env:       BTreeMap<String, String>,
 }
 
-impl Function {
-    /// Digest of the function reference itself.
+impl Command {
+    /// Digest of the command's content.
     pub fn digest(&self) -> Digest {
         hash::digest_of(self)
     }
 }
 
-impl From<Function> for Digest {
-    fn from(function: Function) -> Self {
-        function.digest()
+impl From<Command> for Digest {
+    fn from(command: Command) -> Self {
+        command.digest()
     }
 }
 
-impl TryFrom<&[u8]> for Function {
+impl TryFrom<&[u8]> for Command {
     type Error = cbor2::de::Error;
 
     /// Deserialize `bytes` (a CBOR encoding, canonical or not) as a
-    /// `Function`.
-    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
-        cbor2::from_slice(bytes)
-    }
-}
-
-/// The configuration to invoke an `Action`'s function with.
-///
-/// Shape still evolving -- currently just enough to be
-/// content-addressable.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub struct Manifest {
-    /// The manifest's name.
-    pub name: String,
-}
-
-impl Manifest {
-    /// Digest of the config's content.
-    pub fn digest(&self) -> Digest {
-        hash::digest_of(self)
-    }
-}
-
-impl From<Manifest> for Digest {
-    fn from(manifest: Manifest) -> Self {
-        manifest.digest()
-    }
-}
-
-impl TryFrom<&[u8]> for Manifest {
-    type Error = cbor2::de::Error;
-
-    /// Deserialize `bytes` (a CBOR encoding, canonical or not) as a
-    /// `Manifest`.
+    /// `Command`.
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
         cbor2::from_slice(bytes)
     }
@@ -118,87 +92,85 @@ mod tests {
         h.digest()
     }
 
+    fn command(args: &[&str]) -> Command {
+        Command {
+            arguments: args.iter().map(|s| s.to_string()).collect(),
+            env:       BTreeMap::new(),
+        }
+    }
+
     #[test]
-    fn manifest_digest_is_deterministic() {
-        let a = Manifest { name: "foo".to_string() };
-        let b = Manifest { name: "foo".to_string() };
+    fn command_digest_is_deterministic() {
+        let a = command(&["echo", "hi"]);
+        let b = command(&["echo", "hi"]);
         assert_eq!(a.digest(), b.digest());
     }
 
     #[test]
-    fn manifest_digest_depends_on_name() {
-        let a = Manifest { name: "a".to_string() };
-        let b = Manifest { name: "b".to_string() };
+    fn command_digest_depends_on_arguments() {
+        let a = command(&["echo", "a"]);
+        let b = command(&["echo", "b"]);
         assert_ne!(a.digest(), b.digest());
     }
 
     #[test]
-    fn function_oci_digest_is_deterministic() {
-        let inner = digest(b"image");
-        let a = Function::Oci(inner);
-        let b = Function::Oci(inner);
-        assert_eq!(a.digest(), b.digest());
-    }
-
-    #[test]
-    fn function_oci_digest_depends_on_inner_digest() {
-        let a = Function::Oci(digest(b"image-a"));
-        let b = Function::Oci(digest(b"image-b"));
+    fn command_digest_depends_on_env() {
+        let mut a = command(&["run"]);
+        a.env.insert("KEY".to_string(), "a".to_string());
+        let mut b = command(&["run"]);
+        b.env.insert("KEY".to_string(), "b".to_string());
         assert_ne!(a.digest(), b.digest());
     }
 
     #[test]
-    fn function_oci_digest_is_tagged_not_passthrough() {
-        // The kind tag must actually be folded in, not just the inner
-        // digest re-exposed unchanged.
-        let inner = digest(b"image");
-        assert_ne!(Function::Oci(inner).digest(), inner);
+    fn command_round_trips_through_cbor() {
+        let want = command(&["echo", "hi"]);
+        let bytes = cbor2::to_canonical_vec(&want).unwrap();
+        let got: Command = cbor2::from_slice(&bytes).unwrap();
+        assert_eq!(got, want);
+    }
+
+    #[test]
+    fn command_try_from_bytes_round_trips() {
+        let want = command(&["echo", "hi"]);
+        let bytes = cbor2::to_canonical_vec(&want).unwrap();
+        let got = Command::try_from(bytes.as_slice()).unwrap();
+        assert_eq!(got, want);
+    }
+
+    #[test]
+    fn command_try_from_rejects_garbage_bytes() {
+        assert!(Command::try_from(&b"not cbor"[..]).is_err());
     }
 
     #[test]
     fn action_digest_is_deterministic() {
-        let func = Function::Oci(digest(b"image")).digest();
-        let conf = digest(b"manifest");
-        let a = Action { func, conf };
-        let b = Action { func, conf };
+        let command = digest(b"command");
+        let input = digest(b"input");
+        let a = Action { command, input };
+        let b = Action { command, input };
         assert_eq!(a.digest(), b.digest());
     }
 
     #[test]
-    fn action_digest_changes_with_func() {
-        let conf = digest(b"manifest");
-        let a = Action { func: digest(b"func-a"), conf };
-        let b = Action { func: digest(b"func-b"), conf };
+    fn action_digest_changes_with_command() {
+        let input = digest(b"input");
+        let a = Action { command: digest(b"command-a"), input };
+        let b = Action { command: digest(b"command-b"), input };
         assert_ne!(a.digest(), b.digest());
     }
 
     #[test]
-    fn action_digest_changes_with_conf() {
-        let func = digest(b"func");
-        let a = Action { func, conf: digest(b"manifest-a") };
-        let b = Action { func, conf: digest(b"manifest-b") };
+    fn action_digest_changes_with_input() {
+        let command = digest(b"command");
+        let a = Action { command, input: digest(b"input-a") };
+        let b = Action { command, input: digest(b"input-b") };
         assert_ne!(a.digest(), b.digest());
-    }
-
-    #[test]
-    fn manifest_round_trips_through_cbor() {
-        let want = Manifest { name: "foo".to_string() };
-        let bytes = cbor2::to_canonical_vec(&want).unwrap();
-        let got: Manifest = cbor2::from_slice(&bytes).unwrap();
-        assert_eq!(got, want);
-    }
-
-    #[test]
-    fn function_round_trips_through_cbor() {
-        let want = Function::Oci(digest(b"image"));
-        let bytes = cbor2::to_canonical_vec(&want).unwrap();
-        let got: Function = cbor2::from_slice(&bytes).unwrap();
-        assert_eq!(got, want);
     }
 
     #[test]
     fn action_round_trips_through_cbor() {
-        let want = Action { func: digest(b"func"), conf: digest(b"conf") };
+        let want = Action { command: digest(b"command"), input: digest(b"input") };
         let bytes = cbor2::to_canonical_vec(&want).unwrap();
         let got: Action = cbor2::from_slice(&bytes).unwrap();
         assert_eq!(got, want);
@@ -206,7 +178,7 @@ mod tests {
 
     #[test]
     fn action_try_from_bytes_round_trips() {
-        let want = Action { func: digest(b"func"), conf: digest(b"conf") };
+        let want = Action { command: digest(b"command"), input: digest(b"input") };
         let bytes = cbor2::to_canonical_vec(&want).unwrap();
         let got = Action::try_from(bytes.as_slice()).unwrap();
         assert_eq!(got, want);
@@ -215,31 +187,5 @@ mod tests {
     #[test]
     fn action_try_from_rejects_garbage_bytes() {
         assert!(Action::try_from(&b"not cbor"[..]).is_err());
-    }
-
-    #[test]
-    fn manifest_try_from_bytes_round_trips() {
-        let want = Manifest { name: "foo".to_string() };
-        let bytes = cbor2::to_canonical_vec(&want).unwrap();
-        let got = Manifest::try_from(bytes.as_slice()).unwrap();
-        assert_eq!(got, want);
-    }
-
-    #[test]
-    fn manifest_try_from_rejects_garbage_bytes() {
-        assert!(Manifest::try_from(&b"not cbor"[..]).is_err());
-    }
-
-    #[test]
-    fn function_try_from_bytes_round_trips() {
-        let want = Function::Oci(digest(b"image"));
-        let bytes = cbor2::to_canonical_vec(&want).unwrap();
-        let got = Function::try_from(bytes.as_slice()).unwrap();
-        assert_eq!(got, want);
-    }
-
-    #[test]
-    fn function_try_from_rejects_garbage_bytes() {
-        assert!(Function::try_from(&b"not cbor"[..]).is_err());
     }
 }

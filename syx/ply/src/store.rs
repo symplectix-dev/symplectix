@@ -14,6 +14,7 @@ use std::path::{
     PathBuf,
 };
 
+use moka::future::Cache;
 use tokio::fs;
 
 use crate::hash::{
@@ -68,14 +69,14 @@ impl Content for PathBuf {
 pub struct Store {
     root:  PathBuf,
     /// digest -> content length in bytes, not the content itself.
-    cache: moka::future::Cache<Digest, u64>,
+    cache: Cache<Digest, u64>,
 }
 
 impl Store {
     /// Open a store rooted at `root` (created lazily on first `put`),
     /// with an in-memory cache holding up to `max_capacity` entries.
     pub fn new(root: impl Into<PathBuf>, max_capacity: u64) -> Self {
-        Store { root: root.into(), cache: moka::future::Cache::new(max_capacity) }
+        Store { root: root.into(), cache: Cache::new(max_capacity) }
     }
 
     fn path(&self, digest: &Digest) -> PathBuf {
@@ -275,5 +276,62 @@ mod tests {
         let from_path = store.put(src).await.unwrap();
         let from_bytes = store.put(b"hello".to_vec()).await.unwrap();
         assert_eq!(from_path, from_bytes);
+    }
+
+    #[tokio::test]
+    async fn action_and_its_command_and_input_resolve_from_store() {
+        use std::collections::BTreeMap;
+
+        use crate::action::{
+            Action,
+            Command,
+        };
+        use crate::blob::{
+            Collection,
+            Node,
+        };
+
+        let (_dir, store) = store();
+
+        // The input: a Tree with one file entry, itself resolvable from
+        // the store.
+        let file_digest = store.put(b"print('hi')".to_vec()).await.unwrap();
+        let input = Collection::tree([("main.py".to_string(), Node::Blob(file_digest))], []);
+        let input_bytes = cbor2::to_canonical_vec(&input).unwrap();
+        let input_digest = store.put(input_bytes).await.unwrap();
+        assert_eq!(input_digest, input.digest());
+
+        // The command to run against that input.
+        let command = Command {
+            arguments: vec!["python3".to_string(), "main.py".to_string()],
+            env:       BTreeMap::new(),
+        };
+        let command_bytes = cbor2::to_canonical_vec(&command).unwrap();
+        let command_digest = store.put(command_bytes).await.unwrap();
+        assert_eq!(command_digest, command.digest());
+
+        // The action tying command and input together.
+        let action = Action { command: command_digest, input: input_digest };
+        let action_bytes = cbor2::to_canonical_vec(&action).unwrap();
+        let action_digest = store.put(action_bytes).await.unwrap();
+        assert_eq!(action_digest, action.digest());
+
+        // Read the whole graph back out of the store using only the
+        // action's digest -- the resolution an executor would do before
+        // actually running it.
+        let stored_action_bytes = store.get(&action_digest).await.unwrap().unwrap();
+        let resolved_action = Action::try_from(stored_action_bytes.as_slice()).unwrap();
+        assert_eq!(resolved_action, action);
+
+        let stored_command_bytes = store.get(&resolved_action.command).await.unwrap().unwrap();
+        let resolved_command = Command::try_from(stored_command_bytes.as_slice()).unwrap();
+        assert_eq!(resolved_command, command);
+
+        let stored_input_bytes = store.get(&resolved_action.input).await.unwrap().unwrap();
+        let resolved_input = Collection::try_from(stored_input_bytes.as_slice()).unwrap();
+        assert_eq!(resolved_input.digest(), input.digest());
+
+        // The file the input tree references is itself resolvable.
+        assert_eq!(store.get(&file_digest).await.unwrap(), Some(b"print('hi')".to_vec()));
     }
 }
