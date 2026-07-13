@@ -8,6 +8,10 @@ use std::io::{
 };
 
 use sha2::Digest as _;
+use tokio::io::{
+    AsyncRead,
+    AsyncReadExt as _,
+};
 
 /// Read size for streaming a reader's bytes into a digest,
 /// so a large part is never buffered whole in memory.
@@ -81,6 +85,32 @@ impl Hasher {
         Ok(self)
     }
 
+    /// Async counterpart to `reader`: fold a part of known `len` bytes,
+    /// read from `r`, into the digest, without needing a blocking thread.
+    pub async fn async_reader(
+        &mut self,
+        len: u64,
+        mut r: impl AsyncRead + Unpin,
+    ) -> io::Result<&mut Self> {
+        self.hasher.update(len.to_be_bytes());
+
+        let mut remaining = len;
+        let mut buf = [0u8; BUF_SIZE];
+        while remaining > 0 {
+            let want = remaining.min(BUF_SIZE as u64) as usize;
+            let n = r.read(&mut buf[..want]).await?;
+            if n == 0 {
+                return Err(io::Error::new(
+                    io::ErrorKind::UnexpectedEof,
+                    format!("reader ended {remaining} bytes short of the declared length {len}"),
+                ));
+            }
+            self.hasher.update(&buf[..n]);
+            remaining -= n as u64;
+        }
+        Ok(self)
+    }
+
     /// Finalize and return the digest's bytes.
     pub fn digest(self) -> Digest {
         Digest(self.hasher.finalize().into())
@@ -104,7 +134,9 @@ pub fn digest_of<T: serde::Serialize>(value: &T) -> Digest {
 }
 
 /// A digest's raw bytes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
 pub struct Digest(#[serde(with = "serde_bytes")] [u8; 32]);
 
 impl Digest {
@@ -188,7 +220,7 @@ mod tests {
 
     #[derive(serde::Serialize)]
     struct Example {
-        name: String,
+        name:  String,
         count: u32,
     }
 

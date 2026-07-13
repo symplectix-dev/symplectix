@@ -7,12 +7,16 @@ rust.library(
         "src/blob.rs",
         "src/hash.rs",
         "src/lib.rs",
+        "src/store.rs",
     ],
     deps = [
         "@crates//:cbor2",
+        "@crates//:moka",
         "@crates//:serde",
         "@crates//:serde_bytes",
         "@crates//:sha2",
+        "@crates//:tempfile",
+        "@crates//:tokio",
     ],
 )
 
@@ -21,7 +25,10 @@ rust.test(
     size = "small",
     crate = ":ply",
     data = ["//:.rustfmt.toml"],
-    deps = ["//syx/testing"],
+    deps = [
+        "//syx/testing",
+        "@crates//:tokio",
+    ],
 )
 
 # rust.test_suite(

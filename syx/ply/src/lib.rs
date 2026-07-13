@@ -3,6 +3,7 @@
 mod action;
 mod blob;
 mod hash;
+mod store;
 
 pub use action::{
     Action,
@@ -17,3 +18,4 @@ pub use hash::{
     Digest,
     Hasher,
 };
+pub use store::Store;
