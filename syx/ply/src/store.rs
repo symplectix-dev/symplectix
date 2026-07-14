@@ -18,7 +18,7 @@ use crate::hash::{
     Hasher,
 };
 
-/// Content accepted by `Store::put`.
+/// Content managed by `Store`.
 pub trait Content: 'static + Send {
     /// This content's digest.
     fn digest(&self) -> impl Future<Output = io::Result<Digest>> + Send;
@@ -192,21 +192,31 @@ impl Store {
             dst.parent().expect("path is always root/xx/xx/rest, so it has a parent").to_owned();
         fs::create_dir_all(&dir).await?;
 
+        // About `expect(...)?`:
+        // This `expect` unwraps Result<T, JoinError>, and the inner
+        // io::Result is propagated normally via `?`.
+        // Assuming NamedTempFile::new_in/persist does not panic.
+
         // NamedTempFile reserves a uniquely-named file in `dir` so the
-        // final rename is atomic and on the same filesystem; creating it
-        // is sync (std::fs), so it runs on a blocking thread.
+        // final rename is on the same filesystem thus atomic.
         let tmp = task::spawn_blocking(move || tempfile::NamedTempFile::new_in(dir))
             .await
-            .expect("blocking task should not panic")?;
+            .expect("creating the temp file should not panic")?;
 
         let len = content.write_to(tmp.path()).await?;
 
         task::spawn_blocking(move || -> io::Result<()> {
+            // Read-only: a digest is only valid as long as the bytes it
+            // was computed from never change, so CAS entries must not be
+            // mutable once written.
+            let mut perms = tmp.as_file().metadata()?.permissions();
+            perms.set_readonly(true);
+            tmp.as_file().set_permissions(perms)?;
             tmp.persist(dst)?;
             Ok(())
         })
         .await
-        .expect("blocking task should not panic")?;
+        .expect("persisting the temp file should not panic")?;
 
         self.cache.insert(digest, len).await;
         Ok(digest)
@@ -236,7 +246,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn put_then_get_round_trips() {
+    async fn get_missing_digest_is_none() {
+        let (_dir, store) = store();
+        assert_eq!(store.get::<Vec<u8>>(&digest(b"missing")).await.unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn put_then_get() {
         let (_dir, store) = store();
         let d = store.put(&b"hello".to_vec()).await.unwrap();
         assert!(store.exists(&d).await.unwrap());
@@ -251,21 +267,27 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn get_missing_digest_is_none() {
-        let (_dir, store) = store();
-        assert_eq!(store.get::<Vec<u8>>(&digest(b"missing")).await.unwrap(), None);
-    }
+    async fn put_skips_writing_when_content_already_exists() {
+        use std::os::unix::fs::PermissionsExt;
 
-    #[tokio::test]
-    async fn put_is_idempotent_for_the_same_content() {
-        // A second put of the same content is a no-op (put skips the
-        // write if the address already exists), and still returns the
-        // same digest.
         let (_dir, store) = store();
-        let a = store.put(&b"hello".to_vec()).await.unwrap();
-        let b = store.put(&b"hello".to_vec()).await.unwrap();
-        assert_eq!(a, b);
-        assert_eq!(store.get(&a).await.unwrap(), Some(b"hello".to_vec()));
+        let d = store.put(&b"hello".to_vec()).await.unwrap();
+
+        // Make the destination's parent directory read-only: if the
+        // second put below actually tried to write (create a temp file
+        // in it), that would now fail with a permission error.
+        let path = store.path(&d);
+        let dir = path.parent().unwrap();
+        let permissions = std::fs::metadata(dir).unwrap().permissions();
+        let mut readonly = permissions.clone();
+        readonly.set_mode(0o500);
+        std::fs::set_permissions(dir, readonly).unwrap();
+
+        let d2 = store.put(&b"hello".to_vec()).await.unwrap();
+        assert_eq!(d, d2);
+
+        // Restore write permission so the tempdir can clean itself up.
+        std::fs::set_permissions(dir, permissions).unwrap();
     }
 
     #[tokio::test]
@@ -341,5 +363,18 @@ mod tests {
         let path: PathBuf = store.get(&d).await.unwrap().unwrap();
         assert_eq!(path, dir.path().join(d.hex(2)));
         assert_eq!(std::fs::read(path).unwrap(), b"hello".to_vec());
+    }
+
+    #[tokio::test]
+    async fn put_stores_content_read_only() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let (dir, store) = store();
+        let d = store.put(&b"hello".to_vec()).await.unwrap();
+
+        let path = dir.path().join(d.hex(2));
+        let perms = std::fs::metadata(&path).unwrap().permissions();
+        assert!(perms.readonly());
+        assert_eq!(perms.mode() & 0o200, 0);
     }
 }
