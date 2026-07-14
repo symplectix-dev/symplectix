@@ -1,12 +1,4 @@
-//! Store: a content-addressed blob store.
-//!
-//! An in-memory cache in front of a local-filesystem directory (no S3
-//! support yet). `put` writes through to disk before returning, so
-//! content survives a cache eviction or a process restart. The cache
-//! holds only digest -> size, not blob content, so its footprint does
-//! not grow with blob size; it exists purely to make repeated `exists`
-//! checks fast without a `stat` syscall.
-
+//! A content-addressed blob store.
 use std::future::Future;
 use std::io;
 use std::path::{
@@ -21,21 +13,27 @@ use tokio::{
 };
 
 use crate::hash::{
+    self,
     Digest,
     Hasher,
 };
 
-/// Content accepted by `Store::put`: either in-memory bytes or a file
-/// already on local disk. A `PathBuf` is hashed and written by
-/// streaming its bytes, so a file already on disk never gets buffered
-/// whole in memory just to be written straight back out.
-pub trait Content: Send + 'static {
+/// Content accepted by `Store::put`.
+pub trait Content: 'static + Send {
     /// This content's digest.
     fn digest(&self) -> impl Future<Output = io::Result<Digest>> + Send;
 
-    /// Write this content into a fresh file at `dst`, returning its
-    /// length in bytes.
-    fn write_to(&self, dst: &Path) -> impl Future<Output = io::Result<u64>> + Send;
+    /// Read the content back from `src`.
+    fn read_from<P>(src: &P) -> impl Future<Output = io::Result<Self>> + Send
+    where
+        Self: Sized,
+        P: ?Sized + Sync + AsRef<Path>;
+
+    /// Write this content into a fresh file at `dst`,
+    /// returning its length in bytes.
+    fn write_to<P>(&self, dst: &P) -> impl Future<Output = io::Result<u64>> + Send
+    where
+        P: ?Sized + Sync + AsRef<Path>;
 }
 
 impl Content for Vec<u8> {
@@ -45,7 +43,17 @@ impl Content for Vec<u8> {
         Ok(h.digest())
     }
 
-    async fn write_to(&self, dst: &Path) -> io::Result<u64> {
+    async fn read_from<P>(src: &P) -> io::Result<Self>
+    where
+        P: ?Sized + Sync + AsRef<Path>,
+    {
+        fs::read(src).await
+    }
+
+    async fn write_to<P>(&self, dst: &P) -> io::Result<u64>
+    where
+        P: ?Sized + Sync + AsRef<Path>,
+    {
         fs::write(dst, self).await?;
         Ok(self.len() as u64)
     }
@@ -61,8 +69,50 @@ impl Content for PathBuf {
         Ok(h.digest())
     }
 
-    async fn write_to(&self, dst: &Path) -> io::Result<u64> {
+    /// A `PathBuf`'s "content" is a file elsewhere; reading it back just
+    /// means pointing at where the store already put it, not loading it.
+    async fn read_from<P>(src: &P) -> io::Result<Self>
+    where
+        P: AsRef<Path> + ?Sized + Sync,
+    {
+        Ok(src.as_ref().to_path_buf())
+    }
+
+    async fn write_to<P>(&self, dst: &P) -> io::Result<u64>
+    where
+        P: AsRef<Path> + ?Sized + Sync,
+    {
         fs::copy(self, dst).await
+    }
+}
+
+/// Marker for types that are stored as their own canonical CBOR encoding,
+/// as opposed to `Vec<u8>`/`PathBuf`, which store already-raw bytes/files.
+pub(crate) trait Storable:
+    serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static
+{
+}
+
+impl<T: Storable> Content for T {
+    async fn digest(&self) -> io::Result<Digest> {
+        Ok(hash::digest_of(self))
+    }
+
+    async fn read_from<P>(src: &P) -> io::Result<Self>
+    where
+        P: ?Sized + Sync + AsRef<Path>,
+    {
+        let bytes = fs::read(src).await?;
+        cbor2::from_slice(&bytes).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+    }
+
+    async fn write_to<P>(&self, dst: &P) -> io::Result<u64>
+    where
+        P: ?Sized + Sync + AsRef<Path>,
+    {
+        let bytes = cbor2::to_canonical_vec(self).expect("serializing to CBOR should not fail");
+        fs::write(dst, &bytes).await?;
+        Ok(bytes.len() as u64)
     }
 }
 
@@ -102,35 +152,37 @@ impl Store {
         }
     }
 
-    /// The blob at `digest`, if present. Always reads from disk (the
+    /// The content at `digest`, if present. Always reads from disk (the
     /// cache holds sizes, not content), and fills the cache with the
     /// content's size.
-    pub async fn get(&self, digest: &Digest) -> io::Result<Option<Vec<u8>>> {
-        match fs::read(self.path(digest)).await {
-            Ok(content) => {
-                self.cache.insert(*digest, content.len() as u64).await;
-                Ok(Some(content))
-            }
-            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
-            Err(e) => Err(e),
-        }
+    pub async fn get<T: Content>(&self, digest: &Digest) -> io::Result<Option<T>> {
+        let path = self.path(digest);
+        let content = match T::read_from(&path).await {
+            Ok(content) => content,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
+            Err(e) => return Err(e),
+        };
+
+        let len = fs::metadata(&path).await?.len();
+        self.cache.insert(*digest, len).await;
+
+        Ok(Some(content))
     }
 
     /// Store `content` (in-memory bytes or an existing local file),
     /// addressed by its own digest, and return that digest.
     ///
-    /// If the address already exists, the write is skipped, but this is
-    /// best-effort, not a concurrency-safe write-once: two writers racing
-    /// on the same address may both write and the last one wins. That is
-    /// harmless here because the address is a deterministic function of
-    /// `content`, so whichever write wins holds the intended content.
-    ///
     /// The write to disk is atomic: `content` lands in a temp file next
     /// to the destination, then gets renamed into place, so a concurrent
     /// reader never observes a partially-written file.
-    pub async fn put(&self, content: impl Content) -> io::Result<Digest> {
+    pub async fn put<T: Content>(&self, content: &T) -> io::Result<Digest> {
         let digest = content.digest().await?;
 
+        // If the address already exists, the write is skipped.
+        // This is best-effort, not a concurrency-safe write-once: two writers racing
+        // on the same address may both write and the last one wins. That is harmless
+        // here because the address is a deterministic function of `content`,
+        // so whichever write wins holds the intended content.
         if self.exists(&digest).await? {
             return Ok(digest);
         }
@@ -186,7 +238,7 @@ mod tests {
     #[tokio::test]
     async fn put_then_get_round_trips() {
         let (_dir, store) = store();
-        let d = store.put(b"hello".to_vec()).await.unwrap();
+        let d = store.put(&b"hello".to_vec()).await.unwrap();
         assert!(store.exists(&d).await.unwrap());
         assert_eq!(store.get(&d).await.unwrap(), Some(b"hello".to_vec()));
     }
@@ -194,14 +246,14 @@ mod tests {
     #[tokio::test]
     async fn put_returns_the_content_digest() {
         let (_dir, store) = store();
-        let d = store.put(b"hello".to_vec()).await.unwrap();
+        let d = store.put(&b"hello".to_vec()).await.unwrap();
         assert_eq!(d, digest(b"hello"));
     }
 
     #[tokio::test]
     async fn get_missing_digest_is_none() {
         let (_dir, store) = store();
-        assert_eq!(store.get(&digest(b"missing")).await.unwrap(), None);
+        assert_eq!(store.get::<Vec<u8>>(&digest(b"missing")).await.unwrap(), None);
     }
 
     #[tokio::test]
@@ -210,8 +262,8 @@ mod tests {
         // write if the address already exists), and still returns the
         // same digest.
         let (_dir, store) = store();
-        let a = store.put(b"hello".to_vec()).await.unwrap();
-        let b = store.put(b"hello".to_vec()).await.unwrap();
+        let a = store.put(&b"hello".to_vec()).await.unwrap();
+        let b = store.put(&b"hello".to_vec()).await.unwrap();
         assert_eq!(a, b);
         assert_eq!(store.get(&a).await.unwrap(), Some(b"hello".to_vec()));
     }
@@ -224,7 +276,7 @@ mod tests {
         let dir = testing::tempdir();
 
         let writer = Store::new(dir.path(), 100);
-        let d = writer.put(b"hello".to_vec()).await.unwrap();
+        let d = writer.put(&b"hello".to_vec()).await.unwrap();
 
         let reader = Store::new(dir.path(), 100);
         assert!(reader.exists(&d).await.unwrap());
@@ -239,7 +291,7 @@ mod tests {
         let dir = testing::tempdir();
 
         let writer = Store::new(dir.path(), 100);
-        let d = writer.put(b"hello".to_vec()).await.unwrap();
+        let d = writer.put(&b"hello".to_vec()).await.unwrap();
 
         let reader = Store::new(dir.path(), 100);
         assert_eq!(reader.get(&d).await.unwrap(), Some(b"hello".to_vec()));
@@ -248,7 +300,7 @@ mod tests {
     #[tokio::test]
     async fn content_is_sharded_under_root() {
         let (dir, store) = store();
-        let d = store.put(b"hello".to_vec()).await.unwrap();
+        let d = store.put(&b"hello".to_vec()).await.unwrap();
 
         let path = dir.path().join(d.hex(2));
         assert_eq!(std::fs::read(path).unwrap(), b"hello".to_vec());
@@ -264,7 +316,7 @@ mod tests {
         let src = src_dir.path().join("blob");
         std::fs::write(&src, b"hello").unwrap();
 
-        let d = store.put(src).await.unwrap();
+        let d = store.put(&src).await.unwrap();
         assert_eq!(d, digest(b"hello"));
         assert_eq!(store.get(&d).await.unwrap(), Some(b"hello".to_vec()));
     }
@@ -276,8 +328,18 @@ mod tests {
         let src = src_dir.path().join("blob");
         std::fs::write(&src, b"hello").unwrap();
 
-        let from_path = store.put(src).await.unwrap();
-        let from_bytes = store.put(b"hello".to_vec()).await.unwrap();
+        let from_path = store.put(&src).await.unwrap();
+        let from_bytes = store.put(&b"hello".to_vec()).await.unwrap();
         assert_eq!(from_path, from_bytes);
+    }
+
+    #[tokio::test]
+    async fn get_as_path_points_at_the_stored_file_without_loading_it() {
+        let (dir, store) = store();
+        let d = store.put(&b"hello".to_vec()).await.unwrap();
+
+        let path: PathBuf = store.get(&d).await.unwrap().unwrap();
+        assert_eq!(path, dir.path().join(d.hex(2)));
+        assert_eq!(std::fs::read(path).unwrap(), b"hello".to_vec());
     }
 }

@@ -7,6 +7,7 @@ use crate::hash::{
     Digest,
     Hasher,
 };
+use crate::store::Storable;
 
 /// A content-addressed reference to something runnable: a `Command` and
 /// the input it runs against, each referenced by digest rather than
@@ -30,6 +31,8 @@ impl Action {
         Action { command, input }
     }
 }
+
+impl Storable for Action {}
 
 impl TryFrom<&[u8]> for Action {
     type Error = cbor2::de::Error;
@@ -96,6 +99,8 @@ impl Command {
         self
     }
 }
+
+impl Storable for Command {}
 
 impl TryFrom<&[u8]> for Command {
     type Error = cbor2::de::Error;
@@ -233,40 +238,31 @@ mod tests {
 
         // The input: a Tree with one file entry, itself resolvable from
         // the store.
-        let file_digest = store.put(b"print('hi')".to_vec()).await.unwrap();
+        let file_digest = store.put(&b"print('hi')".to_vec()).await.unwrap();
         let input = Collection::tree([("main.py".to_string(), Node::Blob(file_digest))], []);
-        let input_bytes = cbor2::to_canonical_vec(&input).unwrap();
-        let input_digest = store.put(input_bytes).await.unwrap();
-        assert_eq!(input_digest, hash::digest_of(&input));
+        let input_digest = store.put(&input).await.unwrap();
 
         // The command to run against that input.
         let mut command = Command::new("python3");
         command.arg("main.py");
-        let command_bytes = cbor2::to_canonical_vec(&command).unwrap();
-        let command_digest = store.put(command_bytes).await.unwrap();
-        assert_eq!(command_digest, hash::digest_of(&command));
+        let command_digest = store.put(&command).await.unwrap();
 
         // The action tying command and input together.
         let action = Action::new(command_digest, input_digest);
-        let action_bytes = cbor2::to_canonical_vec(&action).unwrap();
-        let action_digest = store.put(action_bytes).await.unwrap();
-        assert_eq!(action_digest, hash::digest_of(&action));
+        let action_digest = store.put(&action).await.unwrap();
 
         // Read the whole graph back out of the store using only the
         // action's digest -- the resolution an executor would do before
         // actually running it. Reaches into `command`/`input` directly
         // (private fields, but this test lives inside the same module).
-        let stored_action_bytes = store.get(&action_digest).await.unwrap().unwrap();
-        let resolved_action = Action::try_from(stored_action_bytes.as_slice()).unwrap();
+        let resolved_action: Action = store.get(&action_digest).await.unwrap().unwrap();
         assert_eq!(resolved_action, action);
 
-        let stored_command_bytes = store.get(&resolved_action.command).await.unwrap().unwrap();
-        let resolved_command = Command::try_from(stored_command_bytes.as_slice()).unwrap();
+        let resolved_command: Command = store.get(&resolved_action.command).await.unwrap().unwrap();
         assert_eq!(resolved_command, command);
 
-        let stored_input_bytes = store.get(&resolved_action.input).await.unwrap().unwrap();
-        let resolved_input = Collection::try_from(stored_input_bytes.as_slice()).unwrap();
-        assert_eq!(hash::digest_of(&resolved_input), hash::digest_of(&input));
+        let resolved_input: Collection = store.get(&resolved_action.input).await.unwrap().unwrap();
+        assert_eq!(resolved_input, input);
 
         // The file the input tree references is itself resolvable.
         assert_eq!(store.get(&file_digest).await.unwrap(), Some(b"print('hi')".to_vec()));

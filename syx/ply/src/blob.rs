@@ -10,6 +10,7 @@ use crate::hash::{
     Digest,
     Hasher,
 };
+use crate::store::Storable;
 
 /// What a `Tree` entry's name points to: a file's content, or a nested
 /// `Tree`, each referenced by digest rather than embedded.
@@ -107,6 +108,8 @@ impl Collection {
         Collection { blobs: Blobs::Bag(Bag::new(members)), interns }
     }
 }
+
+impl Storable for Collection {}
 
 impl TryFrom<&[u8]> for Collection {
     type Error = cbor2::de::Error;
