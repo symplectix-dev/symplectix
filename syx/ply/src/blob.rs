@@ -106,22 +106,6 @@ impl Collection {
         interns.sort();
         Collection { blobs: Blobs::Bag(Bag::new(members)), interns }
     }
-
-    /// Digest of the collection's own canonical CBOR encoding (like every
-    /// other content-addressed type here), so this always matches the
-    /// digest `Store` computes when storing/retrieving this value's
-    /// bytes. `inner`'s variant tag is part of that encoding, so a
-    /// `Collection` built from a `Tree` never collides with one built
-    /// from a `Bag`.
-    pub fn digest(&self) -> Digest {
-        hash::digest_of(self)
-    }
-}
-
-impl From<Collection> for Digest {
-    fn from(collection: Collection) -> Self {
-        collection.digest()
-    }
 }
 
 impl TryFrom<&[u8]> for Collection {
@@ -187,7 +171,10 @@ mod tests {
 
     #[test]
     fn empty_tree_digest_is_deterministic() {
-        assert_eq!(Collection::tree([], []).digest(), Collection::tree([], []).digest());
+        assert_eq!(
+            hash::digest_of(&Collection::tree([], [])),
+            hash::digest_of(&Collection::tree([], []))
+        );
     }
 
     #[test]
@@ -198,7 +185,7 @@ mod tests {
         let forward = Collection::tree([a.clone(), b.clone()], []);
         let backward = Collection::tree([b, a], []);
 
-        assert_eq!(forward.digest(), backward.digest());
+        assert_eq!(hash::digest_of(&forward), hash::digest_of(&backward));
     }
 
     #[test]
@@ -206,7 +193,7 @@ mod tests {
         let blob = digest(b"content");
         let a = Collection::tree([("a".to_string(), Node::Blob(blob))], []);
         let b = Collection::tree([("b".to_string(), Node::Blob(blob))], []);
-        assert_ne!(a.digest(), b.digest());
+        assert_ne!(hash::digest_of(&a), hash::digest_of(&b));
     }
 
     #[test]
@@ -216,7 +203,7 @@ mod tests {
         let inner = digest(b"same");
         let a = Collection::tree([("x".to_string(), Node::Blob(inner))], []);
         let b = Collection::tree([("x".to_string(), Node::Tree(inner))], []);
-        assert_ne!(a.digest(), b.digest());
+        assert_ne!(hash::digest_of(&a), hash::digest_of(&b));
     }
 
     #[test]
@@ -224,42 +211,53 @@ mod tests {
         let inner_a = Collection::tree([("f".to_string(), Node::Blob(digest(b"a")))], []);
         let inner_b = Collection::tree([("f".to_string(), Node::Blob(digest(b"b")))], []);
 
-        let a = Collection::tree([("dir".to_string(), Node::Tree(inner_a.digest()))], []);
-        let b = Collection::tree([("dir".to_string(), Node::Tree(inner_b.digest()))], []);
-        assert_ne!(a.digest(), b.digest());
+        let a =
+            Collection::tree([("dir".to_string(), Node::Tree(hash::digest_of(&inner_a)))], []);
+        let b =
+            Collection::tree([("dir".to_string(), Node::Tree(hash::digest_of(&inner_b)))], []);
+        assert_ne!(hash::digest_of(&a), hash::digest_of(&b));
     }
 
     #[test]
     fn tree_digest_depends_on_interns() {
         let a = Collection::tree([], [digest(b"intern-a")]);
         let b = Collection::tree([], [digest(b"intern-b")]);
-        assert_ne!(a.digest(), b.digest());
+        assert_ne!(hash::digest_of(&a), hash::digest_of(&b));
     }
 
     #[test]
     fn tree_interns_ignore_build_order() {
         let a = digest(b"a");
         let b = digest(b"b");
-        assert_eq!(Collection::tree([], [a, b]).digest(), Collection::tree([], [b, a]).digest());
+        assert_eq!(
+            hash::digest_of(&Collection::tree([], [a, b])),
+            hash::digest_of(&Collection::tree([], [b, a]))
+        );
     }
 
     #[test]
     fn empty_bag_digest_is_deterministic() {
-        assert_eq!(Collection::bag([], []).digest(), Collection::bag([], []).digest());
+        assert_eq!(
+            hash::digest_of(&Collection::bag([], [])),
+            hash::digest_of(&Collection::bag([], []))
+        );
     }
 
     #[test]
     fn bag_digest_ignores_build_order() {
         let a = digest(b"a");
         let b = digest(b"b");
-        assert_eq!(Collection::bag([a, b], []).digest(), Collection::bag([b, a], []).digest());
+        assert_eq!(
+            hash::digest_of(&Collection::bag([a, b], [])),
+            hash::digest_of(&Collection::bag([b, a], []))
+        );
     }
 
     #[test]
     fn bag_digest_depends_on_interns() {
         let a = Collection::bag([], [digest(b"intern-a")]);
         let b = Collection::bag([], [digest(b"intern-b")]);
-        assert_ne!(a.digest(), b.digest());
+        assert_ne!(hash::digest_of(&a), hash::digest_of(&b));
     }
 
     #[test]
@@ -270,7 +268,7 @@ mod tests {
         let b = digest(b"b");
         let two_members = Collection::bag([a, b], []);
         let one_member_one_intern = Collection::bag([a], [b]);
-        assert_ne!(two_members.digest(), one_member_one_intern.digest());
+        assert_ne!(hash::digest_of(&two_members), hash::digest_of(&one_member_one_intern));
     }
 
     #[test]
@@ -280,7 +278,7 @@ mod tests {
         let interns = [digest(b"x"), digest(b"y")];
         let tree = Collection::tree([], interns);
         let bag = Collection::bag([], interns);
-        assert_ne!(tree.digest(), bag.digest());
+        assert_ne!(hash::digest_of(&tree), hash::digest_of(&bag));
     }
 
     #[test]
@@ -295,7 +293,7 @@ mod tests {
         let bytes = cbor2::to_canonical_vec(&collection).unwrap();
         let mut h = Hasher::new();
         h.part(bytes);
-        assert_eq!(collection.digest(), h.digest());
+        assert_eq!(hash::digest_of(&collection), h.digest());
     }
 
     #[test]
@@ -303,7 +301,7 @@ mod tests {
         let interns = [digest(b"x"), digest(b"y")];
         let tree = Collection::tree([], interns);
         let bag = Collection::bag([], interns);
-        assert_ne!(tree.digest(), bag.digest());
+        assert_ne!(hash::digest_of(&tree), hash::digest_of(&bag));
     }
 
     #[test]

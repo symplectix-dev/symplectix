@@ -11,8 +11,8 @@ use crate::hash::{
 /// A content-addressed reference to something runnable: a `Command` and
 /// the input it runs against, each referenced by digest rather than
 /// embedded. Identical command + input always produce the same `Action`
-/// digest, so identical runs dedup, and any change to either changes it,
-/// so a recorded digest is tamper-evident.
+/// digest (via `hash::digest_of`), so identical runs dedup, and any
+/// change to either changes it, so a recorded digest is tamper-evident.
 ///
 /// Scheduling concerns (which worker, which OS/container image to run in)
 /// are deliberately not part of this: they're metadata an orchestrator
@@ -28,29 +28,6 @@ impl Action {
     /// An `Action` running `command` against `input`.
     pub fn new(command: Digest, input: Digest) -> Self {
         Action { command, input }
-    }
-
-    /// Digest of the `Command` to run.
-    pub fn command(&self) -> Digest {
-        self.command
-    }
-
-    /// Digest of the input (a `Tree` or `Bag`, via `Collection`) to run
-    /// the command against.
-    pub fn input(&self) -> Digest {
-        self.input
-    }
-
-    /// Digest of the action itself, combining `command` and `input` in
-    /// order.
-    pub fn digest(&self) -> Digest {
-        hash::digest_of(self)
-    }
-}
-
-impl From<Action> for Digest {
-    fn from(action: Action) -> Self {
-        action.digest()
     }
 }
 
@@ -118,17 +95,6 @@ impl Command {
         }
         self
     }
-
-    /// Digest of the command's content.
-    pub fn digest(&self) -> Digest {
-        hash::digest_of(self)
-    }
-}
-
-impl From<Command> for Digest {
-    fn from(command: Command) -> Self {
-        command.digest()
-    }
 }
 
 impl TryFrom<&[u8]> for Command {
@@ -161,21 +127,21 @@ mod tests {
     fn command_digest_is_deterministic() {
         let a = command("echo", &["hi"]);
         let b = command("echo", &["hi"]);
-        assert_eq!(a.digest(), b.digest());
+        assert_eq!(hash::digest_of(&a), hash::digest_of(&b));
     }
 
     #[test]
     fn command_digest_depends_on_program() {
         let a = command("echo", &["hi"]);
         let b = command("cat", &["hi"]);
-        assert_ne!(a.digest(), b.digest());
+        assert_ne!(hash::digest_of(&a), hash::digest_of(&b));
     }
 
     #[test]
     fn command_digest_depends_on_args() {
         let a = command("echo", &["a"]);
         let b = command("echo", &["b"]);
-        assert_ne!(a.digest(), b.digest());
+        assert_ne!(hash::digest_of(&a), hash::digest_of(&b));
     }
 
     #[test]
@@ -184,7 +150,7 @@ mod tests {
         a.env("KEY", "a");
         let mut b = Command::new("run");
         b.env("KEY", "b");
-        assert_ne!(a.digest(), b.digest());
+        assert_ne!(hash::digest_of(&a), hash::digest_of(&b));
     }
 
     #[test]
@@ -214,7 +180,7 @@ mod tests {
         let input = digest(b"input");
         let a = Action::new(command, input);
         let b = Action::new(command, input);
-        assert_eq!(a.digest(), b.digest());
+        assert_eq!(hash::digest_of(&a), hash::digest_of(&b));
     }
 
     #[test]
@@ -222,7 +188,7 @@ mod tests {
         let input = digest(b"input");
         let a = Action::new(digest(b"command-a"), input);
         let b = Action::new(digest(b"command-b"), input);
-        assert_ne!(a.digest(), b.digest());
+        assert_ne!(hash::digest_of(&a), hash::digest_of(&b));
     }
 
     #[test]
@@ -230,16 +196,7 @@ mod tests {
         let command = digest(b"command");
         let a = Action::new(command, digest(b"input-a"));
         let b = Action::new(command, digest(b"input-b"));
-        assert_ne!(a.digest(), b.digest());
-    }
-
-    #[test]
-    fn action_accessors_match_constructor_args() {
-        let command = digest(b"command");
-        let input = digest(b"input");
-        let action = Action::new(command, input);
-        assert_eq!(action.command(), command);
-        assert_eq!(action.input(), input);
+        assert_ne!(hash::digest_of(&a), hash::digest_of(&b));
     }
 
     #[test]
@@ -261,5 +218,57 @@ mod tests {
     #[test]
     fn action_try_from_rejects_garbage_bytes() {
         assert!(Action::try_from(&b"not cbor"[..]).is_err());
+    }
+
+    #[tokio::test]
+    async fn action_and_its_command_and_input_resolve_from_store() {
+        use crate::blob::{
+            Collection,
+            Node,
+        };
+        use crate::store::Store;
+
+        let dir = testing::tempdir();
+        let store = Store::new(dir.path(), 100);
+
+        // The input: a Tree with one file entry, itself resolvable from
+        // the store.
+        let file_digest = store.put(b"print('hi')".to_vec()).await.unwrap();
+        let input = Collection::tree([("main.py".to_string(), Node::Blob(file_digest))], []);
+        let input_bytes = cbor2::to_canonical_vec(&input).unwrap();
+        let input_digest = store.put(input_bytes).await.unwrap();
+        assert_eq!(input_digest, hash::digest_of(&input));
+
+        // The command to run against that input.
+        let mut command = Command::new("python3");
+        command.arg("main.py");
+        let command_bytes = cbor2::to_canonical_vec(&command).unwrap();
+        let command_digest = store.put(command_bytes).await.unwrap();
+        assert_eq!(command_digest, hash::digest_of(&command));
+
+        // The action tying command and input together.
+        let action = Action::new(command_digest, input_digest);
+        let action_bytes = cbor2::to_canonical_vec(&action).unwrap();
+        let action_digest = store.put(action_bytes).await.unwrap();
+        assert_eq!(action_digest, hash::digest_of(&action));
+
+        // Read the whole graph back out of the store using only the
+        // action's digest -- the resolution an executor would do before
+        // actually running it. Reaches into `command`/`input` directly
+        // (private fields, but this test lives inside the same module).
+        let stored_action_bytes = store.get(&action_digest).await.unwrap().unwrap();
+        let resolved_action = Action::try_from(stored_action_bytes.as_slice()).unwrap();
+        assert_eq!(resolved_action, action);
+
+        let stored_command_bytes = store.get(&resolved_action.command).await.unwrap().unwrap();
+        let resolved_command = Command::try_from(stored_command_bytes.as_slice()).unwrap();
+        assert_eq!(resolved_command, command);
+
+        let stored_input_bytes = store.get(&resolved_action.input).await.unwrap().unwrap();
+        let resolved_input = Collection::try_from(stored_input_bytes.as_slice()).unwrap();
+        assert_eq!(hash::digest_of(&resolved_input), hash::digest_of(&input));
+
+        // The file the input tree references is itself resolvable.
+        assert_eq!(store.get(&file_digest).await.unwrap(), Some(b"print('hi')".to_vec()));
     }
 }

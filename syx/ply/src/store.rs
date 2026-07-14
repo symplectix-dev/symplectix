@@ -171,8 +171,8 @@ mod tests {
         h.digest()
     }
 
-    fn store() -> (tempfile::TempDir, Store) {
-        let dir = tempfile::tempdir().unwrap();
+    fn store() -> (testing::TempDir, Store) {
+        let dir = testing::tempdir();
         let store = Store::new(dir.path(), 100);
         (dir, store)
     }
@@ -221,7 +221,7 @@ mod tests {
         // A fresh Store instance over the same root sees content a prior
         // instance wrote: proof it actually landed on disk, not only in
         // the (per-instance) in-memory cache.
-        let dir = tempfile::tempdir().unwrap();
+        let dir = testing::tempdir();
 
         let writer = Store::new(dir.path(), 100);
         let d = writer.put(b"hello".to_vec()).await.unwrap();
@@ -236,7 +236,7 @@ mod tests {
         // Content written by one Store is visible via a second Store's
         // get(), which must fall back to disk since its own cache never
         // saw this digest.
-        let dir = tempfile::tempdir().unwrap();
+        let dir = testing::tempdir();
 
         let writer = Store::new(dir.path(), 100);
         let d = writer.put(b"hello".to_vec()).await.unwrap();
@@ -260,7 +260,7 @@ mod tests {
         // put()'d directly; the store reads it in via Content::digest /
         // write_into rather than requiring the caller to load it first.
         let (_dir, store) = store();
-        let src_dir = tempfile::tempdir().unwrap();
+        let src_dir = testing::tempdir();
         let src = src_dir.path().join("blob");
         std::fs::write(&src, b"hello").unwrap();
 
@@ -272,65 +272,12 @@ mod tests {
     #[tokio::test]
     async fn path_and_bytes_content_produce_the_same_digest() {
         let (_dir, store) = store();
-        let src_dir = tempfile::tempdir().unwrap();
+        let src_dir = testing::tempdir();
         let src = src_dir.path().join("blob");
         std::fs::write(&src, b"hello").unwrap();
 
         let from_path = store.put(src).await.unwrap();
         let from_bytes = store.put(b"hello".to_vec()).await.unwrap();
         assert_eq!(from_path, from_bytes);
-    }
-
-    #[tokio::test]
-    async fn action_and_its_command_and_input_resolve_from_store() {
-        use crate::action::{
-            Action,
-            Command,
-        };
-        use crate::blob::{
-            Collection,
-            Node,
-        };
-
-        let (_dir, store) = store();
-
-        // The input: a Tree with one file entry, itself resolvable from
-        // the store.
-        let file_digest = store.put(b"print('hi')".to_vec()).await.unwrap();
-        let input = Collection::tree([("main.py".to_string(), Node::Blob(file_digest))], []);
-        let input_bytes = cbor2::to_canonical_vec(&input).unwrap();
-        let input_digest = store.put(input_bytes).await.unwrap();
-        assert_eq!(input_digest, input.digest());
-
-        // The command to run against that input.
-        let mut command = Command::new("python3");
-        command.arg("main.py");
-        let command_bytes = cbor2::to_canonical_vec(&command).unwrap();
-        let command_digest = store.put(command_bytes).await.unwrap();
-        assert_eq!(command_digest, command.digest());
-
-        // The action tying command and input together.
-        let action = Action::new(command_digest, input_digest);
-        let action_bytes = cbor2::to_canonical_vec(&action).unwrap();
-        let action_digest = store.put(action_bytes).await.unwrap();
-        assert_eq!(action_digest, action.digest());
-
-        // Read the whole graph back out of the store using only the
-        // action's digest -- the resolution an executor would do before
-        // actually running it.
-        let stored_action_bytes = store.get(&action_digest).await.unwrap().unwrap();
-        let resolved_action = Action::try_from(stored_action_bytes.as_slice()).unwrap();
-        assert_eq!(resolved_action, action);
-
-        let stored_command_bytes = store.get(&resolved_action.command()).await.unwrap().unwrap();
-        let resolved_command = Command::try_from(stored_command_bytes.as_slice()).unwrap();
-        assert_eq!(resolved_command, command);
-
-        let stored_input_bytes = store.get(&resolved_action.input()).await.unwrap().unwrap();
-        let resolved_input = Collection::try_from(stored_input_bytes.as_slice()).unwrap();
-        assert_eq!(resolved_input.digest(), input.digest());
-
-        // The file the input tree references is itself resolvable.
-        assert_eq!(store.get(&file_digest).await.unwrap(), Some(b"print('hi')".to_vec()));
     }
 }

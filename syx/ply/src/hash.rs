@@ -119,17 +119,15 @@ impl Hasher {
 
 /// Digest of `value`'s canonical CBOR encoding (RFC 8949 deterministic
 /// encoding: smallest integer forms, definite-length items, sorted map
-/// keys). Two values that are `==` always serialize to the same bytes, so
-/// they always produce the same digest; use this to content-address a
-/// `Serialize` type instead of hand-folding its fields with `Hasher`.
-///
-/// Plain `cbor2::to_vec` is not guaranteed deterministic (RFC 8949 allows
-/// non-canonical encodings of the same value), so this must go through
-/// `to_canonical_vec` specifically.
-pub fn digest_of<T: serde::Serialize>(value: &T) -> Digest {
-    let bytes = cbor2::to_canonical_vec(value).expect("serializing to CBOR should not fail");
+/// keys).
+pub(crate) fn digest_of<T: serde::Serialize>(value: &T) -> Digest {
     let mut h = Hasher::new();
-    h.part(bytes);
+    h.part(
+        // Plain `cbor2::to_vec` is not guaranteed deterministic (RFC 8949 allows
+        // non-canonical encodings of the same value), so this must go through
+        // `to_canonical_vec` specifically.
+        cbor2::to_canonical_vec(value).expect("serializing to CBOR should not fail"),
+    );
     h.digest()
 }
 
