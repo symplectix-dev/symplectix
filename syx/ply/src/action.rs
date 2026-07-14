@@ -20,14 +20,27 @@ use crate::hash::{
 /// what gets cached/addressed here.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Action {
-    /// Digest of the `Command` to run.
-    pub command: Digest,
-    /// Digest of the input (a `Tree` or `Bag`, via `Collection`) to run
-    /// the command against.
-    pub input: Digest,
+    command: Digest,
+    input:   Digest,
 }
 
 impl Action {
+    /// An `Action` running `command` against `input`.
+    pub fn new(command: Digest, input: Digest) -> Self {
+        Action { command, input }
+    }
+
+    /// Digest of the `Command` to run.
+    pub fn command(&self) -> Digest {
+        self.command
+    }
+
+    /// Digest of the input (a `Tree` or `Bag`, via `Collection`) to run
+    /// the command against.
+    pub fn input(&self) -> Digest {
+        self.input
+    }
+
     /// Digest of the action itself, combining `command` and `input` in
     /// order.
     pub fn digest(&self) -> Digest {
@@ -51,15 +64,61 @@ impl TryFrom<&[u8]> for Action {
     }
 }
 
-/// What an `Action` runs: an argv and the environment variables to invoke
-/// it with.
+/// What an `Action` runs: a program, its arguments, and the environment
+/// variables to invoke it with. Named to match `std::process::Command`.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Command {
-    pub arguments: Vec<String>,
-    pub env:       BTreeMap<String, String>,
+    program: String,
+    args:    Vec<String>,
+    env:     BTreeMap<String, String>,
 }
 
 impl Command {
+    /// A `Command` running `program` with `args` and `env`.
+    pub fn new(program: impl Into<String>) -> Self {
+        Command { program: program.into(), args: Vec::new(), env: BTreeMap::new() }
+    }
+
+    pub fn arg<S>(&mut self, arg: S) -> &mut Self
+    where
+        S: AsRef<str>,
+    {
+        self.args.push(arg.as_ref().to_owned());
+        self
+    }
+
+    pub fn args<I, S>(&mut self, args: I) -> &mut Self
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<str>,
+    {
+        for arg in args {
+            self.arg(arg);
+        }
+        self
+    }
+
+    pub fn env<K, V>(&mut self, key: K, value: V) -> &mut Self
+    where
+        K: AsRef<str>,
+        V: AsRef<str>,
+    {
+        self.env.insert(key.as_ref().to_owned(), value.as_ref().to_owned());
+        self
+    }
+
+    pub fn envs<I, K, V>(&mut self, vars: I) -> &mut Self
+    where
+        I: IntoIterator<Item = (K, V)>,
+        K: AsRef<str>,
+        V: AsRef<str>,
+    {
+        for (key, value) in vars {
+            self.env(key, value);
+        }
+        self
+    }
+
     /// Digest of the command's content.
     pub fn digest(&self) -> Digest {
         hash::digest_of(self)
@@ -92,39 +151,45 @@ mod tests {
         h.digest()
     }
 
-    fn command(args: &[&str]) -> Command {
-        Command {
-            arguments: args.iter().map(|s| s.to_string()).collect(),
-            env:       BTreeMap::new(),
-        }
+    fn command(program: &str, args: &[&str]) -> Command {
+        let mut command = Command::new(program);
+        command.args(args);
+        command
     }
 
     #[test]
     fn command_digest_is_deterministic() {
-        let a = command(&["echo", "hi"]);
-        let b = command(&["echo", "hi"]);
+        let a = command("echo", &["hi"]);
+        let b = command("echo", &["hi"]);
         assert_eq!(a.digest(), b.digest());
     }
 
     #[test]
-    fn command_digest_depends_on_arguments() {
-        let a = command(&["echo", "a"]);
-        let b = command(&["echo", "b"]);
+    fn command_digest_depends_on_program() {
+        let a = command("echo", &["hi"]);
+        let b = command("cat", &["hi"]);
+        assert_ne!(a.digest(), b.digest());
+    }
+
+    #[test]
+    fn command_digest_depends_on_args() {
+        let a = command("echo", &["a"]);
+        let b = command("echo", &["b"]);
         assert_ne!(a.digest(), b.digest());
     }
 
     #[test]
     fn command_digest_depends_on_env() {
-        let mut a = command(&["run"]);
-        a.env.insert("KEY".to_string(), "a".to_string());
-        let mut b = command(&["run"]);
-        b.env.insert("KEY".to_string(), "b".to_string());
+        let mut a = Command::new("run");
+        a.env("KEY", "a");
+        let mut b = Command::new("run");
+        b.env("KEY", "b");
         assert_ne!(a.digest(), b.digest());
     }
 
     #[test]
     fn command_round_trips_through_cbor() {
-        let want = command(&["echo", "hi"]);
+        let want = command("echo", &["hi"]);
         let bytes = cbor2::to_canonical_vec(&want).unwrap();
         let got: Command = cbor2::from_slice(&bytes).unwrap();
         assert_eq!(got, want);
@@ -132,7 +197,7 @@ mod tests {
 
     #[test]
     fn command_try_from_bytes_round_trips() {
-        let want = command(&["echo", "hi"]);
+        let want = command("echo", &["hi"]);
         let bytes = cbor2::to_canonical_vec(&want).unwrap();
         let got = Command::try_from(bytes.as_slice()).unwrap();
         assert_eq!(got, want);
@@ -147,30 +212,39 @@ mod tests {
     fn action_digest_is_deterministic() {
         let command = digest(b"command");
         let input = digest(b"input");
-        let a = Action { command, input };
-        let b = Action { command, input };
+        let a = Action::new(command, input);
+        let b = Action::new(command, input);
         assert_eq!(a.digest(), b.digest());
     }
 
     #[test]
     fn action_digest_changes_with_command() {
         let input = digest(b"input");
-        let a = Action { command: digest(b"command-a"), input };
-        let b = Action { command: digest(b"command-b"), input };
+        let a = Action::new(digest(b"command-a"), input);
+        let b = Action::new(digest(b"command-b"), input);
         assert_ne!(a.digest(), b.digest());
     }
 
     #[test]
     fn action_digest_changes_with_input() {
         let command = digest(b"command");
-        let a = Action { command, input: digest(b"input-a") };
-        let b = Action { command, input: digest(b"input-b") };
+        let a = Action::new(command, digest(b"input-a"));
+        let b = Action::new(command, digest(b"input-b"));
         assert_ne!(a.digest(), b.digest());
     }
 
     #[test]
+    fn action_accessors_match_constructor_args() {
+        let command = digest(b"command");
+        let input = digest(b"input");
+        let action = Action::new(command, input);
+        assert_eq!(action.command(), command);
+        assert_eq!(action.input(), input);
+    }
+
+    #[test]
     fn action_round_trips_through_cbor() {
-        let want = Action { command: digest(b"command"), input: digest(b"input") };
+        let want = Action::new(digest(b"command"), digest(b"input"));
         let bytes = cbor2::to_canonical_vec(&want).unwrap();
         let got: Action = cbor2::from_slice(&bytes).unwrap();
         assert_eq!(got, want);
@@ -178,7 +252,7 @@ mod tests {
 
     #[test]
     fn action_try_from_bytes_round_trips() {
-        let want = Action { command: digest(b"command"), input: digest(b"input") };
+        let want = Action::new(digest(b"command"), digest(b"input"));
         let bytes = cbor2::to_canonical_vec(&want).unwrap();
         let got = Action::try_from(bytes.as_slice()).unwrap();
         assert_eq!(got, want);

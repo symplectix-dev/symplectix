@@ -15,7 +15,10 @@ use std::path::{
 };
 
 use moka::future::Cache;
-use tokio::fs;
+use tokio::{
+    fs,
+    task,
+};
 
 use crate::hash::{
     Digest,
@@ -32,7 +35,7 @@ pub trait Content: Send + 'static {
 
     /// Write this content into a fresh file at `dst`, returning its
     /// length in bytes.
-    fn write_into(&self, dst: &Path) -> impl Future<Output = io::Result<u64>> + Send;
+    fn write_to(&self, dst: &Path) -> impl Future<Output = io::Result<u64>> + Send;
 }
 
 impl Content for Vec<u8> {
@@ -42,7 +45,7 @@ impl Content for Vec<u8> {
         Ok(h.digest())
     }
 
-    async fn write_into(&self, dst: &Path) -> io::Result<u64> {
+    async fn write_to(&self, dst: &Path) -> io::Result<u64> {
         fs::write(dst, self).await?;
         Ok(self.len() as u64)
     }
@@ -58,7 +61,7 @@ impl Content for PathBuf {
         Ok(h.digest())
     }
 
-    async fn write_into(&self, dst: &Path) -> io::Result<u64> {
+    async fn write_to(&self, dst: &Path) -> io::Result<u64> {
         fs::copy(self, dst).await
     }
 }
@@ -140,13 +143,13 @@ impl Store {
         // NamedTempFile reserves a uniquely-named file in `dir` so the
         // final rename is atomic and on the same filesystem; creating it
         // is sync (std::fs), so it runs on a blocking thread.
-        let tmp = tokio::task::spawn_blocking(move || tempfile::NamedTempFile::new_in(dir))
+        let tmp = task::spawn_blocking(move || tempfile::NamedTempFile::new_in(dir))
             .await
             .expect("blocking task should not panic")?;
 
-        let len = content.write_into(tmp.path()).await?;
+        let len = content.write_to(tmp.path()).await?;
 
-        tokio::task::spawn_blocking(move || -> io::Result<()> {
+        task::spawn_blocking(move || -> io::Result<()> {
             tmp.persist(dst)?;
             Ok(())
         })
@@ -280,8 +283,6 @@ mod tests {
 
     #[tokio::test]
     async fn action_and_its_command_and_input_resolve_from_store() {
-        use std::collections::BTreeMap;
-
         use crate::action::{
             Action,
             Command,
@@ -302,16 +303,14 @@ mod tests {
         assert_eq!(input_digest, input.digest());
 
         // The command to run against that input.
-        let command = Command {
-            arguments: vec!["python3".to_string(), "main.py".to_string()],
-            env:       BTreeMap::new(),
-        };
+        let mut command = Command::new("python3");
+        command.arg("main.py");
         let command_bytes = cbor2::to_canonical_vec(&command).unwrap();
         let command_digest = store.put(command_bytes).await.unwrap();
         assert_eq!(command_digest, command.digest());
 
         // The action tying command and input together.
-        let action = Action { command: command_digest, input: input_digest };
+        let action = Action::new(command_digest, input_digest);
         let action_bytes = cbor2::to_canonical_vec(&action).unwrap();
         let action_digest = store.put(action_bytes).await.unwrap();
         assert_eq!(action_digest, action.digest());
@@ -323,11 +322,11 @@ mod tests {
         let resolved_action = Action::try_from(stored_action_bytes.as_slice()).unwrap();
         assert_eq!(resolved_action, action);
 
-        let stored_command_bytes = store.get(&resolved_action.command).await.unwrap().unwrap();
+        let stored_command_bytes = store.get(&resolved_action.command()).await.unwrap().unwrap();
         let resolved_command = Command::try_from(stored_command_bytes.as_slice()).unwrap();
         assert_eq!(resolved_command, command);
 
-        let stored_input_bytes = store.get(&resolved_action.input).await.unwrap().unwrap();
+        let stored_input_bytes = store.get(&resolved_action.input()).await.unwrap().unwrap();
         let resolved_input = Collection::try_from(stored_input_bytes.as_slice()).unwrap();
         assert_eq!(resolved_input.digest(), input.digest());
 
