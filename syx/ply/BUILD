@@ -5,18 +5,11 @@ rust.library(
     srcs = [
         "src/action.rs",
         "src/blob.rs",
-        "src/hash.rs",
         "src/lib.rs",
-        "src/store.rs",
     ],
     deps = [
-        "@crates//:cbor2",
-        "@crates//:moka",
+        "//syx/cas",
         "@crates//:serde",
-        "@crates//:serde_bytes",
-        "@crates//:sha2",
-        "@crates//:tempfile",
-        "@crates//:tokio",
     ],
 )
 

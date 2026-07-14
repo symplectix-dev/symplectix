@@ -88,14 +88,17 @@ impl Content for PathBuf {
 
 /// Marker for types that are stored as their own canonical CBOR encoding,
 /// as opposed to `Vec<u8>`/`PathBuf`, which store already-raw bytes/files.
-pub(crate) trait Storable:
+/// Implementing this (an empty impl -- `impl Storable for Foo {}`) is
+/// enough to make `Foo` `Store::put`/`get`-able directly, without
+/// (de)serializing it by hand first.
+pub trait Storable:
     serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static
 {
 }
 
 impl<T: Storable> Content for T {
     async fn digest(&self) -> io::Result<Digest> {
-        Ok(hash::digest_of(self))
+        Ok(hash::digest(self))
     }
 
     async fn read_from<P>(src: &P) -> io::Result<Self>
@@ -103,14 +106,14 @@ impl<T: Storable> Content for T {
         P: ?Sized + Sync + AsRef<Path>,
     {
         let bytes = fs::read(src).await?;
-        cbor2::from_slice(&bytes).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+        hash::from_bytes(&bytes).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
     }
 
     async fn write_to<P>(&self, dst: &P) -> io::Result<u64>
     where
         P: ?Sized + Sync + AsRef<Path>,
     {
-        let bytes = cbor2::to_canonical_vec(self).expect("serializing to CBOR should not fail");
+        let bytes = hash::to_bytes(self);
         fs::write(dst, &bytes).await?;
         Ok(bytes.len() as u64)
     }
@@ -163,8 +166,8 @@ impl Store {
             Err(e) => return Err(e),
         };
 
-        let len = fs::metadata(&path).await?.len();
-        self.cache.insert(*digest, len).await;
+        let size_bytes = fs::metadata(&path).await?.len();
+        self.cache.insert(*digest, size_bytes).await;
 
         Ok(Some(content))
     }
@@ -208,7 +211,10 @@ impl Store {
         task::spawn_blocking(move || -> io::Result<()> {
             // Read-only: a digest is only valid as long as the bytes it
             // was computed from never change, so CAS entries must not be
-            // mutable once written.
+            // mutable once written. On Unix, deleting a file only needs
+            // write permission on its directory, so this doesn't block
+            // cleanup. But I'm not sure abount Windows. Removing a Store's
+            // root there may need extra handling.
             let mut perms = tmp.as_file().metadata()?.permissions();
             perms.set_readonly(true);
             tmp.as_file().set_permissions(perms)?;

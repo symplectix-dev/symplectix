@@ -5,19 +5,12 @@
 
 use std::collections::BTreeMap;
 
-use crate::hash::{
-    self,
-    Digest,
-    Hasher,
-};
-use crate::store::Storable;
-
 /// What a `Tree` entry's name points to: a file's content, or a nested
 /// `Tree`, each referenced by digest rather than embedded.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Node {
-    Blob(Digest),
-    Tree(Digest),
+    Blob(cas::Digest),
+    Tree(cas::Digest),
 }
 
 /// A content-addressed directory: names mapped to a `Blob` (file) or a
@@ -35,7 +28,7 @@ pub struct Tree {
 /// -- once they do, use `Tree` instead.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Bag {
-    members: Vec<Digest>,
+    members: Vec<cas::Digest>,
 }
 
 impl Tree {
@@ -52,14 +45,14 @@ impl Tree {
 
 impl Bag {
     /// Build a `Bag` from `members`, sorted.
-    pub fn new(members: impl IntoIterator<Item = Digest>) -> Self {
-        let mut members: Vec<Digest> = members.into_iter().collect();
+    pub fn new(members: impl IntoIterator<Item = cas::Digest>) -> Self {
+        let mut members: Vec<cas::Digest> = members.into_iter().collect();
         members.sort();
         Bag { members }
     }
 
     /// The bag's members, sorted (duplicates kept).
-    pub fn members(&self) -> &[Digest] {
+    pub fn members(&self) -> &[cas::Digest] {
         &self.members
     }
 }
@@ -78,7 +71,7 @@ pub struct Collection {
     /// unreferenced to a GC walking the CAS from live roots. This applies
     /// equally regardless of whether the collection is a `Tree` or a
     /// `Bag`, so it lives here rather than being duplicated on each.
-    interns: Vec<Digest>,
+    interns: Vec<cas::Digest>,
 }
 
 #[derive(Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -91,42 +84,32 @@ impl Collection {
     /// A `Collection` backed by a `Tree`.
     pub fn tree(
         entries: impl IntoIterator<Item = (String, Node)>,
-        interns: impl IntoIterator<Item = Digest>,
+        interns: impl IntoIterator<Item = cas::Digest>,
     ) -> Self {
-        let mut interns: Vec<Digest> = interns.into_iter().collect();
+        let mut interns: Vec<cas::Digest> = interns.into_iter().collect();
         interns.sort();
         Collection { blobs: Blobs::Tree(Tree::new(entries)), interns }
     }
 
     /// A `Collection` backed by a `Bag`.
     pub fn bag(
-        members: impl IntoIterator<Item = Digest>,
-        interns: impl IntoIterator<Item = Digest>,
+        members: impl IntoIterator<Item = cas::Digest>,
+        interns: impl IntoIterator<Item = cas::Digest>,
     ) -> Self {
-        let mut interns: Vec<Digest> = interns.into_iter().collect();
+        let mut interns: Vec<cas::Digest> = interns.into_iter().collect();
         interns.sort();
         Collection { blobs: Blobs::Bag(Bag::new(members)), interns }
     }
 }
 
-impl Storable for Collection {}
-
-impl TryFrom<&[u8]> for Collection {
-    type Error = cbor2::de::Error;
-
-    /// Deserialize `bytes` (a CBOR encoding, canonical or not) as a
-    /// `Collection`.
-    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
-        cbor2::from_slice(bytes)
-    }
-}
+impl cas::Storable for Collection {}
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn digest(bytes: &[u8]) -> Digest {
-        let mut h = Hasher::new();
+    fn digest(bytes: &[u8]) -> cas::Digest {
+        let mut h = cas::Hasher::new();
         h.part(bytes);
         h.digest()
     }
@@ -175,8 +158,8 @@ mod tests {
     #[test]
     fn empty_tree_digest_is_deterministic() {
         assert_eq!(
-            hash::digest_of(&Collection::tree([], [])),
-            hash::digest_of(&Collection::tree([], []))
+            cas::digest(&Collection::tree([], [])),
+            cas::digest(&Collection::tree([], []))
         );
     }
 
@@ -188,7 +171,7 @@ mod tests {
         let forward = Collection::tree([a.clone(), b.clone()], []);
         let backward = Collection::tree([b, a], []);
 
-        assert_eq!(hash::digest_of(&forward), hash::digest_of(&backward));
+        assert_eq!(cas::digest(&forward), cas::digest(&backward));
     }
 
     #[test]
@@ -196,7 +179,7 @@ mod tests {
         let blob = digest(b"content");
         let a = Collection::tree([("a".to_string(), Node::Blob(blob))], []);
         let b = Collection::tree([("b".to_string(), Node::Blob(blob))], []);
-        assert_ne!(hash::digest_of(&a), hash::digest_of(&b));
+        assert_ne!(cas::digest(&a), cas::digest(&b));
     }
 
     #[test]
@@ -206,7 +189,7 @@ mod tests {
         let inner = digest(b"same");
         let a = Collection::tree([("x".to_string(), Node::Blob(inner))], []);
         let b = Collection::tree([("x".to_string(), Node::Tree(inner))], []);
-        assert_ne!(hash::digest_of(&a), hash::digest_of(&b));
+        assert_ne!(cas::digest(&a), cas::digest(&b));
     }
 
     #[test]
@@ -215,17 +198,17 @@ mod tests {
         let inner_b = Collection::tree([("f".to_string(), Node::Blob(digest(b"b")))], []);
 
         let a =
-            Collection::tree([("dir".to_string(), Node::Tree(hash::digest_of(&inner_a)))], []);
+            Collection::tree([("dir".to_string(), Node::Tree(cas::digest(&inner_a)))], []);
         let b =
-            Collection::tree([("dir".to_string(), Node::Tree(hash::digest_of(&inner_b)))], []);
-        assert_ne!(hash::digest_of(&a), hash::digest_of(&b));
+            Collection::tree([("dir".to_string(), Node::Tree(cas::digest(&inner_b)))], []);
+        assert_ne!(cas::digest(&a), cas::digest(&b));
     }
 
     #[test]
     fn tree_digest_depends_on_interns() {
         let a = Collection::tree([], [digest(b"intern-a")]);
         let b = Collection::tree([], [digest(b"intern-b")]);
-        assert_ne!(hash::digest_of(&a), hash::digest_of(&b));
+        assert_ne!(cas::digest(&a), cas::digest(&b));
     }
 
     #[test]
@@ -233,16 +216,16 @@ mod tests {
         let a = digest(b"a");
         let b = digest(b"b");
         assert_eq!(
-            hash::digest_of(&Collection::tree([], [a, b])),
-            hash::digest_of(&Collection::tree([], [b, a]))
+            cas::digest(&Collection::tree([], [a, b])),
+            cas::digest(&Collection::tree([], [b, a]))
         );
     }
 
     #[test]
     fn empty_bag_digest_is_deterministic() {
         assert_eq!(
-            hash::digest_of(&Collection::bag([], [])),
-            hash::digest_of(&Collection::bag([], []))
+            cas::digest(&Collection::bag([], [])),
+            cas::digest(&Collection::bag([], []))
         );
     }
 
@@ -251,8 +234,8 @@ mod tests {
         let a = digest(b"a");
         let b = digest(b"b");
         assert_eq!(
-            hash::digest_of(&Collection::bag([a, b], [])),
-            hash::digest_of(&Collection::bag([b, a], []))
+            cas::digest(&Collection::bag([a, b], [])),
+            cas::digest(&Collection::bag([b, a], []))
         );
     }
 
@@ -260,7 +243,7 @@ mod tests {
     fn bag_digest_depends_on_interns() {
         let a = Collection::bag([], [digest(b"intern-a")]);
         let b = Collection::bag([], [digest(b"intern-b")]);
-        assert_ne!(hash::digest_of(&a), hash::digest_of(&b));
+        assert_ne!(cas::digest(&a), cas::digest(&b));
     }
 
     #[test]
@@ -271,7 +254,7 @@ mod tests {
         let b = digest(b"b");
         let two_members = Collection::bag([a, b], []);
         let one_member_one_intern = Collection::bag([a], [b]);
-        assert_ne!(hash::digest_of(&two_members), hash::digest_of(&one_member_one_intern));
+        assert_ne!(cas::digest(&two_members), cas::digest(&one_member_one_intern));
     }
 
     #[test]
@@ -281,7 +264,7 @@ mod tests {
         let interns = [digest(b"x"), digest(b"y")];
         let tree = Collection::tree([], interns);
         let bag = Collection::bag([], interns);
-        assert_ne!(hash::digest_of(&tree), hash::digest_of(&bag));
+        assert_ne!(cas::digest(&tree), cas::digest(&bag));
     }
 
     #[test]
@@ -293,10 +276,10 @@ mod tests {
         let interns = [digest(b"intern")];
         let collection = Collection::tree(entries, interns);
 
-        let bytes = cbor2::to_canonical_vec(&collection).unwrap();
-        let mut h = Hasher::new();
+        let bytes = cas::to_bytes(&collection);
+        let mut h = cas::Hasher::new();
         h.part(bytes);
-        assert_eq!(hash::digest_of(&collection), h.digest());
+        assert_eq!(cas::digest(&collection), h.digest());
     }
 
     #[test]
@@ -304,35 +287,35 @@ mod tests {
         let interns = [digest(b"x"), digest(b"y")];
         let tree = Collection::tree([], interns);
         let bag = Collection::bag([], interns);
-        assert_ne!(hash::digest_of(&tree), hash::digest_of(&bag));
+        assert_ne!(cas::digest(&tree), cas::digest(&bag));
     }
 
     #[test]
     fn node_round_trips_through_cbor() {
         let want = Node::Blob(digest(b"a"));
-        let bytes = cbor2::to_canonical_vec(&want).unwrap();
-        let got: Node = cbor2::from_slice(&bytes).unwrap();
+        let bytes = cas::to_bytes(&want);
+        let got: Node = cas::from_bytes(&bytes).unwrap();
         assert_eq!(got, want);
     }
 
     #[test]
-    fn collection_tree_try_from_bytes_round_trips() {
+    fn collection_tree_round_trips_through_cbor() {
         let want = Collection::tree([("a".to_string(), Node::Blob(digest(b"a")))], []);
-        let bytes = cbor2::to_canonical_vec(&want).unwrap();
-        let got = Collection::try_from(bytes.as_slice()).unwrap();
+        let bytes = cas::to_bytes(&want);
+        let got: Collection = cas::from_bytes(&bytes).unwrap();
         assert_eq!(got, want);
     }
 
     #[test]
-    fn collection_bag_try_from_bytes_round_trips() {
+    fn collection_bag_round_trips_through_cbor() {
         let want = Collection::bag([digest(b"a"), digest(b"b")], []);
-        let bytes = cbor2::to_canonical_vec(&want).unwrap();
-        let got = Collection::try_from(bytes.as_slice()).unwrap();
+        let bytes = cas::to_bytes(&want);
+        let got: Collection = cas::from_bytes(&bytes).unwrap();
         assert_eq!(got, want);
     }
 
     #[test]
-    fn collection_try_from_rejects_garbage_bytes() {
-        assert!(Collection::try_from(&b"not cbor"[..]).is_err());
+    fn collection_from_bytes_rejects_garbage() {
+        assert!(cas::from_bytes::<Collection>(b"not cbor").is_err());
     }
 }

@@ -1,4 +1,4 @@
-//! Digest.
+//! The digest primitive everything else in `cas` is addressed by.
 
 use std::fmt;
 use std::fmt::Write as _;
@@ -13,15 +13,94 @@ use tokio::io::{
     AsyncReadExt as _,
 };
 
+/// Error deserializing a value's canonical CBOR encoding, e.g. via
+/// `from_bytes`.
+pub type Error = cbor2::de::Error;
+
+/// `value`'s canonical CBOR encoding (RFC 8949 deterministic encoding:
+/// smallest integer forms, definite-length items, sorted map keys). The
+/// underlying format is deliberately not exposed further than this: it's
+/// what `digest` hashes and what `Store` persists for `Storable` types.
+pub fn to_bytes<T: serde::Serialize>(value: &T) -> Vec<u8> {
+    // Plain `cbor2::to_vec` is not guaranteed deterministic (RFC 8949 allows
+    // non-canonical encodings of the same value), so this must go through
+    // `to_canonical_vec` specifically.
+    cbor2::to_canonical_vec(value).expect("serializing to CBOR should not fail")
+}
+
+/// Deserialize `bytes` (a CBOR encoding, canonical or not) as `T`.
+pub fn from_bytes<T: for<'de> serde::Deserialize<'de>>(bytes: &[u8]) -> Result<T, Error> {
+    cbor2::from_slice(bytes)
+}
+
+/// Digest of `value`'s canonical CBOR encoding.
+pub fn digest<T: serde::Serialize>(value: &T) -> Digest {
+    let mut h = Hasher::new();
+    h.part(to_bytes(value));
+    h.digest()
+}
+
+/// A digest's raw bytes.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
+pub struct Digest(#[serde(with = "serde_bytes")] [u8; 32]);
+
+impl Digest {
+    pub fn new(bytes: [u8; 32]) -> Self {
+        Digest(bytes)
+    }
+
+    /// Format as a sharded hex string: `depth` leading two-character
+    /// segments, then the rest, joined by `/`. For example, depth=3
+    /// gives "ab/cd/ef/<remaining 58 hex chars>". depth=0 means no
+    /// sharding. `depth` must be less than 32.
+    pub fn hex(&self, depth: usize) -> String {
+        assert!(depth < 32, "depth must be less than 32, got {depth}");
+        let mut out = String::with_capacity(self.0.len() * 2 + depth);
+        for (i, b) in self.0.iter().enumerate() {
+            write!(out, "{b:02x}").expect("writing to a String never fails");
+            if i < depth {
+                out.push('/');
+            }
+        }
+        out
+    }
+}
+
+impl AsRef<[u8]> for Digest {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+impl fmt::UpperHex for Digest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for b in &self.0 {
+            write!(f, "{b:02X}")?;
+        }
+        Ok(())
+    }
+}
+
+impl fmt::LowerHex for Digest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for b in &self.0 {
+            write!(f, "{b:02x}")?;
+        }
+        Ok(())
+    }
+}
+
 /// Read size for streaming a reader's bytes into a digest,
 /// so a large part is never buffered whole in memory.
 const BUF_SIZE: usize = 1 << 16;
 
-/// Builds a length-prefixed digest over an ordered sequence of parts.
+/// Builds a length-prefixed `Digest` over an ordered sequence of parts.
 ///
 /// This framing is self-delimiting, so no two distinct sequences
-/// of parts produce the same digest. For example,
-/// `part(b"a").part(b"b")` cannot collide with `part(b"ab")`.
+/// of parts produce the same digest. For example, `part(b"a").part(b"b")`
+/// cannot collide with `part(b"ab")`.
 pub struct Hasher {
     hasher: sha2::Sha256,
 }
@@ -117,67 +196,10 @@ impl Hasher {
     }
 }
 
-/// Digest of `value`'s canonical CBOR encoding (RFC 8949 deterministic
-/// encoding: smallest integer forms, definite-length items, sorted map
-/// keys).
-pub(crate) fn digest_of<T: serde::Serialize>(value: &T) -> Digest {
-    let mut h = Hasher::new();
-    h.part(
-        // Plain `cbor2::to_vec` is not guaranteed deterministic (RFC 8949 allows
-        // non-canonical encodings of the same value), so this must go through
-        // `to_canonical_vec` specifically.
-        cbor2::to_canonical_vec(value).expect("serializing to CBOR should not fail"),
-    );
-    h.digest()
-}
-
-/// A digest's raw bytes.
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
-)]
-pub struct Digest(#[serde(with = "serde_bytes")] [u8; 32]);
-
-impl Digest {
-    /// Format as a sharded hex string: `depth` leading two-character
-    /// segments, then the rest, joined by `/`. For example, depth=3
-    /// gives "ab/cd/ef/<remaining 58 hex chars>". depth=0 means no
-    /// sharding. `depth` must be less than 32.
-    pub fn hex(&self, depth: usize) -> String {
-        assert!(depth < 32, "depth must be less than 32, got {depth}");
-        let mut out = String::with_capacity(self.0.len() * 2 + depth);
-        for (i, b) in self.0.iter().enumerate() {
-            write!(out, "{b:02x}").expect("writing to a String never fails");
-            if i < depth {
-                out.push('/');
-            }
-        }
-        out
-    }
-}
-
-impl AsRef<[u8]> for Digest {
-    fn as_ref(&self) -> &[u8] {
-        &self.0
-    }
-}
-
-impl From<[u8; 32]> for Digest {
-    fn from(bytes: [u8; 32]) -> Self {
-        Digest(bytes)
-    }
-}
-
-impl fmt::LowerHex for Digest {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for b in &self.0 {
-            write!(f, "{b:02x}")?;
-        }
-        Ok(())
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
     use super::*;
 
     /// Digest of `parts`, combined in order: equal parts (in the same order)
@@ -194,28 +216,6 @@ mod tests {
         h.digest()
     }
 
-    #[test]
-    fn digest_byte_buf() {
-        let d = digest([b"hello"]);
-        let d_bytes = serde_bytes::ByteBuf::from(d.as_ref());
-        assert_eq!(cbor2::to_vec(&d_bytes).unwrap(), cbor2::to_vec(&d).unwrap());
-    }
-
-    #[test]
-    fn digest_round_trips_through_cbor() {
-        let want = digest([b"hello"]);
-        let bytes = cbor2::to_canonical_vec(&want).unwrap();
-        let got: Digest = cbor2::from_slice(&bytes).unwrap();
-        assert_eq!(got, want);
-    }
-
-    #[test]
-    fn digest_from_array_round_trips() {
-        let want = digest([b"hello"]);
-        let bytes: [u8; 32] = want.as_ref().try_into().unwrap();
-        assert_eq!(Digest::from(bytes), want);
-    }
-
     #[derive(serde::Serialize)]
     struct Example {
         name:  String,
@@ -223,33 +223,38 @@ mod tests {
     }
 
     #[test]
-    fn digest_of_is_deterministic() {
+    fn digest_is_deterministic() {
+        assert_eq!(digest([b"a".as_slice()]), digest([b"a".as_slice()]),);
         let a = Example { name: "foo".to_string(), count: 1 };
         let b = Example { name: "foo".to_string(), count: 1 };
-        assert_eq!(digest_of(&a), digest_of(&b));
+        assert_eq!(crate::digest(&a), crate::digest(&b));
+        assert_eq!(crate::digest(&a), crate::digest(&&b));
     }
 
     #[test]
-    fn digest_of_depends_on_every_field() {
+    fn digest_byte_buf() {
+        let d = digest([b"hello"]);
+        let d_bytes = serde_bytes::ByteBuf::from(d.as_ref());
+        assert_eq!(
+            cbor2::to_canonical_vec(&d_bytes).unwrap(),
+            cbor2::to_canonical_vec(&d).unwrap()
+        );
+    }
+
+    #[test]
+    fn digest_from_array_round_trips() {
+        let want = digest([b"hello"]);
+        let bytes: [u8; 32] = want.as_ref().try_into().unwrap();
+        assert_eq!(Digest::new(bytes), want);
+    }
+
+    #[test]
+    fn digest_depends_on_every_field() {
         let base = Example { name: "foo".to_string(), count: 1 };
         let other_name = Example { name: "bar".to_string(), count: 1 };
         let other_count = Example { name: "foo".to_string(), count: 2 };
-        assert_ne!(digest_of(&base), digest_of(&other_name));
-        assert_ne!(digest_of(&base), digest_of(&other_count));
-    }
-
-    #[test]
-    fn digest_of_matches_canonical_cbor_hash() {
-        let value = Example { name: "foo".to_string(), count: 1 };
-        let bytes = cbor2::to_canonical_vec(&value).unwrap();
-        let mut h = Hasher::new();
-        h.part(bytes);
-        assert_eq!(digest_of(&value), h.digest());
-    }
-
-    #[test]
-    fn deterministic() {
-        assert_eq!(digest([b"hello".as_slice()]), digest([b"hello".as_slice()]));
+        assert_ne!(crate::digest(&base), crate::digest(&other_name));
+        assert_ne!(crate::digest(&base), crate::digest(&other_count));
     }
 
     #[test]
@@ -279,27 +284,21 @@ mod tests {
     }
 
     #[test]
-    fn hex_is_lowercase_64_chars() {
-        let hex = format!("{:x}", digest([b"hello".as_slice()]));
-        assert_eq!(hex.len(), 64);
-        assert!(hex.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()));
-    }
-
-    #[test]
-    fn hex_matches_hash_bytes() {
-        let want: String =
-            digest([b"hello".as_slice()]).0.iter().map(|b| format!("{b:02x}")).collect();
-        assert_eq!(format!("{:x}", digest([b"hello".as_slice()])), want);
-    }
-
-    #[test]
-    fn sharded_hex_depth_zero_is_plain_hex() {
+    fn hex_depth_zero_is_plain_hex() {
         let d = digest([b"hello".as_slice()]);
         assert_eq!(d.hex(0), format!("{d:x}"));
     }
 
     #[test]
-    fn sharded_hex_splits_leading_bytes() {
+    fn hex_is_lowercase_64_chars() {
+        let d = digest([b"hello".as_slice()]);
+        let hex = d.hex(0);
+        assert_eq!(hex.len(), 64);
+        assert!(hex.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()));
+    }
+
+    #[test]
+    fn hex_splits_leading_bytes() {
         let d = digest([b"hello".as_slice()]);
         let plain = format!("{d:x}");
         let want = format!("{}/{}/{}/{}", &plain[0..2], &plain[2..4], &plain[4..6], &plain[6..]);
@@ -315,10 +314,8 @@ mod tests {
     #[test]
     fn reader_matches_in_memory_bytes() {
         let content = b"hello, reader".to_vec();
-
         let mut h = Hasher::new();
         h.reader(content.len() as u64, io::Cursor::new(&content)).unwrap();
-
         assert_eq!(h.digest(), digest([content.as_slice()]));
     }
 
@@ -328,10 +325,8 @@ mod tests {
         // proving the reader loops instead of assuming a single read call
         // drains everything.
         let content = vec![0x42u8; BUF_SIZE * 2 + 1];
-
         let mut h = Hasher::new();
         h.reader(content.len() as u64, io::Cursor::new(&content)).unwrap();
-
         assert_eq!(h.digest(), digest([content.as_slice()]));
     }
 
@@ -340,8 +335,8 @@ mod tests {
         // A real fs::File (not just an in-memory Cursor) implements Read
         // the same way; the caller supplies the length via `stat()`.
         let path = testing::rlocation("_main/.rustfmt.toml");
-        let content = std::fs::read(&path).unwrap();
-        let file = std::fs::File::open(&path).unwrap();
+        let content = fs::read(&path).unwrap();
+        let file = fs::File::open(&path).unwrap();
         let len = file.metadata().unwrap().len();
 
         let mut h = Hasher::new();

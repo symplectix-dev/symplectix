@@ -2,17 +2,10 @@
 
 use std::collections::BTreeMap;
 
-use crate::hash::{
-    self,
-    Digest,
-    Hasher,
-};
-use crate::store::Storable;
-
 /// A content-addressed reference to something runnable: a `Command` and
 /// the input it runs against, each referenced by digest rather than
 /// embedded. Identical command + input always produce the same `Action`
-/// digest (via `hash::digest_of`), so identical runs dedup, and any
+/// digest (via `cas::digest`), so identical runs dedup, and any
 /// change to either changes it, so a recorded digest is tamper-evident.
 ///
 /// Scheduling concerns (which worker, which OS/container image to run in)
@@ -21,28 +14,18 @@ use crate::store::Storable;
 /// what gets cached/addressed here.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Action {
-    command: Digest,
-    input:   Digest,
+    command: cas::Digest,
+    input:   cas::Digest,
 }
 
 impl Action {
     /// An `Action` running `command` against `input`.
-    pub fn new(command: Digest, input: Digest) -> Self {
+    pub fn new(command: cas::Digest, input: cas::Digest) -> Self {
         Action { command, input }
     }
 }
 
-impl Storable for Action {}
-
-impl TryFrom<&[u8]> for Action {
-    type Error = cbor2::de::Error;
-
-    /// Deserialize `bytes` (a CBOR encoding, canonical or not) as an
-    /// `Action`.
-    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
-        cbor2::from_slice(bytes)
-    }
-}
+impl cas::Storable for Action {}
 
 /// What an `Action` runs: a program, its arguments, and the environment
 /// variables to invoke it with. Named to match `std::process::Command`.
@@ -100,24 +83,14 @@ impl Command {
     }
 }
 
-impl Storable for Command {}
-
-impl TryFrom<&[u8]> for Command {
-    type Error = cbor2::de::Error;
-
-    /// Deserialize `bytes` (a CBOR encoding, canonical or not) as a
-    /// `Command`.
-    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
-        cbor2::from_slice(bytes)
-    }
-}
+impl cas::Storable for Command {}
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn digest(bytes: &[u8]) -> Digest {
-        let mut h = Hasher::new();
+    fn digest(bytes: &[u8]) -> cas::Digest {
+        let mut h = cas::Hasher::new();
         h.part(bytes);
         h.digest()
     }
@@ -132,21 +105,21 @@ mod tests {
     fn command_digest_is_deterministic() {
         let a = command("echo", &["hi"]);
         let b = command("echo", &["hi"]);
-        assert_eq!(hash::digest_of(&a), hash::digest_of(&b));
+        assert_eq!(cas::digest(&a), cas::digest(&b));
     }
 
     #[test]
     fn command_digest_depends_on_program() {
         let a = command("echo", &["hi"]);
         let b = command("cat", &["hi"]);
-        assert_ne!(hash::digest_of(&a), hash::digest_of(&b));
+        assert_ne!(cas::digest(&a), cas::digest(&b));
     }
 
     #[test]
     fn command_digest_depends_on_args() {
         let a = command("echo", &["a"]);
         let b = command("echo", &["b"]);
-        assert_ne!(hash::digest_of(&a), hash::digest_of(&b));
+        assert_ne!(cas::digest(&a), cas::digest(&b));
     }
 
     #[test]
@@ -155,28 +128,20 @@ mod tests {
         a.env("KEY", "a");
         let mut b = Command::new("run");
         b.env("KEY", "b");
-        assert_ne!(hash::digest_of(&a), hash::digest_of(&b));
+        assert_ne!(cas::digest(&a), cas::digest(&b));
     }
 
     #[test]
     fn command_round_trips_through_cbor() {
         let want = command("echo", &["hi"]);
-        let bytes = cbor2::to_canonical_vec(&want).unwrap();
-        let got: Command = cbor2::from_slice(&bytes).unwrap();
+        let bytes = cas::to_bytes(&want);
+        let got: Command = cas::from_bytes(&bytes).unwrap();
         assert_eq!(got, want);
     }
 
     #[test]
-    fn command_try_from_bytes_round_trips() {
-        let want = command("echo", &["hi"]);
-        let bytes = cbor2::to_canonical_vec(&want).unwrap();
-        let got = Command::try_from(bytes.as_slice()).unwrap();
-        assert_eq!(got, want);
-    }
-
-    #[test]
-    fn command_try_from_rejects_garbage_bytes() {
-        assert!(Command::try_from(&b"not cbor"[..]).is_err());
+    fn command_from_bytes_rejects_garbage() {
+        assert!(cas::from_bytes::<Command>(b"not cbor").is_err());
     }
 
     #[test]
@@ -185,7 +150,7 @@ mod tests {
         let input = digest(b"input");
         let a = Action::new(command, input);
         let b = Action::new(command, input);
-        assert_eq!(hash::digest_of(&a), hash::digest_of(&b));
+        assert_eq!(cas::digest(&a), cas::digest(&b));
     }
 
     #[test]
@@ -193,7 +158,7 @@ mod tests {
         let input = digest(b"input");
         let a = Action::new(digest(b"command-a"), input);
         let b = Action::new(digest(b"command-b"), input);
-        assert_ne!(hash::digest_of(&a), hash::digest_of(&b));
+        assert_ne!(cas::digest(&a), cas::digest(&b));
     }
 
     #[test]
@@ -201,28 +166,20 @@ mod tests {
         let command = digest(b"command");
         let a = Action::new(command, digest(b"input-a"));
         let b = Action::new(command, digest(b"input-b"));
-        assert_ne!(hash::digest_of(&a), hash::digest_of(&b));
+        assert_ne!(cas::digest(&a), cas::digest(&b));
     }
 
     #[test]
     fn action_round_trips_through_cbor() {
         let want = Action::new(digest(b"command"), digest(b"input"));
-        let bytes = cbor2::to_canonical_vec(&want).unwrap();
-        let got: Action = cbor2::from_slice(&bytes).unwrap();
+        let bytes = cas::to_bytes(&want);
+        let got: Action = cas::from_bytes(&bytes).unwrap();
         assert_eq!(got, want);
     }
 
     #[test]
-    fn action_try_from_bytes_round_trips() {
-        let want = Action::new(digest(b"command"), digest(b"input"));
-        let bytes = cbor2::to_canonical_vec(&want).unwrap();
-        let got = Action::try_from(bytes.as_slice()).unwrap();
-        assert_eq!(got, want);
-    }
-
-    #[test]
-    fn action_try_from_rejects_garbage_bytes() {
-        assert!(Action::try_from(&b"not cbor"[..]).is_err());
+    fn action_from_bytes_rejects_garbage() {
+        assert!(cas::from_bytes::<Action>(b"not cbor").is_err());
     }
 
     #[tokio::test]
@@ -231,10 +188,9 @@ mod tests {
             Collection,
             Node,
         };
-        use crate::store::Store;
 
         let dir = testing::tempdir();
-        let store = Store::new(dir.path(), 100);
+        let store = cas::Store::new(dir.path(), 100);
 
         // The input: a Tree with one file entry, itself resolvable from
         // the store.

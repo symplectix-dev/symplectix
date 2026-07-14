@@ -1,0 +1,31 @@
+load("//bazel:rust.bzl", "rust")
+
+rust.library(
+    name = "cas",
+    srcs = [
+        "src/hash.rs",
+        "src/lib.rs",
+        "src/store.rs",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        "@crates//:cbor2",
+        "@crates//:moka",
+        "@crates//:serde",
+        "@crates//:serde_bytes",
+        "@crates//:sha2",
+        "@crates//:tempfile",
+        "@crates//:tokio",
+    ],
+)
+
+rust.test(
+    name = "cas_test",
+    size = "small",
+    crate = ":cas",
+    data = ["//:.rustfmt.toml"],
+    deps = [
+        "//syx/testing",
+        "@crates//:tokio",
+    ],
+)
