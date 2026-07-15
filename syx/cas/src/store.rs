@@ -13,15 +13,15 @@ use tokio::{
 };
 
 use crate::hash::{
-    self,
     Digest,
     Hasher,
+    Storable,
 };
 
 /// Content managed by `Store`.
 pub trait Content: 'static + Send {
-    /// This content's digest.
-    fn digest(&self) -> impl Future<Output = io::Result<Digest>> + Send;
+    /// The digest this content is addressed by.
+    fn address(&self) -> impl Future<Output = io::Result<Digest>> + Send;
 
     /// Read the content back from `src`.
     fn read_from<P>(src: &P) -> impl Future<Output = io::Result<Self>> + Send
@@ -37,7 +37,7 @@ pub trait Content: 'static + Send {
 }
 
 impl Content for Vec<u8> {
-    async fn digest(&self) -> io::Result<Digest> {
+    async fn address(&self) -> io::Result<Digest> {
         let mut h = Hasher::new();
         h.part(self);
         Ok(h.digest())
@@ -60,7 +60,7 @@ impl Content for Vec<u8> {
 }
 
 impl Content for PathBuf {
-    async fn digest(&self) -> io::Result<Digest> {
+    async fn address(&self) -> io::Result<Digest> {
         let mut file = fs::File::open(self).await?;
         let len = file.metadata().await?.len();
 
@@ -86,19 +86,9 @@ impl Content for PathBuf {
     }
 }
 
-/// Marker for types that are stored as their own canonical CBOR encoding,
-/// as opposed to `Vec<u8>`/`PathBuf`, which store already-raw bytes/files.
-/// Implementing this (an empty impl -- `impl Storable for Foo {}`) is
-/// enough to make `Foo` `Store::put`/`get`-able directly, without
-/// (de)serializing it by hand first.
-pub trait Storable:
-    serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static
-{
-}
-
-impl<T: Storable> Content for T {
-    async fn digest(&self) -> io::Result<Digest> {
-        Ok(hash::digest(self))
+impl<T: 'static + Storable + Send + Sync> Content for T {
+    async fn address(&self) -> io::Result<Digest> {
+        Ok(self.digest())
     }
 
     async fn read_from<P>(src: &P) -> io::Result<Self>
@@ -106,14 +96,20 @@ impl<T: Storable> Content for T {
         P: ?Sized + Sync + AsRef<Path>,
     {
         let bytes = fs::read(src).await?;
-        hash::from_bytes(&bytes).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+        Self::from_bytes(&bytes)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("{e:?}")))
     }
 
     async fn write_to<P>(&self, dst: &P) -> io::Result<u64>
     where
         P: ?Sized + Sync + AsRef<Path>,
     {
-        let bytes = hash::to_bytes(self);
+        // See the matching comment in `Storable::digest`: for the blanket
+        // `ToBytes` impl this can't actually fail, since it writes to an
+        // in-memory buffer and every `Serialize` impl here only produces
+        // directly CBOR-representable shapes.
+        let bytes =
+            self.to_bytes().unwrap_or_else(|_| panic!("serializing to bytes should not fail"));
         fs::write(dst, &bytes).await?;
         Ok(bytes.len() as u64)
     }
@@ -179,7 +175,7 @@ impl Store {
     /// to the destination, then gets renamed into place, so a concurrent
     /// reader never observes a partially-written file.
     pub async fn put<T: Content>(&self, content: &T) -> io::Result<Digest> {
-        let digest = content.digest().await?;
+        let digest = content.address().await?;
 
         // If the address already exists, the write is skipped.
         // This is best-effort, not a concurrency-safe write-once: two writers racing
@@ -238,6 +234,13 @@ mod tests {
         h.part(bytes);
         h.digest()
     }
+
+    #[derive(Debug, serde::Serialize, serde::Deserialize)]
+    struct Example {
+        value: u32,
+    }
+
+    impl Storable for Example {}
 
     fn store() -> (testing::TempDir, Store) {
         let dir = testing::tempdir();
@@ -337,7 +340,7 @@ mod tests {
     #[tokio::test]
     async fn put_accepts_a_path_and_streams_it_in() {
         // A file already on disk (not just in-memory bytes) can be
-        // put()'d directly; the store reads it in via Content::digest /
+        // put()'d directly; the store reads it in via Content::address /
         // write_into rather than requiring the caller to load it first.
         let (_dir, store) = store();
         let src_dir = testing::tempdir();
@@ -382,5 +385,24 @@ mod tests {
         let perms = std::fs::metadata(&path).unwrap().permissions();
         assert!(perms.readonly());
         assert_eq!(perms.mode() & 0o200, 0);
+    }
+
+    #[tokio::test]
+    async fn get_returns_an_error_for_corrupted_content_instead_of_panicking() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let (dir, store) = store();
+        let d = store.put(&Example { value: 1 }).await.unwrap();
+
+        // Overwrite the stored bytes on disk with something that isn't
+        // valid CBOR at all, simulating on-disk corruption.
+        let path = dir.path().join(d.hex(2));
+        let mut perms = std::fs::metadata(&path).unwrap().permissions();
+        perms.set_mode(0o600);
+        std::fs::set_permissions(&path, perms).unwrap();
+        std::fs::write(&path, b"not cbor").unwrap();
+
+        let err = store.get::<Example>(&d).await.unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
     }
 }

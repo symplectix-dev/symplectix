@@ -1,13 +1,13 @@
-//! ply: content addressing.
+//! ply: content addressing actions.
 
-mod action;
 mod blob;
+mod function;
 
-pub use action::{
-    Action,
-    Command,
-};
 pub use blob::{
-    Collection,
     Node,
+    Tree,
+};
+pub use function::{
+    Command,
+    Function,
 };

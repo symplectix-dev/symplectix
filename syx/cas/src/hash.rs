@@ -13,31 +13,63 @@ use tokio::io::{
     AsyncReadExt as _,
 };
 
-/// Error deserializing a value's canonical CBOR encoding, e.g. via
-/// `from_bytes`.
-pub type Error = cbor2::de::Error;
-
-/// `value`'s canonical CBOR encoding (RFC 8949 deterministic encoding:
-/// smallest integer forms, definite-length items, sorted map keys). The
-/// underlying format is deliberately not exposed further than this: it's
-/// what `digest` hashes and what `Store` persists for `Storable` types.
-pub fn to_bytes<T: serde::Serialize>(value: &T) -> Vec<u8> {
-    // Plain `cbor2::to_vec` is not guaranteed deterministic (RFC 8949 allows
-    // non-canonical encodings of the same value), so this must go through
-    // `to_canonical_vec` specifically.
-    cbor2::to_canonical_vec(value).expect("serializing to CBOR should not fail")
+/// A value that can be turned into its own canonical byte encoding. Any
+/// `serde::Serialize` type gets this for free via the blanket impl below,
+/// using canonical CBOR (RFC 8949 deterministic encoding: smallest
+/// integer forms, definite-length items, sorted map keys). A type that
+/// needs a different encoding can implement this directly instead.
+pub trait ToBytes {
+    type Error;
+    fn to_bytes(&self) -> Result<Vec<u8>, Self::Error>;
 }
 
-/// Deserialize `bytes` (a CBOR encoding, canonical or not) as `T`.
-pub fn from_bytes<T: for<'de> serde::Deserialize<'de>>(bytes: &[u8]) -> Result<T, Error> {
-    cbor2::from_slice(bytes)
+/// The inverse of `ToBytes`: build a value back from its own byte
+/// encoding.
+pub trait FromBytes: Sized {
+    type Error: fmt::Debug;
+    fn from_bytes(bytes: &[u8]) -> Result<Self, Self::Error>;
 }
 
-/// Digest of `value`'s canonical CBOR encoding.
-pub fn digest<T: serde::Serialize>(value: &T) -> Digest {
-    let mut h = Hasher::new();
-    h.part(to_bytes(value));
-    h.digest()
+impl<T: serde::Serialize> ToBytes for T {
+    type Error = cbor2::ser::Error;
+
+    fn to_bytes(&self) -> Result<Vec<u8>, Self::Error> {
+        // Plain `cbor2::to_vec` is not guaranteed deterministic (RFC 8949
+        // allows non-canonical encodings of the same value), so this must
+        // go through `to_canonical_vec` specifically.
+        cbor2::to_canonical_vec(self)
+    }
+}
+
+impl<T: for<'de> serde::Deserialize<'de>> FromBytes for T {
+    type Error = cbor2::de::Error;
+
+    fn from_bytes(bytes: &[u8]) -> Result<Self, Self::Error> {
+        cbor2::from_slice(bytes)
+    }
+}
+
+/// Marker for types addressed as their own canonical byte encoding, as
+/// opposed to `Vec<u8>`/raw files, which are already raw bytes.
+/// Implementing this (an empty impl -- `impl Storable for Foo {}`) is a
+/// deliberate, per-type opt-in: unlike `ToBytes`/`FromBytes`, there's no
+/// blanket impl, so adding it is a conscious assertion that `Foo`'s
+/// encoding is safe to compute (see `digest`).
+pub trait Storable: ToBytes + FromBytes {
+    /// Digest of this value's canonical byte encoding.
+    fn digest(&self) -> Digest {
+        // For the blanket `ToBytes` impl, `Self::Error` is `cbor2::ser::Error`,
+        // whose only cases are an I/O failure from the writer, or a value CBOR
+        // can't represent (e.g. NaN as a map key). Writing to an in-memory
+        // `Vec<u8>` rules out the first; every ordinary struct/enum/string/
+        // integer/collection type -- the only things anyone should be marking
+        // `Storable` -- rules out the second.
+        let bytes =
+            self.to_bytes().unwrap_or_else(|_| panic!("serializing to bytes should not fail"));
+        let mut h = Hasher::new();
+        h.part(bytes);
+        h.digest()
+    }
 }
 
 /// A digest's raw bytes.
@@ -216,19 +248,20 @@ mod tests {
         h.digest()
     }
 
-    #[derive(serde::Serialize)]
+    #[derive(serde::Serialize, serde::Deserialize)]
     struct Example {
         name:  String,
         count: u32,
     }
+
+    impl Storable for Example {}
 
     #[test]
     fn digest_is_deterministic() {
         assert_eq!(digest([b"a".as_slice()]), digest([b"a".as_slice()]),);
         let a = Example { name: "foo".to_string(), count: 1 };
         let b = Example { name: "foo".to_string(), count: 1 };
-        assert_eq!(crate::digest(&a), crate::digest(&b));
-        assert_eq!(crate::digest(&a), crate::digest(&&b));
+        assert_eq!(a.digest(), b.digest());
     }
 
     #[test]
@@ -253,8 +286,8 @@ mod tests {
         let base = Example { name: "foo".to_string(), count: 1 };
         let other_name = Example { name: "bar".to_string(), count: 1 };
         let other_count = Example { name: "foo".to_string(), count: 2 };
-        assert_ne!(crate::digest(&base), crate::digest(&other_name));
-        assert_ne!(crate::digest(&base), crate::digest(&other_count));
+        assert_ne!(base.digest(), other_name.digest());
+        assert_ne!(base.digest(), other_count.digest());
     }
 
     #[test]

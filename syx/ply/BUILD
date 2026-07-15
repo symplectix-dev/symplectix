@@ -3,8 +3,8 @@ load("//bazel:rust.bzl", "rust")
 rust.library(
     name = "ply",
     srcs = [
-        "src/action.rs",
         "src/blob.rs",
+        "src/function.rs",
         "src/lib.rs",
     ],
     deps = [
