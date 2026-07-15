@@ -104,12 +104,7 @@ impl<T: 'static + Storable + Send + Sync> Content for T {
     where
         P: ?Sized + Sync + AsRef<Path>,
     {
-        // See the matching comment in `Storable::digest`: for the blanket
-        // `ToBytes` impl this can't actually fail, since it writes to an
-        // in-memory buffer and every `Serialize` impl here only produces
-        // directly CBOR-representable shapes.
-        let bytes =
-            self.to_bytes().unwrap_or_else(|_| panic!("serializing to bytes should not fail"));
+        let bytes = self.to_bytes();
         fs::write(dst, &bytes).await?;
         Ok(bytes.len() as u64)
     }

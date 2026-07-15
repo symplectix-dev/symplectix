@@ -13,62 +13,41 @@ use tokio::io::{
     AsyncReadExt as _,
 };
 
-/// A value that can be turned into its own canonical byte encoding. Any
-/// `serde::Serialize` type gets this for free via the blanket impl below,
-/// using canonical CBOR (RFC 8949 deterministic encoding: smallest
-/// integer forms, definite-length items, sorted map keys). A type that
-/// needs a different encoding can implement this directly instead.
-pub trait ToBytes {
-    type Error;
-    fn to_bytes(&self) -> Result<Vec<u8>, Self::Error>;
-}
-
-/// The inverse of `ToBytes`: build a value back from its own byte
-/// encoding.
-pub trait FromBytes: Sized {
-    type Error: fmt::Debug;
-    fn from_bytes(bytes: &[u8]) -> Result<Self, Self::Error>;
-}
-
-impl<T: serde::Serialize> ToBytes for T {
-    type Error = cbor2::ser::Error;
-
-    fn to_bytes(&self) -> Result<Vec<u8>, Self::Error> {
-        // Plain `cbor2::to_vec` is not guaranteed deterministic (RFC 8949
-        // allows non-canonical encodings of the same value), so this must
-        // go through `to_canonical_vec` specifically.
-        cbor2::to_canonical_vec(self)
-    }
-}
-
-impl<T: for<'de> serde::Deserialize<'de>> FromBytes for T {
-    type Error = cbor2::de::Error;
-
-    fn from_bytes(bytes: &[u8]) -> Result<Self, Self::Error> {
-        cbor2::from_slice(bytes)
-    }
-}
-
 /// Marker for types addressed as their own canonical byte encoding, as
 /// opposed to `Vec<u8>`/raw files, which are already raw bytes.
 /// Implementing this (an empty impl -- `impl Storable for Foo {}`) is a
-/// deliberate, per-type opt-in: unlike `ToBytes`/`FromBytes`, there's no
-/// blanket impl, so adding it is a conscious assertion that `Foo`'s
-/// encoding is safe to compute (see `digest`).
-pub trait Storable: ToBytes + FromBytes {
+/// deliberate, per-type opt-in: it's a conscious assertion that `Foo`'s
+/// encoding is safe to compute (see `digest`). `to_bytes`/`from_bytes`
+/// default to canonical CBOR (RFC 8949 deterministic encoding: smallest
+/// integer forms, definite-length items, sorted map keys) but can be
+/// overridden by a type that needs a different encoding.
+pub trait Storable: serde::Serialize + for<'de> serde::Deserialize<'de> {
     /// Digest of this value's canonical byte encoding.
     fn digest(&self) -> Digest {
-        // For the blanket `ToBytes` impl, `Self::Error` is `cbor2::ser::Error`,
-        // whose only cases are an I/O failure from the writer, or a value CBOR
-        // can't represent (e.g. NaN as a map key). Writing to an in-memory
-        // `Vec<u8>` rules out the first; every ordinary struct/enum/string/
-        // integer/collection type -- the only things anyone should be marking
-        // `Storable` -- rules out the second.
-        let bytes =
-            self.to_bytes().unwrap_or_else(|_| panic!("serializing to bytes should not fail"));
         let mut h = Hasher::new();
-        h.part(bytes);
+        h.part(self.to_bytes());
         h.digest()
+    }
+
+    /// This value's canonical byte encoding.
+    fn to_bytes(&self) -> Vec<u8> {
+        // Plain `cbor2::to_vec` is not guaranteed deterministic (RFC 8949
+        // allows non-canonical encodings of the same value), so this must
+        // go through `to_canonical_vec` specifically. Its only failure
+        // cases are an I/O failure from the writer, or a value CBOR can't
+        // represent (e.g. NaN as a map key). Writing to an in-memory
+        // `Vec<u8>` rules out the first; every ordinary struct/enum/
+        // string/integer/collection type -- the only things anyone
+        // should be marking `Storable` -- rules out the second.
+        cbor2::to_canonical_vec(self).unwrap_or_else(|_| panic!("serializing to bytes should not fail"))
+    }
+
+    /// Build a value back from its own canonical byte encoding.
+    fn from_bytes(bytes: &[u8]) -> Result<Self, cbor2::de::Error>
+    where
+        Self: Sized,
+    {
+        cbor2::from_slice(bytes)
     }
 }
 
