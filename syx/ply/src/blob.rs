@@ -41,7 +41,7 @@ impl Tree {
     }
 }
 
-impl cas::CborBytes for Tree {}
+impl cas::Storable for Tree {}
 
 #[cfg(test)]
 mod tests {

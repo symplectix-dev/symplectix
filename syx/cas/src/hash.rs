@@ -13,22 +13,19 @@ use tokio::io::{
     AsyncReadExt as _,
 };
 
-/// This value's canonical byte encoding, e.g. for `Store` to persist it
-/// or `digest` to hash it.
+/// This value's canonical byte encoding.
 ///
 /// Implementations must keep this consistent with `FromBytes`:
 /// `T::from_bytes(&x.to_bytes())` must equal `Ok(x)`, and encoding the
 /// same logical value twice (in any order it was built) must always
-/// produce identical bytes -- `digest` is a hash of this output, so both
-/// properties are what make it a stable dedup key that actually matches
-/// what `Store` persists.
+/// produce identical bytes.
 pub trait ToBytes {
     type Error;
     fn to_bytes(&self) -> Result<Vec<u8>, Self::Error>;
 }
 
-/// The inverse of `ToBytes`: build a value back from its own byte
-/// encoding.
+/// The inverse of `ToBytes`.
+/// Build a value back from its own byte encoding.
 pub trait FromBytes: Sized {
     type Error: fmt::Debug;
     fn from_bytes(bytes: &[u8]) -> Result<Self, Self::Error>;
@@ -37,15 +34,14 @@ pub trait FromBytes: Sized {
 /// Marker: this type's `ToBytes`/`FromBytes` come from its own
 /// `Serialize`/`Deserialize` impls, via canonical CBOR (RFC 8949
 /// deterministic encoding: smallest integer forms, definite-length items,
-/// sorted map keys). Implementing this (an empty impl -- `impl CborBytes
-/// for Foo {}`) is a deliberate, per-type opt-in: there's no blanket impl
-/// from `Serialize`/`Deserialize` alone, so adding it is a conscious
+/// sorted map keys). Implementing this is a deliberate, per-type opt-in:
+/// there's no blanket impl from `Serialize`/`Deserialize` alone, so adding it is a conscious
 /// assertion that `Foo`'s encoding is safe to compute (see `digest`). A
 /// type that needs a different encoding (e.g. `Vec<u8>`, already raw
 /// bytes) implements `ToBytes`/`FromBytes` directly instead.
-pub trait CborBytes: serde::Serialize + for<'de> serde::Deserialize<'de> {}
+pub trait Storable: serde::Serialize + for<'de> serde::Deserialize<'de> {}
 
-impl<T: CborBytes> ToBytes for T {
+impl<T: Storable> ToBytes for T {
     type Error = cbor2::ser::Error;
 
     fn to_bytes(&self) -> Result<Vec<u8>, Self::Error> {
@@ -56,7 +52,7 @@ impl<T: CborBytes> ToBytes for T {
     }
 }
 
-impl<T: CborBytes> FromBytes for T {
+impl<T: Storable> FromBytes for T {
     type Error = cbor2::de::Error;
 
     fn from_bytes(bytes: &[u8]) -> Result<Self, Self::Error> {
@@ -66,12 +62,12 @@ impl<T: CborBytes> FromBytes for T {
 
 /// Digest of `value`'s canonical byte encoding.
 pub fn digest<T: ToBytes>(value: &T) -> Digest {
-    // For the blanket `CborBytes`-derived impl, `Self::Error` is
+    // For the blanket `Storable`-derived impl, `Self::Error` is
     // `cbor2::ser::Error`, whose only cases are an I/O failure from the
     // writer, or a value CBOR can't represent (e.g. NaN as a map key).
     // Writing to an in-memory `Vec<u8>` rules out the first; every
     // ordinary struct/enum/string/integer/collection type -- the only
-    // things anyone should be marking `CborBytes` -- rules out the
+    // things anyone should be marking `Storable` -- rules out the
     // second.
     let bytes = value.to_bytes().unwrap_or_else(|_| panic!("serializing to bytes should not fail"));
     let mut h = Hasher::new();
@@ -261,7 +257,7 @@ mod tests {
         count: u32,
     }
 
-    impl CborBytes for Example {}
+    impl Storable for Example {}
 
     #[test]
     fn digest_is_deterministic() {

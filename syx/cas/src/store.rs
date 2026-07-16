@@ -225,7 +225,7 @@ impl Store {
 
 #[cfg(test)]
 mod tests {
-    use hash::CborBytes;
+    use hash::Storable;
 
     use super::*;
 
@@ -240,7 +240,7 @@ mod tests {
         value: u32,
     }
 
-    impl CborBytes for Example {}
+    impl Storable for Example {}
 
     fn store() -> (testing::TempDir, Store) {
         let dir = testing::tempdir();

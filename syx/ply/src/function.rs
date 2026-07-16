@@ -61,7 +61,7 @@ impl Command {
     }
 }
 
-impl cas::CborBytes for Command {}
+impl cas::Storable for Command {}
 
 /// A reference to something runnable, addressed by how it's invoked:
 ///
@@ -114,7 +114,7 @@ impl Function {
     }
 }
 
-impl cas::CborBytes for Function {}
+impl cas::Storable for Function {}
 
 #[cfg(test)]
 mod tests {

@@ -4,12 +4,12 @@ mod hash;
 mod store;
 
 pub use hash::{
-    digest,
-    CborBytes,
     Digest,
     FromBytes,
     Hasher,
+    Storable,
     ToBytes,
+    digest,
 };
 pub use store::{
     Content,
