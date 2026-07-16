@@ -100,9 +100,11 @@ impl Store {
         let bytes =
             content.to_bytes().unwrap_or_else(|_| panic!("serializing to bytes should not fail"));
 
-        let mut h = Hasher::new();
-        h.part(&bytes);
-        let digest = h.digest();
+        let digest = {
+            let mut h = Hasher::new();
+            h.part(&bytes);
+            h.digest()
+        };
 
         if self.exists(&digest).await? {
             return Ok(digest);
@@ -118,13 +120,15 @@ impl Store {
     ///
     /// Reads `r` once to compute the digest; only if that digest isn't already
     /// stored does it seek back to the start and copy `r` in.
-    pub async fn copy_from<R>(&self, len: u64, mut r: R) -> io::Result<Digest>
+    pub async fn copy_from<R>(&self, len: u64, r: &mut R) -> io::Result<Digest>
     where
         R: AsyncRead + AsyncSeek + Unpin,
     {
-        let mut h = Hasher::new();
-        h.async_reader(len, &mut r).await?;
-        let digest = h.digest();
+        let digest = {
+            let mut h = Hasher::new();
+            h.read_from(len, &mut *r).await?;
+            h.digest()
+        };
 
         if self.exists(&digest).await? {
             return Ok(digest);
@@ -133,7 +137,7 @@ impl Store {
         r.rewind().await?;
         let tmp = self.new_temp_file().await?;
         let mut file = fs::File::create(tmp.path()).await?;
-        tokio::io::copy(&mut r, &mut file).await?;
+        tokio::io::copy(r, &mut file).await?;
         self.persist(tmp, digest, len).await?;
         Ok(digest)
     }
@@ -143,16 +147,18 @@ impl Store {
     ///
     /// Hashes and writes `r` in a single pass, so unlike `copy_from`,
     /// an already-stored duplicate still costs one temp-file write.
-    pub async fn copy_from_stream<R>(&self, len: u64, mut r: R) -> io::Result<Digest>
+    pub async fn copy_from_stream<R>(&self, len: u64, r: &mut R) -> io::Result<Digest>
     where
         R: AsyncRead + Unpin,
     {
         let tmp = self.new_temp_file().await?;
         let mut file = fs::File::create(tmp.path()).await?;
 
-        let mut h = Hasher::new();
-        h.async_reader_tee(len, &mut r, &mut file).await?;
-        let digest = h.digest();
+        let digest = {
+            let mut h = Hasher::new();
+            h.tee_read_from(len, r, &mut file).await?;
+            h.digest()
+        };
 
         if self.exists(&digest).await? {
             return Ok(digest);
@@ -336,9 +342,9 @@ mod tests {
         let src = src_dir.path().join("blob");
         std::fs::write(&src, b"hello").unwrap();
 
-        let file = fs::File::open(&src).await.unwrap();
+        let mut file = fs::File::open(&src).await.unwrap();
         let len = file.metadata().await.unwrap().len();
-        let d = store.copy_from(len, file).await.unwrap();
+        let d = store.copy_from(len, &mut file).await.unwrap();
         assert_eq!(d, digest(b"hello"));
         assert_eq!(store.get(&d).await.unwrap(), Some(b"hello".to_vec()));
     }
@@ -350,9 +356,9 @@ mod tests {
         let src = src_dir.path().join("blob");
         std::fs::write(&src, b"hello").unwrap();
 
-        let file = fs::File::open(&src).await.unwrap();
+        let mut file = fs::File::open(&src).await.unwrap();
         let len = file.metadata().await.unwrap().len();
-        let from_reader = store.copy_from(len, file).await.unwrap();
+        let from_reader = store.copy_from(len, &mut file).await.unwrap();
         let from_bytes = store.put(&b"hello".to_vec()).await.unwrap();
         assert_eq!(from_reader, from_bytes);
     }
@@ -361,8 +367,8 @@ mod tests {
     async fn copy_from_stream_produces_the_same_digest_as_put() {
         let (_dir, store) = store();
         let content = b"hello".to_vec();
-        let d =
-            store.copy_from_stream(content.len() as u64, io::Cursor::new(&content)).await.unwrap();
+        let mut cursor = io::Cursor::new(&content);
+        let d = store.copy_from_stream(content.len() as u64, &mut cursor).await.unwrap();
         assert_eq!(d, digest(b"hello"));
         assert_eq!(store.get(&d).await.unwrap(), Some(content));
     }

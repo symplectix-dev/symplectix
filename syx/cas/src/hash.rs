@@ -1,10 +1,9 @@
 //! The digest primitive everything else in `cas` is addressed by.
 
-use std::fmt;
 use std::fmt::Write as _;
-use std::io::{
-    self,
-    Read,
+use std::{
+    fmt,
+    io,
 };
 
 use sha2::Digest as _;
@@ -176,7 +175,7 @@ impl Hasher {
 
     /// Fold a part of known `len` bytes, read from `r`, into the digest.
     ///
-    /// `r` is trusted to be exactly `len` bytes; a plain `Read` cannot
+    /// `r` is trusted to be exactly `len` bytes; an `AsyncRead` cannot
     /// report its own length up front without being fully consumed, so the
     /// caller must already know it. Returns an error if `r` runs out
     /// before `len` bytes are read; does not check for extra trailing
@@ -192,40 +191,18 @@ impl Hasher {
     /// needs the same thing for the same reason: its upload streams
     /// carry a blob's size (and an explicit `finish_write` flag) since
     /// the stream itself outlives any one blob.
-    pub fn reader(&mut self, len: u64, mut r: impl Read) -> io::Result<&mut Self> {
-        self.hasher.update(len.to_be_bytes());
-
-        let mut remaining = len;
-        let mut buf = [0u8; BUF_SIZE];
-        while remaining > 0 {
-            let want = remaining.min(BUF_SIZE as u64) as usize;
-            let n = r.read(&mut buf[..want])?;
-            if n == 0 {
-                return Err(io::Error::new(
-                    io::ErrorKind::UnexpectedEof,
-                    format!("reader ended {remaining} bytes short of the declared length {len}"),
-                ));
-            }
-            self.hasher.update(&buf[..n]);
-            remaining -= n as u64;
-        }
-        Ok(self)
-    }
-
-    /// Async counterpart to `reader`: fold a part of known `len` bytes,
-    /// read from `r`, into the digest, without needing a blocking thread.
-    pub async fn async_reader(
+    pub async fn read_from(
         &mut self,
         len: u64,
         r: impl AsyncRead + Unpin,
     ) -> io::Result<&mut Self> {
-        self.async_reader_tee(len, r, tokio::io::sink()).await
+        self.tee_read_from(len, r, tokio::io::sink()).await
     }
 
-    /// Like `async_reader`, but also forwards each chunk to `w` as it's
+    /// Like `read_from`, but also forwards each chunk to `w` as it's
     /// read, so a source can be hashed and copied to `w` in a single
     /// pass without materializing it whole in memory.
-    pub async fn async_reader_tee(
+    pub async fn tee_read_from(
         &mut self,
         len: u64,
         mut r: impl AsyncRead + Unpin,
@@ -373,44 +350,44 @@ mod tests {
         digest([b"hello".as_slice()]).hex(32);
     }
 
-    #[test]
-    fn reader_matches_in_memory_bytes() {
+    #[tokio::test]
+    async fn async_reader_matches_in_memory_bytes() {
         let content = b"hello, reader".to_vec();
         let mut h = Hasher::new();
-        h.reader(content.len() as u64, io::Cursor::new(&content)).unwrap();
+        h.read_from(content.len() as u64, io::Cursor::new(&content)).await.unwrap();
         assert_eq!(h.digest(), digest([content.as_slice()]));
     }
 
-    #[test]
-    fn reader_is_chunked_not_buffered_at_once() {
+    #[tokio::test]
+    async fn async_reader_is_chunked_not_buffered_at_once() {
         // Content larger than one BUF_SIZE read still hashes correctly,
         // proving the reader loops instead of assuming a single read call
         // drains everything.
         let content = vec![0x42u8; BUF_SIZE * 2 + 1];
         let mut h = Hasher::new();
-        h.reader(content.len() as u64, io::Cursor::new(&content)).unwrap();
+        h.read_from(content.len() as u64, io::Cursor::new(&content)).await.unwrap();
         assert_eq!(h.digest(), digest([content.as_slice()]));
     }
 
-    #[test]
-    fn reader_works_with_a_real_file() {
-        // A real fs::File (not just an in-memory Cursor) implements Read
-        // the same way; the caller supplies the length via `stat()`.
+    #[tokio::test]
+    async fn async_reader_works_with_a_real_file() {
+        // A real tokio::fs::File (not just an in-memory Cursor) implements
+        // AsyncRead the same way; the caller supplies the length via `stat()`.
         let path = testing::rlocation("_main/.rustfmt.toml");
         let content = fs::read(&path).unwrap();
-        let file = fs::File::open(&path).unwrap();
-        let len = file.metadata().unwrap().len();
+        let file = tokio::fs::File::open(&path).await.unwrap();
+        let len = file.metadata().await.unwrap().len();
 
         let mut h = Hasher::new();
-        h.reader(len, file).unwrap();
+        h.read_from(len, file).await.unwrap();
 
         assert_eq!(h.digest(), digest([content.as_slice()]));
     }
 
-    #[test]
-    fn reader_errors_on_early_eof() {
+    #[tokio::test]
+    async fn async_reader_errors_on_early_eof() {
         let content = b"short".to_vec();
         let mut h = Hasher::new();
-        assert!(h.reader(content.len() as u64 + 1, io::Cursor::new(&content)).is_err());
+        assert!(h.read_from(content.len() as u64 + 1, io::Cursor::new(&content)).await.is_err());
     }
 }
