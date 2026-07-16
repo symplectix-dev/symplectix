@@ -41,12 +41,10 @@ impl Tree {
     }
 }
 
-impl cas::Storable for Tree {}
+impl cas::CborBytes for Tree {}
 
 #[cfg(test)]
 mod tests {
-    use cas::Storable;
-
     use super::*;
 
     fn digest(bytes: &[u8]) -> cas::Digest {
@@ -57,7 +55,7 @@ mod tests {
 
     #[test]
     fn empty_tree_digest_is_deterministic() {
-        assert_eq!(Tree::new([], []).digest(), Tree::new([], []).digest());
+        assert_eq!(cas::digest(&Tree::new([], [])), cas::digest(&Tree::new([], [])));
     }
 
     #[test]
@@ -68,7 +66,7 @@ mod tests {
         let forward = Tree::new([a.clone(), b.clone()], []);
         let backward = Tree::new([b, a], []);
 
-        assert_eq!(forward.digest(), backward.digest());
+        assert_eq!(cas::digest(&forward), cas::digest(&backward));
         assert_eq!(forward.entries, backward.entries);
     }
 
@@ -98,7 +96,7 @@ mod tests {
         let blob = digest(b"content");
         let a = Tree::new([("a".to_string(), Node::Blob(blob))], []);
         let b = Tree::new([("b".to_string(), Node::Blob(blob))], []);
-        assert_ne!(a.digest(), b.digest());
+        assert_ne!(cas::digest(&a), cas::digest(&b));
     }
 
     #[test]
@@ -108,7 +106,7 @@ mod tests {
         let inner = digest(b"same");
         let a = Tree::new([("x".to_string(), Node::Blob(inner))], []);
         let b = Tree::new([("x".to_string(), Node::Tree(inner))], []);
-        assert_ne!(a.digest(), b.digest());
+        assert_ne!(cas::digest(&a), cas::digest(&b));
     }
 
     #[test]
@@ -116,23 +114,23 @@ mod tests {
         let inner_a = Tree::new([("f".to_string(), Node::Blob(digest(b"a")))], []);
         let inner_b = Tree::new([("f".to_string(), Node::Blob(digest(b"b")))], []);
 
-        let a = Tree::new([("dir".to_string(), Node::Tree(inner_a.digest()))], []);
-        let b = Tree::new([("dir".to_string(), Node::Tree(inner_b.digest()))], []);
-        assert_ne!(a.digest(), b.digest());
+        let a = Tree::new([("dir".to_string(), Node::Tree(cas::digest(&inner_a)))], []);
+        let b = Tree::new([("dir".to_string(), Node::Tree(cas::digest(&inner_b)))], []);
+        assert_ne!(cas::digest(&a), cas::digest(&b));
     }
 
     #[test]
     fn tree_digest_depends_on_interns() {
         let a = Tree::new([], [digest(b"intern-a")]);
         let b = Tree::new([], [digest(b"intern-b")]);
-        assert_ne!(a.digest(), b.digest());
+        assert_ne!(cas::digest(&a), cas::digest(&b));
     }
 
     #[test]
     fn tree_interns_ignore_build_order() {
         let a = digest(b"a");
         let b = digest(b"b");
-        assert_eq!(Tree::new([], [a, b]).digest(), Tree::new([], [b, a]).digest());
+        assert_eq!(cas::digest(&Tree::new([], [a, b])), cas::digest(&Tree::new([], [b, a])));
     }
 
     #[test]

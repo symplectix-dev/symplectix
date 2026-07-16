@@ -13,9 +13,11 @@ use tokio::{
 };
 
 use crate::hash::{
+    self,
     Digest,
+    FromBytes,
     Hasher,
-    Storable,
+    ToBytes,
 };
 
 /// Content managed by `Store`.
@@ -86,9 +88,9 @@ impl Content for PathBuf {
     }
 }
 
-impl<T: 'static + Storable + Send + Sync> Content for T {
+impl<T: 'static + ToBytes + FromBytes + Send + Sync> Content for T {
     async fn address(&self) -> io::Result<Digest> {
-        Ok(self.digest())
+        Ok(hash::digest(self))
     }
 
     async fn read_from<P>(src: &P) -> io::Result<Self>
@@ -104,7 +106,8 @@ impl<T: 'static + Storable + Send + Sync> Content for T {
     where
         P: ?Sized + Sync + AsRef<Path>,
     {
-        let bytes = self.to_bytes();
+        let bytes =
+            self.to_bytes().unwrap_or_else(|_| panic!("serializing to bytes should not fail"));
         fs::write(dst, &bytes).await?;
         Ok(bytes.len() as u64)
     }
@@ -222,6 +225,8 @@ impl Store {
 
 #[cfg(test)]
 mod tests {
+    use hash::CborBytes;
+
     use super::*;
 
     fn digest(bytes: &[u8]) -> Digest {
@@ -235,7 +240,7 @@ mod tests {
         value: u32,
     }
 
-    impl Storable for Example {}
+    impl CborBytes for Example {}
 
     fn store() -> (testing::TempDir, Store) {
         let dir = testing::tempdir();

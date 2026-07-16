@@ -61,7 +61,7 @@ impl Command {
     }
 }
 
-impl cas::Storable for Command {}
+impl cas::CborBytes for Command {}
 
 /// A reference to something runnable, addressed by how it's invoked:
 ///
@@ -114,12 +114,10 @@ impl Function {
     }
 }
 
-impl cas::Storable for Function {}
+impl cas::CborBytes for Function {}
 
 #[cfg(test)]
 mod tests {
-    use cas::Storable;
-
     use super::*;
 
     fn digest(bytes: &[u8]) -> cas::Digest {
@@ -138,21 +136,21 @@ mod tests {
     fn command_struct_digest_is_deterministic() {
         let a = command("echo", &["hi"]);
         let b = command("echo", &["hi"]);
-        assert_eq!(a.digest(), b.digest());
+        assert_eq!(cas::digest(&a), cas::digest(&b));
     }
 
     #[test]
     fn command_struct_digest_depends_on_program() {
         let a = command("echo", &["hi"]);
         let b = command("cat", &["hi"]);
-        assert_ne!(a.digest(), b.digest());
+        assert_ne!(cas::digest(&a), cas::digest(&b));
     }
 
     #[test]
     fn command_struct_digest_depends_on_args() {
         let a = command("echo", &["a"]);
         let b = command("echo", &["b"]);
-        assert_ne!(a.digest(), b.digest());
+        assert_ne!(cas::digest(&a), cas::digest(&b));
     }
 
     #[test]
@@ -161,7 +159,7 @@ mod tests {
         a.env("KEY", "a");
         let mut b = Command::new("run");
         b.env("KEY", "b");
-        assert_ne!(a.digest(), b.digest());
+        assert_ne!(cas::digest(&a), cas::digest(&b));
     }
 
     #[test]
@@ -169,14 +167,14 @@ mod tests {
         let command = digest(b"command");
         let a = Function::command(command);
         let b = Function::command(command);
-        assert_eq!(a.digest(), b.digest());
+        assert_eq!(cas::digest(&a), cas::digest(&b));
     }
 
     #[test]
     fn command_digest_changes_with_command() {
         let a = Function::command(digest(b"command-a"));
         let b = Function::command(digest(b"command-b"));
-        assert_ne!(a.digest(), b.digest());
+        assert_ne!(cas::digest(&a), cas::digest(&b));
     }
 
     #[test]
@@ -185,7 +183,7 @@ mod tests {
         let config = digest(b"config");
         let a = Function::map(command, config);
         let b = Function::map(command, config);
-        assert_eq!(a.digest(), b.digest());
+        assert_eq!(cas::digest(&a), cas::digest(&b));
     }
 
     #[test]
@@ -193,7 +191,7 @@ mod tests {
         let config = digest(b"config");
         let a = Function::map(digest(b"command-a"), config);
         let b = Function::map(digest(b"command-b"), config);
-        assert_ne!(a.digest(), b.digest());
+        assert_ne!(cas::digest(&a), cas::digest(&b));
     }
 
     #[test]
@@ -201,7 +199,7 @@ mod tests {
         let command = digest(b"command");
         let a = Function::map(command, digest(b"config-a"));
         let b = Function::map(command, digest(b"config-b"));
-        assert_ne!(a.digest(), b.digest());
+        assert_ne!(cas::digest(&a), cas::digest(&b));
     }
 
     #[test]
@@ -210,7 +208,7 @@ mod tests {
         let config = digest(b"config");
         let map = Function::map(command, config);
         let reduce = Function::reduce(command, config);
-        assert_ne!(map.digest(), reduce.digest());
+        assert_ne!(cas::digest(&map), cas::digest(&reduce));
     }
 
     #[test]
@@ -218,7 +216,7 @@ mod tests {
         let command = digest(b"command");
         let a = Function::command(command);
         let b = Function::map(command, digest(b"config"));
-        assert_ne!(a.digest(), b.digest());
+        assert_ne!(cas::digest(&a), cas::digest(&b));
     }
 
     #[tokio::test]
