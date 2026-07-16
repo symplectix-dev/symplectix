@@ -24,6 +24,7 @@ impl ToBytes for Vec<u8> {
     type Error = std::convert::Infallible;
 
     fn to_bytes(&self) -> Result<Vec<u8>, Self::Error> {
+        // TODO: Remove clone.
         Ok(self.clone())
     }
 }
@@ -117,7 +118,7 @@ impl Store {
     ///
     /// Reads `r` once to compute the digest; only if that digest isn't already
     /// stored does it seek back to the start and copy `r` in.
-    pub async fn put_reader<R>(&self, len: u64, mut r: R) -> io::Result<Digest>
+    pub async fn copy_from<R>(&self, len: u64, mut r: R) -> io::Result<Digest>
     where
         R: AsyncRead + AsyncSeek + Unpin,
     {
@@ -129,7 +130,7 @@ impl Store {
             return Ok(digest);
         }
 
-        r.seek(io::SeekFrom::Start(0)).await?;
+        r.rewind().await?;
         let tmp = self.new_temp_file().await?;
         let mut file = fs::File::create(tmp.path()).await?;
         tokio::io::copy(&mut r, &mut file).await?;
@@ -140,9 +141,9 @@ impl Store {
     /// Store the content read from a one-shot `r` of `len` bytes
     /// that can't be rewound (e.g. a socket), addressed by its own digest.
     ///
-    /// Hashes and writes `r` in a single pass, so unlike `put_reader`,
+    /// Hashes and writes `r` in a single pass, so unlike `copy_from`,
     /// an already-stored duplicate still costs one temp-file write.
-    pub async fn copy_from<R>(&self, len: u64, mut r: R) -> io::Result<Digest>
+    pub async fn copy_from_stream<R>(&self, len: u64, mut r: R) -> io::Result<Digest>
     where
         R: AsyncRead + Unpin,
     {
@@ -326,9 +327,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn put_reader_accepts_a_file_and_streams_it_in() {
+    async fn copy_from_accepts_a_file_and_streams_it_in() {
         // A file already on disk (not just in-memory bytes) can be
-        // ingested via put_reader, streamed in without requiring the
+        // ingested via copy_from, streamed in without requiring the
         // caller to load it into memory first.
         let (_dir, store) = store();
         let src_dir = testing::tempdir();
@@ -337,13 +338,13 @@ mod tests {
 
         let file = fs::File::open(&src).await.unwrap();
         let len = file.metadata().await.unwrap().len();
-        let d = store.put_reader(len, file).await.unwrap();
+        let d = store.copy_from(len, file).await.unwrap();
         assert_eq!(d, digest(b"hello"));
         assert_eq!(store.get(&d).await.unwrap(), Some(b"hello".to_vec()));
     }
 
     #[tokio::test]
-    async fn put_reader_produces_the_same_digest_as_put() {
+    async fn copy_from_produces_the_same_digest_as_put() {
         let (_dir, store) = store();
         let src_dir = testing::tempdir();
         let src = src_dir.path().join("blob");
@@ -351,16 +352,17 @@ mod tests {
 
         let file = fs::File::open(&src).await.unwrap();
         let len = file.metadata().await.unwrap().len();
-        let from_reader = store.put_reader(len, file).await.unwrap();
+        let from_reader = store.copy_from(len, file).await.unwrap();
         let from_bytes = store.put(&b"hello".to_vec()).await.unwrap();
         assert_eq!(from_reader, from_bytes);
     }
 
     #[tokio::test]
-    async fn copy_from_produces_the_same_digest_as_put() {
+    async fn copy_from_stream_produces_the_same_digest_as_put() {
         let (_dir, store) = store();
         let content = b"hello".to_vec();
-        let d = store.copy_from(content.len() as u64, io::Cursor::new(&content)).await.unwrap();
+        let d =
+            store.copy_from_stream(content.len() as u64, io::Cursor::new(&content)).await.unwrap();
         assert_eq!(d, digest(b"hello"));
         assert_eq!(store.get(&d).await.unwrap(), Some(content));
     }
