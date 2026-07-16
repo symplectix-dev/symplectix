@@ -11,7 +11,4 @@ pub use hash::{
     ToBytes,
     digest,
 };
-pub use store::{
-    Content,
-    Store,
-};
+pub use store::Store;

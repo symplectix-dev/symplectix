@@ -11,6 +11,8 @@ use sha2::Digest as _;
 use tokio::io::{
     AsyncRead,
     AsyncReadExt as _,
+    AsyncWrite,
+    AsyncWriteExt as _,
 };
 
 /// This value's canonical byte encoding.
@@ -179,6 +181,17 @@ impl Hasher {
     /// caller must already know it. Returns an error if `r` runs out
     /// before `len` bytes are read; does not check for extra trailing
     /// bytes in `r` beyond `len`.
+    ///
+    /// Why `len` up front matters most: for a source that can outlive a
+    /// single blob (a persistent socket, a multiplexed stream), EOF only
+    /// marks the end of the whole connection, not of this blob -- `len`
+    /// is what says where this blob ends. It also lets this catch a
+    /// truncated `r` as an error, and lets a caller like
+    /// `Store::put_reader` skip a second read+write pass once the
+    /// resulting digest turns out to already exist. REAPI's `ByteStream`
+    /// needs the same thing for the same reason: its upload streams
+    /// carry a blob's size (and an explicit `finish_write` flag) since
+    /// the stream itself outlives any one blob.
     pub fn reader(&mut self, len: u64, mut r: impl Read) -> io::Result<&mut Self> {
         self.hasher.update(len.to_be_bytes());
 
@@ -204,7 +217,19 @@ impl Hasher {
     pub async fn async_reader(
         &mut self,
         len: u64,
+        r: impl AsyncRead + Unpin,
+    ) -> io::Result<&mut Self> {
+        self.async_reader_tee(len, r, tokio::io::sink()).await
+    }
+
+    /// Like `async_reader`, but also forwards each chunk to `w` as it's
+    /// read, so a source can be hashed and copied to `w` in a single
+    /// pass without materializing it whole in memory.
+    pub async fn async_reader_tee(
+        &mut self,
+        len: u64,
         mut r: impl AsyncRead + Unpin,
+        mut w: impl AsyncWrite + Unpin,
     ) -> io::Result<&mut Self> {
         self.hasher.update(len.to_be_bytes());
 
@@ -220,6 +245,7 @@ impl Hasher {
                 ));
             }
             self.hasher.update(&buf[..n]);
+            w.write_all(&buf[..n]).await?;
             remaining -= n as u64;
         }
         Ok(self)

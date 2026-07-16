@@ -1,115 +1,38 @@
 //! A content-addressed blob store.
-use std::future::Future;
 use std::io;
-use std::path::{
-    Path,
-    PathBuf,
-};
+use std::path::PathBuf;
 
 use moka::future::Cache;
+use tokio::io::{
+    AsyncRead,
+    AsyncSeek,
+    AsyncSeekExt as _,
+};
 use tokio::{
     fs,
     task,
 };
 
 use crate::hash::{
-    self,
     Digest,
     FromBytes,
     Hasher,
     ToBytes,
 };
 
-/// Content managed by `Store`.
-pub trait Content: 'static + Send {
-    /// The digest this content is addressed by.
-    fn address(&self) -> impl Future<Output = io::Result<Digest>> + Send;
+impl ToBytes for Vec<u8> {
+    type Error = std::convert::Infallible;
 
-    /// Read the content back from `src`.
-    fn read_from<P>(src: &P) -> impl Future<Output = io::Result<Self>> + Send
-    where
-        Self: Sized,
-        P: ?Sized + Sync + AsRef<Path>;
-
-    /// Write this content into a fresh file at `dst`,
-    /// returning its length in bytes.
-    fn write_to<P>(&self, dst: &P) -> impl Future<Output = io::Result<u64>> + Send
-    where
-        P: ?Sized + Sync + AsRef<Path>;
-}
-
-impl Content for Vec<u8> {
-    async fn address(&self) -> io::Result<Digest> {
-        let mut h = Hasher::new();
-        h.part(self);
-        Ok(h.digest())
-    }
-
-    async fn read_from<P>(src: &P) -> io::Result<Self>
-    where
-        P: ?Sized + Sync + AsRef<Path>,
-    {
-        fs::read(src).await
-    }
-
-    async fn write_to<P>(&self, dst: &P) -> io::Result<u64>
-    where
-        P: ?Sized + Sync + AsRef<Path>,
-    {
-        fs::write(dst, self).await?;
-        Ok(self.len() as u64)
+    fn to_bytes(&self) -> Result<Vec<u8>, Self::Error> {
+        Ok(self.clone())
     }
 }
 
-impl Content for PathBuf {
-    async fn address(&self) -> io::Result<Digest> {
-        let mut file = fs::File::open(self).await?;
-        let len = file.metadata().await?.len();
+impl FromBytes for Vec<u8> {
+    type Error = std::convert::Infallible;
 
-        let mut h = Hasher::new();
-        h.async_reader(len, &mut file).await?;
-        Ok(h.digest())
-    }
-
-    /// A `PathBuf`'s "content" is a file elsewhere; reading it back just
-    /// means pointing at where the store already put it, not loading it.
-    async fn read_from<P>(src: &P) -> io::Result<Self>
-    where
-        P: AsRef<Path> + ?Sized + Sync,
-    {
-        Ok(src.as_ref().to_path_buf())
-    }
-
-    async fn write_to<P>(&self, dst: &P) -> io::Result<u64>
-    where
-        P: AsRef<Path> + ?Sized + Sync,
-    {
-        fs::copy(self, dst).await
-    }
-}
-
-impl<T: 'static + ToBytes + FromBytes + Send + Sync> Content for T {
-    async fn address(&self) -> io::Result<Digest> {
-        Ok(hash::digest(self))
-    }
-
-    async fn read_from<P>(src: &P) -> io::Result<Self>
-    where
-        P: ?Sized + Sync + AsRef<Path>,
-    {
-        let bytes = fs::read(src).await?;
-        Self::from_bytes(&bytes)
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("{e:?}")))
-    }
-
-    async fn write_to<P>(&self, dst: &P) -> io::Result<u64>
-    where
-        P: ?Sized + Sync + AsRef<Path>,
-    {
-        let bytes =
-            self.to_bytes().unwrap_or_else(|_| panic!("serializing to bytes should not fail"));
-        fs::write(dst, &bytes).await?;
-        Ok(bytes.len() as u64)
+    fn from_bytes(bytes: &[u8]) -> Result<Self, Self::Error> {
+        Ok(bytes.to_vec())
     }
 }
 
@@ -129,7 +52,11 @@ impl Store {
         Store { root: root.into(), cache: Cache::new(max_capacity) }
     }
 
-    fn path(&self, digest: &Digest) -> PathBuf {
+    /// The path content addressed by `digest` lives at (whether or not
+    /// it's actually been stored yet), for a caller that wants to work
+    /// with the file directly (e.g. mmap it) instead of loading it via
+    /// `get`.
+    pub fn path(&self, digest: &Digest) -> PathBuf {
         self.root.join(digest.hex(2))
     }
 
@@ -152,63 +79,125 @@ impl Store {
     /// The content at `digest`, if present. Always reads from disk (the
     /// cache holds sizes, not content), and fills the cache with the
     /// content's size.
-    pub async fn get<T: Content>(&self, digest: &Digest) -> io::Result<Option<T>> {
-        let path = self.path(digest);
-        let content = match T::read_from(&path).await {
-            Ok(content) => content,
+    pub async fn get<T: FromBytes>(&self, digest: &Digest) -> io::Result<Option<T>> {
+        let bytes = match fs::read(self.path(digest)).await {
+            Ok(bytes) => bytes,
             Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
             Err(e) => return Err(e),
         };
 
-        let size_bytes = fs::metadata(&path).await?.len();
-        self.cache.insert(*digest, size_bytes).await;
+        let content = T::from_bytes(&bytes)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("{e:?}")))?;
 
+        self.cache.insert(*digest, bytes.len() as u64).await;
         Ok(Some(content))
     }
 
-    /// Store `content` (in-memory bytes or an existing local file),
-    /// addressed by its own digest, and return that digest.
-    ///
-    /// The write to disk is atomic: `content` lands in a temp file next
-    /// to the destination, then gets renamed into place, so a concurrent
-    /// reader never observes a partially-written file.
-    pub async fn put<T: Content>(&self, content: &T) -> io::Result<Digest> {
-        let digest = content.address().await?;
+    /// Store `content`, addressed by its own digest, and return that
+    /// digest.
+    pub async fn put<T: ToBytes>(&self, content: &T) -> io::Result<Digest> {
+        let bytes =
+            content.to_bytes().unwrap_or_else(|_| panic!("serializing to bytes should not fail"));
 
-        // If the address already exists, the write is skipped.
-        // This is best-effort, not a concurrency-safe write-once: two writers racing
-        // on the same address may both write and the last one wins. That is harmless
-        // here because the address is a deterministic function of `content`,
-        // so whichever write wins holds the intended content.
+        let mut h = Hasher::new();
+        h.part(&bytes);
+        let digest = h.digest();
+
         if self.exists(&digest).await? {
             return Ok(digest);
         }
 
+        let tmp = self.new_temp_file().await?;
+        fs::write(tmp.path(), &bytes).await?;
+        self.persist(tmp, digest, bytes.len() as u64).await?;
+        Ok(digest)
+    }
+
+    /// Store the content read from a seekable `r` of `len` bytes.
+    ///
+    /// Reads `r` once to compute the digest; only if that digest isn't already
+    /// stored does it seek back to the start and copy `r` in.
+    pub async fn put_reader<R>(&self, len: u64, mut r: R) -> io::Result<Digest>
+    where
+        R: AsyncRead + AsyncSeek + Unpin,
+    {
+        let mut h = Hasher::new();
+        h.async_reader(len, &mut r).await?;
+        let digest = h.digest();
+
+        if self.exists(&digest).await? {
+            return Ok(digest);
+        }
+
+        r.seek(io::SeekFrom::Start(0)).await?;
+        let tmp = self.new_temp_file().await?;
+        let mut file = fs::File::create(tmp.path()).await?;
+        tokio::io::copy(&mut r, &mut file).await?;
+        self.persist(tmp, digest, len).await?;
+        Ok(digest)
+    }
+
+    /// Store the content read from a one-shot `r` of `len` bytes
+    /// that can't be rewound (e.g. a socket), addressed by its own digest.
+    ///
+    /// Hashes and writes `r` in a single pass, so unlike `put_reader`,
+    /// an already-stored duplicate still costs one temp-file write.
+    pub async fn copy_from<R>(&self, len: u64, mut r: R) -> io::Result<Digest>
+    where
+        R: AsyncRead + Unpin,
+    {
+        let tmp = self.new_temp_file().await?;
+        let mut file = fs::File::create(tmp.path()).await?;
+
+        let mut h = Hasher::new();
+        h.async_reader_tee(len, &mut r, &mut file).await?;
+        let digest = h.digest();
+
+        if self.exists(&digest).await? {
+            return Ok(digest);
+        }
+
+        self.persist(tmp, digest, len).await?;
+        Ok(digest)
+    }
+
+    /// A fresh, empty temp file under `root`, on the same filesystem as
+    /// every digest-addressed path this store persists to, so a later
+    /// rename into place is atomic.
+    async fn new_temp_file(&self) -> io::Result<tempfile::NamedTempFile> {
+        let dir = self.root.join("tmp");
+        fs::create_dir_all(&dir).await?;
+        task::spawn_blocking(move || tempfile::NamedTempFile::new_in(dir))
+            .await
+            .expect("creating the temp file should not panic")
+    }
+
+    /// Make `tmp` read-only and rename it into place at `digest`'s path,
+    /// then record its size in the cache.
+    ///
+    /// This is best-effort, not a concurrency-safe write-once: two
+    /// writers racing on the same digest may both persist and the last
+    /// one wins. That is harmless here because the path is a
+    /// deterministic function of `digest`, so whichever write wins holds
+    /// the intended content.
+    async fn persist(
+        &self,
+        tmp: tempfile::NamedTempFile,
+        digest: Digest,
+        len: u64,
+    ) -> io::Result<()> {
         let dst = self.path(&digest);
         let dir =
             dst.parent().expect("path is always root/xx/xx/rest, so it has a parent").to_owned();
         fs::create_dir_all(&dir).await?;
-
-        // About `expect(...)?`:
-        // This `expect` unwraps Result<T, JoinError>, and the inner
-        // io::Result is propagated normally via `?`.
-        // Assuming NamedTempFile::new_in/persist does not panic.
-
-        // NamedTempFile reserves a uniquely-named file in `dir` so the
-        // final rename is on the same filesystem thus atomic.
-        let tmp = task::spawn_blocking(move || tempfile::NamedTempFile::new_in(dir))
-            .await
-            .expect("creating the temp file should not panic")?;
-
-        let len = content.write_to(tmp.path()).await?;
 
         task::spawn_blocking(move || -> io::Result<()> {
             // Read-only: a digest is only valid as long as the bytes it
             // was computed from never change, so CAS entries must not be
             // mutable once written. On Unix, deleting a file only needs
             // write permission on its directory, so this doesn't block
-            // cleanup. But I'm not sure abount Windows. Removing a Store's
-            // root there may need extra handling.
+            // cleanup. But I'm not sure abount Windows. Removing a
+            // Store's root there may need extra handling.
             let mut perms = tmp.as_file().metadata()?.permissions();
             perms.set_readonly(true);
             tmp.as_file().set_permissions(perms)?;
@@ -219,15 +208,14 @@ impl Store {
         .expect("persisting the temp file should not panic")?;
 
         self.cache.insert(digest, len).await;
-        Ok(digest)
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use hash::Storable;
-
     use super::*;
+    use crate::Storable;
 
     fn digest(bytes: &[u8]) -> Digest {
         let mut h = Hasher::new();
@@ -338,38 +326,51 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn put_accepts_a_path_and_streams_it_in() {
+    async fn put_reader_accepts_a_file_and_streams_it_in() {
         // A file already on disk (not just in-memory bytes) can be
-        // put()'d directly; the store reads it in via Content::address /
-        // write_into rather than requiring the caller to load it first.
+        // ingested via put_reader, streamed in without requiring the
+        // caller to load it into memory first.
         let (_dir, store) = store();
         let src_dir = testing::tempdir();
         let src = src_dir.path().join("blob");
         std::fs::write(&src, b"hello").unwrap();
 
-        let d = store.put(&src).await.unwrap();
+        let file = fs::File::open(&src).await.unwrap();
+        let len = file.metadata().await.unwrap().len();
+        let d = store.put_reader(len, file).await.unwrap();
         assert_eq!(d, digest(b"hello"));
         assert_eq!(store.get(&d).await.unwrap(), Some(b"hello".to_vec()));
     }
 
     #[tokio::test]
-    async fn path_and_bytes_content_produce_the_same_digest() {
+    async fn put_reader_produces_the_same_digest_as_put() {
         let (_dir, store) = store();
         let src_dir = testing::tempdir();
         let src = src_dir.path().join("blob");
         std::fs::write(&src, b"hello").unwrap();
 
-        let from_path = store.put(&src).await.unwrap();
+        let file = fs::File::open(&src).await.unwrap();
+        let len = file.metadata().await.unwrap().len();
+        let from_reader = store.put_reader(len, file).await.unwrap();
         let from_bytes = store.put(&b"hello".to_vec()).await.unwrap();
-        assert_eq!(from_path, from_bytes);
+        assert_eq!(from_reader, from_bytes);
     }
 
     #[tokio::test]
-    async fn get_as_path_points_at_the_stored_file_without_loading_it() {
+    async fn copy_from_produces_the_same_digest_as_put() {
+        let (_dir, store) = store();
+        let content = b"hello".to_vec();
+        let d = store.copy_from(content.len() as u64, io::Cursor::new(&content)).await.unwrap();
+        assert_eq!(d, digest(b"hello"));
+        assert_eq!(store.get(&d).await.unwrap(), Some(content));
+    }
+
+    #[tokio::test]
+    async fn path_points_at_the_stored_file() {
         let (dir, store) = store();
         let d = store.put(&b"hello".to_vec()).await.unwrap();
 
-        let path: PathBuf = store.get(&d).await.unwrap().unwrap();
+        let path = store.path(&d);
         assert_eq!(path, dir.path().join(d.hex(2)));
         assert_eq!(std::fs::read(path).unwrap(), b"hello".to_vec());
     }
