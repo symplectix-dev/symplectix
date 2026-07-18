@@ -8,7 +8,6 @@ pub use hash::{
     Digest,
     FromBytes,
     Hasher,
-    Storable,
     ToBytes,
     digest,
 };

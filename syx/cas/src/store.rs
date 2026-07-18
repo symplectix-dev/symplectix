@@ -268,7 +268,6 @@ impl Store {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Storable;
 
     impl Store {
         /// Whether content is already stored at `digest`, on disk.
@@ -288,7 +287,7 @@ mod tests {
         value: u32,
     }
 
-    impl Storable for Example {}
+    crate::storable!(Example);
 
     fn store() -> (testing::TempDir, Store) {
         let dir = testing::tempdir();

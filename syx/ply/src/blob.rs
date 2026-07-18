@@ -44,7 +44,7 @@ impl Tree {
     }
 }
 
-impl cas::Storable for Tree {}
+cas::storable!(Tree);
 
 #[cfg(test)]
 mod tests {

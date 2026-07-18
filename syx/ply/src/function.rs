@@ -61,7 +61,7 @@ impl Command {
     }
 }
 
-impl cas::Storable for Command {}
+cas::storable!(Command);
 
 /// A reference to something runnable, addressed by how it's invoked:
 ///
@@ -104,7 +104,7 @@ impl Function {
     }
 }
 
-impl cas::Storable for Function {}
+cas::storable!(Function);
 
 #[cfg(test)]
 mod tests {

@@ -9,6 +9,7 @@ rust.library(
     ],
     deps = [
         "//syx/cas",
+        "@crates//:cbor2",
         "@crates//:serde",
     ],
 )

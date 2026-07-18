@@ -10,7 +10,6 @@ rust.library(
     visibility = ["//visibility:public"],
     deps = [
         "@crates//:bytes",
-        "@crates//:cbor2",
         "@crates//:moka",
         "@crates//:serde",
         "@crates//:serde_bytes",
@@ -27,6 +26,7 @@ rust.test(
     data = ["//:.rustfmt.toml"],
     deps = [
         "//syx/testing",
+        "@crates//:cbor2",
         "@crates//:tokio",
     ],
 )
