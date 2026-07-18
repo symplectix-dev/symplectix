@@ -1,4 +1,8 @@
 //! A content-addressed blob store.
+use std::future::{
+    self,
+    Future,
+};
 use std::io;
 use std::path::PathBuf;
 
@@ -37,49 +41,35 @@ impl FromBytes for Vec<u8> {
     }
 }
 
-/// A content-addressed store mapping `Digest` keys to blob content: an
-/// in-memory cache in front of files under `root`, sharded the same way
-/// as `Digest::hex`.
+/// A content-addressed store mapping `Digest` keys to blob content: files
+/// under `root`, sharded the same way as `Digest::hex`.
 pub struct Store {
     root:  PathBuf,
-    /// digest -> content length in bytes, not the content itself.
-    cache: Cache<Digest, u64>,
+    /// Coalesces concurrent write calls for the same
+    /// not-yet-persisted digest into a single write.
+    /// A performance optimization, not something
+    /// anything else here depends on for correctness.
+    cache: Cache<Digest, ()>,
 }
 
 impl Store {
-    /// Open a store rooted at `root` (created lazily on first `put`),
-    /// with an in-memory cache holding up to `max_capacity` entries.
-    pub fn new(root: impl Into<PathBuf>, max_capacity: u64) -> Self {
-        Store { root: root.into(), cache: Cache::new(max_capacity) }
+    /// Open a store rooted at `root`, creating `root` and its `tmp`
+    /// subdirectory if they don't already exist.
+    pub fn create(root: impl Into<PathBuf>, max_capacity: u64) -> io::Result<Self> {
+        let root = root.into();
+        std::fs::create_dir_all(root.join("tmp"))?;
+        Ok(Store { root, cache: Cache::new(max_capacity) })
     }
 
-    /// The path content addressed by `digest` lives at (whether or not
-    /// it's actually been stored yet), for a caller that wants to work
-    /// with the file directly (e.g. mmap it) instead of loading it via
-    /// `get`.
+    /// The path content addressed by `digest` whether or not
+    /// it's actually been stored yet. For a caller that wants
+    /// to work with the file directly (e.g. mmap it)
+    /// instead of loading it via `get`.
     pub fn path(&self, digest: &Digest) -> PathBuf {
         self.root.join(digest.hex(2))
     }
 
-    /// Whether content is already stored at `digest`, in the cache or on
-    /// disk.
-    pub async fn exists(&self, digest: &Digest) -> io::Result<bool> {
-        if self.cache.contains_key(digest) {
-            return Ok(true);
-        }
-        match fs::metadata(self.path(digest)).await {
-            Ok(meta) => {
-                self.cache.insert(*digest, meta.len()).await;
-                Ok(true)
-            }
-            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(false),
-            Err(e) => Err(e),
-        }
-    }
-
-    /// The content at `digest`, if present. Always reads from disk (the
-    /// cache holds sizes, not content), and fills the cache with the
-    /// content's size.
+    /// Reads the content at `digest`, if present.
     pub async fn get<T: FromBytes>(&self, digest: &Digest) -> io::Result<Option<T>> {
         let bytes = match fs::read(self.path(digest)).await {
             Ok(bytes) => bytes,
@@ -90,7 +80,6 @@ impl Store {
         let content = T::from_bytes(&bytes)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("{e:?}")))?;
 
-        self.cache.insert(*digest, bytes.len() as u64).await;
         Ok(Some(content))
     }
 
@@ -106,13 +95,13 @@ impl Store {
             h.digest()
         };
 
-        if self.exists(&digest).await? {
-            return Ok(digest);
-        }
+        self.ensure_persisted(digest, async {
+            let tmp = self.new_temp_file().await?;
+            fs::write(tmp.path(), &bytes).await?;
+            Ok(tmp)
+        })
+        .await?;
 
-        let tmp = self.new_temp_file().await?;
-        fs::write(tmp.path(), &bytes).await?;
-        self.persist(tmp, digest, bytes.len() as u64).await?;
         Ok(digest)
     }
 
@@ -130,23 +119,27 @@ impl Store {
             h.digest()
         };
 
-        if self.exists(&digest).await? {
-            return Ok(digest);
-        }
+        self.ensure_persisted(digest, async {
+            r.rewind().await?;
+            let tmp = self.new_temp_file().await?;
+            let mut file = fs::File::create(tmp.path()).await?;
+            tokio::io::copy(r, &mut file).await?;
+            Ok(tmp)
+        })
+        .await?;
 
-        r.rewind().await?;
-        let tmp = self.new_temp_file().await?;
-        let mut file = fs::File::create(tmp.path()).await?;
-        tokio::io::copy(r, &mut file).await?;
-        self.persist(tmp, digest, len).await?;
         Ok(digest)
     }
 
     /// Store the content read from a one-shot `r` of `len` bytes
     /// that can't be rewound (e.g. a socket), addressed by its own digest.
     ///
-    /// Hashes and writes `r` in a single pass, so unlike `copy_from`,
-    /// an already-stored duplicate still costs one temp-file write.
+    /// Hashes and writes `r` in a single pass, so unlike `copy_from`, an
+    /// already-stored duplicate still costs one temp-file write -- the
+    /// write happens before the digest is even known, so there's nothing
+    /// to key a coalescing check on yet. Only the persist step that
+    /// follows (rename, read-only) is coalesced with other concurrent
+    /// callers, via `ensure_persisted`.
     pub async fn copy_from_stream<R>(&self, len: u64, r: &mut R) -> io::Result<Digest>
     where
         R: AsyncRead + Unpin,
@@ -160,40 +153,53 @@ impl Store {
             h.digest()
         };
 
-        if self.exists(&digest).await? {
-            return Ok(digest);
-        }
-
-        self.persist(tmp, digest, len).await?;
+        self.ensure_persisted(digest, future::ready(Ok(tmp))).await?;
         Ok(digest)
     }
 
-    /// A fresh, empty temp file under `root`, on the same filesystem as
-    /// every digest-addressed path this store persists to, so a later
-    /// rename into place is atomic.
+    /// A fresh, empty temp file under `root/tmp` (created in `new`), on
+    /// the same filesystem as every digest-addressed path this store
+    /// persists to, so a later rename into place is atomic.
     async fn new_temp_file(&self) -> io::Result<tempfile::NamedTempFile> {
         let dir = self.root.join("tmp");
-        fs::create_dir_all(&dir).await?;
         task::spawn_blocking(move || tempfile::NamedTempFile::new_in(dir))
             .await
             .expect("creating the temp file should not panic")
     }
 
-    /// Make `tmp` read-only and rename it into place at `digest`'s path,
-    /// then record its size in the cache.
+    /// Ensure `digest` is persisted, running `write` (which produces a
+    /// temp file holding the content) only if it isn't already there.
+    /// Concurrent `put`/`copy_from` calls for the same not-yet-persisted
+    /// digest are coalesced into this single write, rather than each
+    /// redoing it -- a pure performance optimization, not a correctness
+    /// requirement (see `persist`).
+    async fn ensure_persisted<F>(&self, digest: Digest, write: F) -> io::Result<()>
+    where
+        F: Future<Output = io::Result<tempfile::NamedTempFile>>,
+    {
+        let dst = self.path(&digest);
+        self.cache
+            .try_get_with(digest, async move {
+                // Not `self.exists`: `dst` is already known here, so
+                // check it directly instead of recomputing it.
+                if fs::try_exists(&dst).await? {
+                    return Ok(());
+                }
+                let tmp = write.await?;
+                self.persist(tmp, dst).await
+            })
+            .await
+            .map_err(|e| io::Error::new(e.kind(), e.to_string()))
+    }
+
+    /// Make `tmp` read-only and rename it into place at `dst`.
     ///
     /// This is best-effort, not a concurrency-safe write-once: two
     /// writers racing on the same digest may both persist and the last
-    /// one wins. That is harmless here because the path is a
-    /// deterministic function of `digest`, so whichever write wins holds
-    /// the intended content.
-    async fn persist(
-        &self,
-        tmp: tempfile::NamedTempFile,
-        digest: Digest,
-        len: u64,
-    ) -> io::Result<()> {
-        let dst = self.path(&digest);
+    /// one wins. That is harmless here because `dst` is a deterministic
+    /// function of the digest, so whichever write wins holds the
+    /// intended content.
+    async fn persist(&self, tmp: tempfile::NamedTempFile, dst: PathBuf) -> io::Result<()> {
         let dir =
             dst.parent().expect("path is always root/xx/xx/rest, so it has a parent").to_owned();
         fs::create_dir_all(&dir).await?;
@@ -214,7 +220,6 @@ impl Store {
         .await
         .expect("persisting the temp file should not panic")?;
 
-        self.cache.insert(digest, len).await;
         Ok(())
     }
 }
@@ -223,6 +228,13 @@ impl Store {
 mod tests {
     use super::*;
     use crate::Storable;
+
+    impl Store {
+        /// Whether content is already stored at `digest`, on disk.
+        pub async fn exists(&self, digest: &Digest) -> io::Result<bool> {
+            fs::try_exists(self.path(digest)).await
+        }
+    }
 
     fn digest(bytes: &[u8]) -> Digest {
         let mut h = Hasher::new();
@@ -239,7 +251,7 @@ mod tests {
 
     fn store() -> (testing::TempDir, Store) {
         let dir = testing::tempdir();
-        let store = Store::new(dir.path(), 100);
+        let store = Store::create(dir.path(), 100).unwrap();
         (dir, store)
     }
 
@@ -278,8 +290,9 @@ mod tests {
         let d = store.put(&b"hello".to_vec()).await.unwrap();
 
         // Make the destination's parent directory read-only: if the
-        // second put below actually tried to write (create a temp file
-        // in it), that would now fail with a permission error.
+        // second put below actually tried to persist (rename a temp
+        // file, created elsewhere under `root/tmp`, into this
+        // directory), that would now fail with a permission error.
         let path = store.path(&d);
         let dir = path.parent().unwrap();
         let permissions = std::fs::metadata(dir).unwrap().permissions();
@@ -295,31 +308,16 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn put_persists_to_disk_not_just_the_cache() {
+    async fn content_persists_across_store_instances() {
         // A fresh Store instance over the same root sees content a prior
-        // instance wrote: proof it actually landed on disk, not only in
-        // the (per-instance) in-memory cache.
+        // instance wrote: proof it actually landed on disk.
         let dir = testing::tempdir();
 
-        let writer = Store::new(dir.path(), 100);
+        let writer = Store::create(dir.path(), 100).unwrap();
         let d = writer.put(&b"hello".to_vec()).await.unwrap();
 
-        let reader = Store::new(dir.path(), 100);
+        let reader = Store::create(dir.path(), 100).unwrap();
         assert!(reader.exists(&d).await.unwrap());
-        assert_eq!(reader.get(&d).await.unwrap(), Some(b"hello".to_vec()));
-    }
-
-    #[tokio::test]
-    async fn get_reads_through_to_disk_on_cache_miss() {
-        // Content written by one Store is visible via a second Store's
-        // get(), which must fall back to disk since its own cache never
-        // saw this digest.
-        let dir = testing::tempdir();
-
-        let writer = Store::new(dir.path(), 100);
-        let d = writer.put(&b"hello".to_vec()).await.unwrap();
-
-        let reader = Store::new(dir.path(), 100);
         assert_eq!(reader.get(&d).await.unwrap(), Some(b"hello".to_vec()));
     }
 

@@ -132,6 +132,12 @@ mod tests {
         command
     }
 
+    fn store() -> (testing::TempDir, cas::Store) {
+        let dir = testing::tempdir();
+        let store = cas::Store::create(dir.path(), 100).unwrap();
+        (dir, store)
+    }
+
     #[test]
     fn command_struct_digest_is_deterministic() {
         let a = command("echo", &["hi"]);
@@ -221,8 +227,7 @@ mod tests {
 
     #[tokio::test]
     async fn command_variant_and_its_command_resolve_from_store() {
-        let dir = testing::tempdir();
-        let store = cas::Store::new(dir.path(), 100);
+        let (_dir, store) = store();
 
         // The command to run, once, directly.
         let mut command = Command::new("python3");
@@ -253,8 +258,7 @@ mod tests {
             Tree,
         };
 
-        let dir = testing::tempdir();
-        let store = cas::Store::new(dir.path(), 100);
+        let (_dir, store) = store();
 
         // The command to run as the persistent process.
         let mut command = Command::new("serve");
