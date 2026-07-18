@@ -237,44 +237,9 @@ mod tests {
         h.digest()
     }
 
-    #[derive(serde::Serialize, serde::Deserialize)]
-    struct Example {
-        name:  String,
-        count: u32,
-    }
-
-    impl ToBytes for Example {
-        type Error = cbor2::ser::Error;
-
-        fn to_bytes(&self) -> Result<Bytes, Self::Error> {
-            cbor2::to_canonical_vec(self).map(Bytes::from)
-        }
-    }
-
-    impl FromBytes for Example {
-        type Error = cbor2::de::Error;
-
-        fn from_bytes(bytes: Bytes) -> Result<Self, Self::Error> {
-            cbor2::from_slice(&bytes)
-        }
-    }
-
     #[test]
     fn digest_is_deterministic() {
         assert_eq!(digest([b"a".as_slice()]), digest([b"a".as_slice()]),);
-        let a = Example { name: "foo".to_string(), count: 1 };
-        let b = Example { name: "foo".to_string(), count: 1 };
-        assert_eq!(crate::digest(&a), crate::digest(&b));
-    }
-
-    #[test]
-    fn digest_byte_buf() {
-        let d = digest([b"hello"]);
-        let d_bytes = serde_bytes::ByteBuf::from(d.as_ref());
-        assert_eq!(
-            cbor2::to_canonical_vec(&d_bytes).unwrap(),
-            cbor2::to_canonical_vec(&d).unwrap()
-        );
     }
 
     #[test]
@@ -282,15 +247,6 @@ mod tests {
         let want = digest([b"hello"]);
         let bytes: [u8; 32] = want.as_ref().try_into().unwrap();
         assert_eq!(Digest::new(bytes), want);
-    }
-
-    #[test]
-    fn digest_depends_on_every_field() {
-        let base = Example { name: "foo".to_string(), count: 1 };
-        let other_name = Example { name: "bar".to_string(), count: 1 };
-        let other_count = Example { name: "foo".to_string(), count: 2 };
-        assert_ne!(crate::digest(&base), crate::digest(&other_name));
-        assert_ne!(crate::digest(&base), crate::digest(&other_count));
     }
 
     #[test]

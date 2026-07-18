@@ -282,27 +282,6 @@ mod tests {
         h.digest()
     }
 
-    #[derive(Debug, serde::Serialize, serde::Deserialize)]
-    struct Example {
-        value: u32,
-    }
-
-    impl ToBytes for Example {
-        type Error = cbor2::ser::Error;
-
-        fn to_bytes(&self) -> Result<Bytes, Self::Error> {
-            cbor2::to_canonical_vec(self).map(Bytes::from)
-        }
-    }
-
-    impl FromBytes for Example {
-        type Error = cbor2::de::Error;
-
-        fn from_bytes(bytes: Bytes) -> Result<Self, Self::Error> {
-            cbor2::from_slice(&bytes)
-        }
-    }
-
     fn store() -> (testing::TempDir, Store) {
         let dir = testing::tempdir();
         let store = Store::create(dir.path()).unwrap();
@@ -446,24 +425,5 @@ mod tests {
         let perms = std::fs::metadata(&path).unwrap().permissions();
         assert!(perms.readonly());
         assert_eq!(perms.mode() & 0o200, 0);
-    }
-
-    #[tokio::test]
-    async fn get_returns_an_error_for_corrupted_content_instead_of_panicking() {
-        use std::os::unix::fs::PermissionsExt;
-
-        let (dir, store) = store();
-        let d = store.put(&Example { value: 1 }).await.unwrap();
-
-        // Overwrite the stored bytes on disk with something that isn't
-        // valid CBOR at all, simulating on-disk corruption.
-        let path = dir.path().join(d.hex(2));
-        let mut perms = std::fs::metadata(&path).unwrap().permissions();
-        perms.set_mode(0o600);
-        std::fs::set_permissions(&path, perms).unwrap();
-        std::fs::write(&path, b"not cbor").unwrap();
-
-        let err = store.get::<Example>(&d).await.unwrap_err();
-        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
     }
 }

@@ -26,7 +26,22 @@ rust.test(
     data = ["//:.rustfmt.toml"],
     deps = [
         "//syx/testing",
+        "@crates//:tokio",
+    ],
+)
+
+rust.test_suite(
+    name = "cas_test_suite",
+    size = "small",
+    srcs = ["tests/storable_test.rs"],
+    shared_srcs = ["tests/support.rs"],
+    data = ["//:.rustfmt.toml"],
+    deps = [
+        ":cas",
+        "//syx/testing",
         "@crates//:cbor2",
+        "@crates//:serde",
+        "@crates//:serde_bytes",
         "@crates//:tokio",
     ],
 )
