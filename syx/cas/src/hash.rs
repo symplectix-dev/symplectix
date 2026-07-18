@@ -6,6 +6,7 @@ use std::{
     io,
 };
 
+use bytes::Bytes;
 use sha2::Digest as _;
 use tokio::io::{
     AsyncRead,
@@ -21,59 +22,78 @@ use tokio::io::{
 /// same logical value twice (in any order it was built) must always
 /// produce identical bytes.
 pub trait ToBytes {
-    type Error;
-    fn to_bytes(&self) -> Result<Vec<u8>, Self::Error>;
+    type Error: fmt::Debug;
+    fn to_bytes(&self) -> Result<Bytes, Self::Error>;
+
+    fn digest(&self) -> Result<Digest, Self::Error> {
+        self.to_bytes().map(|bytes| {
+            let mut h = Hasher::new();
+            h.part(bytes);
+            h.digest()
+        })
+    }
 }
 
 /// The inverse of `ToBytes`.
 /// Build a value back from its own byte encoding.
 pub trait FromBytes: Sized {
     type Error: fmt::Debug;
-    fn from_bytes(bytes: &[u8]) -> Result<Self, Self::Error>;
+    fn from_bytes(bytes: Bytes) -> Result<Self, Self::Error>;
 }
 
-/// Marker: this type's `ToBytes`/`FromBytes` come from its own
-/// `Serialize`/`Deserialize` impls, via canonical CBOR (RFC 8949
-/// deterministic encoding: smallest integer forms, definite-length items,
-/// sorted map keys). Implementing this is a deliberate, per-type opt-in:
-/// there's no blanket impl from `Serialize`/`Deserialize` alone, so adding it is a conscious
-/// assertion that `Foo`'s encoding is safe to compute (see `digest`). A
-/// type that needs a different encoding (e.g. `Vec<u8>`, already raw
-/// bytes) implements `ToBytes`/`FromBytes` directly instead.
+impl ToBytes for Bytes {
+    type Error = std::convert::Infallible;
+    fn to_bytes(&self) -> Result<Bytes, Self::Error> {
+        Ok(self.clone())
+    }
+}
+
+impl FromBytes for Bytes {
+    type Error = std::convert::Infallible;
+    fn from_bytes(bytes: Bytes) -> Result<Self, Self::Error> {
+        Ok(bytes)
+    }
+}
+
+/// Marks a type whose `ToBytes`/`FromBytes` come from its own
+/// `Serialize`/`Deserialize` impls, via canonical CBOR encoding.
 pub trait Storable: serde::Serialize + for<'de> serde::Deserialize<'de> {}
 
 impl<T: Storable> ToBytes for T {
     type Error = cbor2::ser::Error;
 
-    fn to_bytes(&self) -> Result<Vec<u8>, Self::Error> {
+    fn to_bytes(&self) -> Result<Bytes, Self::Error> {
         // Plain `cbor2::to_vec` is not guaranteed deterministic (RFC 8949
         // allows non-canonical encodings of the same value), so this must
         // go through `to_canonical_vec` specifically.
-        cbor2::to_canonical_vec(self)
+        cbor2::to_canonical_vec(self).map(Bytes::from)
     }
 }
 
 impl<T: Storable> FromBytes for T {
     type Error = cbor2::de::Error;
 
-    fn from_bytes(bytes: &[u8]) -> Result<Self, Self::Error> {
-        cbor2::from_slice(bytes)
+    fn from_bytes(bytes: Bytes) -> Result<Self, Self::Error> {
+        cbor2::from_slice(&bytes)
     }
 }
 
 /// Digest of `value`'s canonical byte encoding.
 pub fn digest<T: ToBytes>(value: &T) -> Digest {
-    // For the blanket `Storable`-derived impl, `Self::Error` is
-    // `cbor2::ser::Error`, whose only cases are an I/O failure from the
-    // writer, or a value CBOR can't represent (e.g. NaN as a map key).
-    // Writing to an in-memory `Vec<u8>` rules out the first; every
-    // ordinary struct/enum/string/integer/collection type -- the only
-    // things anyone should be marking `Storable` -- rules out the
-    // second.
-    let bytes = value.to_bytes().unwrap_or_else(|_| panic!("serializing to bytes should not fail"));
-    let mut h = Hasher::new();
-    h.part(bytes);
-    h.digest()
+    value
+        .digest()
+        // Panicking here instead of returning a Result is safe for every ToBytes impl in this
+        // crate.
+        // - Vec<u8>/Bytes: Self::Error is Infallible, so to_bytes() can't fail.
+        // - the Storable-derived blanket impl only fails on:
+        //   1. an I/O error from the writer, and this is impossible because writing into an
+        //      in-memory Vec<u8>.
+        //   2. a value CBOR can't represent, like NaN as a map key. `derive(Serialize)` always
+        //      turns struct fields into string keys, and `HashMap`/`BTreeMap` require `Eq +
+        //      Hash`/`Ord` on their key type, which `f32`/`f64` don't implement. So ordinary types,
+        //      the only kinds of types anyone should mark Storable, can't put a float (let alone a
+        //      NaN) in a map key position to begin with.
+        .expect("serializing to bytes failed")
 }
 
 /// A digest's raw bytes.
@@ -175,22 +195,16 @@ impl Hasher {
 
     /// Fold a part of known `len` bytes, read from `r`, into the digest.
     ///
-    /// `r` is trusted to be exactly `len` bytes; an `AsyncRead` cannot
-    /// report its own length up front without being fully consumed, so the
-    /// caller must already know it. Returns an error if `r` runs out
-    /// before `len` bytes are read; does not check for extra trailing
-    /// bytes in `r` beyond `len`.
+    /// `len` is what says where this blob ends: a source that can outlive
+    /// a single blob (a persistent socket, a multiplexed stream),
+    /// EOF only marks the end of the whole connection, not of this blob.
     ///
-    /// Why `len` up front matters most: for a source that can outlive a
-    /// single blob (a persistent socket, a multiplexed stream), EOF only
-    /// marks the end of the whole connection, not of this blob -- `len`
-    /// is what says where this blob ends. It also lets this catch a
-    /// truncated `r` as an error, and lets a caller like
-    /// `Store::copy_from_file` skip a second read+write pass once the
-    /// resulting digest turns out to already exist. REAPI's `ByteStream`
-    /// needs the same thing for the same reason: its upload streams
-    /// carry a blob's size (and an explicit `finish_write` flag) since
-    /// the stream itself outlives any one blob.
+    /// `r` is trusted to have at least `len` bytes available; an
+    /// `AsyncRead` cannot report its own length up front without being
+    /// fully consumed, so the caller must already know it. Returns an
+    /// error if `r` runs out before `len` bytes are read. Reads exactly
+    /// `len` bytes and no more, so any bytes in `r` beyond that are left
+    /// untouched -- neither read nor checked.
     pub async fn read_from(
         &mut self,
         len: u64,

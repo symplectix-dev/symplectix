@@ -1,6 +1,9 @@
 //! Tree: a content-addressed collection of blobs.
 
-use std::collections::BTreeMap;
+use std::collections::{
+    BTreeMap,
+    BTreeSet,
+};
 
 /// What a `Tree` entry's name points to: a file's content, or a nested
 /// `Tree`, each referenced by digest rather than embedded.
@@ -26,7 +29,9 @@ pub struct Tree {
     /// Recording them here keeps them from looking unreferenced to a GC
     /// walking the CAS from live roots -- `entries` alone can't express
     /// "reachable but not a real file", since every entry is materialized.
-    interns: Vec<cas::Digest>,
+    /// A digest is either reachable via this tree or not, so this is a
+    /// set: interning the same digest twice doesn't change the tree.
+    interns: BTreeSet<cas::Digest>,
 }
 
 impl Tree {
@@ -35,9 +40,7 @@ impl Tree {
         entries: impl IntoIterator<Item = (String, Node)>,
         interns: impl IntoIterator<Item = cas::Digest>,
     ) -> Self {
-        let mut interns: Vec<cas::Digest> = interns.into_iter().collect();
-        interns.sort();
-        Tree { entries: entries.into_iter().collect(), interns }
+        Tree { entries: entries.into_iter().collect(), interns: interns.into_iter().collect() }
     }
 }
 
@@ -138,5 +141,12 @@ mod tests {
         let a = digest(b"a");
         let b = digest(b"b");
         assert_eq!(Tree::new([], [a, b]).interns, Tree::new([], [b, a]).interns);
+    }
+
+    #[test]
+    fn tree_interns_are_deduplicated() {
+        let a = digest(b"a");
+        assert_eq!(Tree::new([], [a, a]).interns.len(), 1);
+        assert_eq!(cas::digest(&Tree::new([], [a, a])), cas::digest(&Tree::new([], [a])));
     }
 }

@@ -3,6 +3,7 @@
 mod hash;
 mod store;
 
+pub use bytes::Bytes;
 pub use hash::{
     Digest,
     FromBytes,

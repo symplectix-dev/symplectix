@@ -9,6 +9,7 @@ rust.library(
     ],
     visibility = ["//visibility:public"],
     deps = [
+        "@crates//:bytes",
         "@crates//:cbor2",
         "@crates//:moka",
         "@crates//:serde",

@@ -73,20 +73,10 @@ impl cas::Storable for Command {}
 /// - `Reduce`: a sequential accumulate-then-finalize call to an already-running, persistent
 ///   process.
 ///
-/// The three need different calling protocols, so the distinction is
-/// made at the type level rather than discovered at call time (e.g. via
-/// a schema lookup or a live capability-query RPC): a caller can tell
-/// which one it has directly from the value, with nothing else to
-/// resolve first. This also means the same `command`/`config` used as
-/// `Map` vs `Reduce` are deliberately different `Function`s (different
-/// digests), since they are different calling contracts even when
-/// backed by the same process.
-///
-/// `config` is a `Tree` holding whatever extra metadata a long-running
-/// service needs that a one-shot `Command` doesn't (protocol, port,
-/// schema, ...) -- still unsettled which of those matter, so rather than
-/// guessing a fixed set of fields now, they live as files in an opaque
-/// config `Tree`.
+/// TODO: add a field for which OCI image the VM boots from. The image is
+/// used directly as the VM's boot rootfs; `config`'s `Tree` is then
+/// materialized inside the already-booted VM, on top of it. The two are
+/// not merged or resolved into each other here.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Function {
     Command(cas::Digest),
@@ -134,7 +124,7 @@ mod tests {
 
     fn store() -> (testing::TempDir, cas::Store) {
         let dir = testing::tempdir();
-        let store = cas::Store::create(dir.path(), 100).unwrap();
+        let store = cas::Store::create(dir.path()).unwrap();
         (dir, store)
     }
 
@@ -267,7 +257,7 @@ mod tests {
 
         // The config: a Tree with one file entry, itself resolvable from
         // the store.
-        let file_digest = store.put(&b"port: 8080".to_vec()).await.unwrap();
+        let file_digest = store.put(&cas::Bytes::from_static(b"port: 8080")).await.unwrap();
         let config = Tree::new([("config.yaml".to_string(), Node::Blob(file_digest))], []);
         let config_digest = store.put(&config).await.unwrap();
 
@@ -293,6 +283,9 @@ mod tests {
         assert_eq!(resolved_config, config);
 
         // The file the config tree references is itself resolvable.
-        assert_eq!(store.get(&file_digest).await.unwrap(), Some(b"port: 8080".to_vec()));
+        assert_eq!(
+            store.get(&file_digest).await.unwrap(),
+            Some(cas::Bytes::from_static(b"port: 8080"))
+        );
     }
 }

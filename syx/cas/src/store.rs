@@ -5,7 +5,9 @@ use std::future::{
 };
 use std::io;
 use std::path::PathBuf;
+use std::time::Duration;
 
+use bytes::Bytes;
 use moka::future::Cache;
 use tokio::io::{
     AsyncRead,
@@ -24,25 +26,25 @@ use crate::hash::{
     ToBytes,
 };
 
-impl ToBytes for Vec<u8> {
-    type Error = std::convert::Infallible;
-
-    fn to_bytes(&self) -> Result<Vec<u8>, Self::Error> {
-        // TODO: Remove clone.
-        Ok(self.clone())
-    }
-}
-
-impl FromBytes for Vec<u8> {
-    type Error = std::convert::Infallible;
-
-    fn from_bytes(bytes: &[u8]) -> Result<Self, Self::Error> {
-        Ok(bytes.to_vec())
-    }
-}
-
 /// A content-addressed store mapping `Digest` keys to blob content: files
 /// under `root`, sharded the same way as `Digest::hex`.
+///
+/// TODO: no GC yet. The likely shape:
+/// When given a set of digests to delete, a digest not in `cache` has
+/// no recent write activity, so delete it right away; a digest that is
+/// in `cache` gets recorded in a separate pending-delete marker instead,
+/// and `cache`'s own `eviction_listener` does the actual `fs::remove_file`
+/// once `cache` naturally lets go of that digest.
+///
+/// Open question:
+/// What happens if the same digest is `put` again while marked?
+/// - delete could still win regardless
+/// - the write path could clear the marker
+///
+/// Also need to check whether `eviction_listener` fires for entries still
+/// live in `cache` when `Store` itself drops. If not, `Store` will need
+/// its own `Drop` impl that synchronously deletes whatever is still in
+/// the pending-delete marker at that point.
 pub struct Store {
     root:  PathBuf,
     /// Coalesces concurrent write calls for the same
@@ -51,12 +53,44 @@ pub struct Store {
 }
 
 impl Store {
-    /// Open a store rooted at `root`, creating `root` and its `tmp`
+    const TMP: &str = ".tmp";
+    const CACHE_TIME_TO_LIVE: Duration = Duration::from_secs(60);
+    const CACHE_MAX_CAPACITY: u64 = 10_000;
+
+    /// Open a store rooted at `root`, creating `root` and its `.tmp`
     /// subdirectory if they don't already exist.
-    pub fn create(root: impl Into<PathBuf>, max_capacity: u64) -> io::Result<Self> {
+    ///
+    /// `persist` relies on `root/.tmp`: a rename between every digest-addressed
+    /// path and `root/.tmp` must be atomic. That's checked once here, by actually
+    /// renaming a probe file from `root/.tmp` into `root`.
+    pub fn create(root: impl Into<PathBuf>) -> io::Result<Self> {
         let root = root.into();
-        std::fs::create_dir_all(root.join("tmp"))?;
-        Ok(Store { root, cache: Cache::new(max_capacity) })
+        let tmp = root.join(Self::TMP);
+        std::fs::create_dir_all(&tmp)?;
+
+        let probe = tempfile::NamedTempFile::new_in(&tmp)?;
+        let probe_path = root.join(".probe");
+        probe.persist(&probe_path).map_err(|e| {
+            io::Error::new(
+                e.error.kind(),
+                format!(
+                    "Store requires {root} and {tmp} to be on the same filesystem, \
+                    so that persisting a blob is atomic; renaming a probe file \
+                    between them failed: {err}",
+                    root = root.display(),
+                    tmp = tmp.display(),
+                    err = e.error,
+                ),
+            )
+        })?;
+
+        Ok(Store {
+            root,
+            cache: Cache::builder()
+                .time_to_live(Self::CACHE_TIME_TO_LIVE)
+                .max_capacity(Self::CACHE_MAX_CAPACITY)
+                .build(),
+        })
     }
 
     /// The path content addressed by `digest` whether or not
@@ -70,12 +104,12 @@ impl Store {
     /// Reads the content at `digest`, if present.
     pub async fn get<T: FromBytes>(&self, digest: &Digest) -> io::Result<Option<T>> {
         let bytes = match fs::read(self.path(digest)).await {
-            Ok(bytes) => bytes,
+            Ok(bytes) => Bytes::from(bytes),
             Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
             Err(e) => return Err(e),
         };
 
-        let content = T::from_bytes(&bytes)
+        let content = T::from_bytes(bytes)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("{e:?}")))?;
 
         Ok(Some(content))
@@ -160,19 +194,16 @@ impl Store {
         Ok(digest)
     }
 
-    /// A fresh, empty temp file under `root/tmp` (created in `new`), on
-    /// the same filesystem as every digest-addressed path this store
-    /// persists to, so a later rename into place is atomic.
+    /// A fresh, empty temp file under `root/.tmp`.
     async fn new_temp_file(&self) -> io::Result<tempfile::NamedTempFile> {
-        let dir = self.root.join("tmp");
+        let dir = self.root.join(Self::TMP);
         task::spawn_blocking(move || tempfile::NamedTempFile::new_in(dir))
             .await
             .expect("creating the temp file should not panic")
     }
 
     /// Persist already-in-memory `bytes` at `digest` via a temp file,
-    /// coalescing concurrent writes for the same digest (see
-    /// `ensure_persisted`).
+    /// coalescing concurrent writes for the same digest.
     async fn persist_bytes<T>(&self, digest: Digest, bytes: &T) -> io::Result<()>
     where
         T: AsRef<[u8]>,
@@ -185,12 +216,7 @@ impl Store {
         .await
     }
 
-    /// Ensure `digest` is persisted, running `write` (which produces a
-    /// temp file holding the content) only if it isn't already there.
-    /// Concurrent `put`/`copy_from`/`copy_from_file` calls for the same not-yet-persisted
-    /// digest are coalesced into this single write, rather than each
-    /// redoing it -- a pure performance optimization, not a correctness
-    /// requirement (see `persist`).
+    /// Persist a `file` at `digest`.
     async fn persist_file<F>(&self, digest: Digest, file: F) -> io::Result<()>
     where
         F: Future<Output = io::Result<tempfile::NamedTempFile>>,
@@ -225,10 +251,7 @@ impl Store {
         task::spawn_blocking(move || -> io::Result<()> {
             // Read-only: a digest is only valid as long as the bytes it
             // was computed from never change, so CAS entries must not be
-            // mutable once written. On Unix, deleting a file only needs
-            // write permission on its directory, so this doesn't block
-            // cleanup. But I'm not sure abount Windows. Removing a
-            // Store's root there may need extra handling.
+            // mutable once written.
             let mut perms = tmp.as_file().metadata()?.permissions();
             perms.set_readonly(true);
             tmp.as_file().set_permissions(perms)?;
@@ -269,7 +292,7 @@ mod tests {
 
     fn store() -> (testing::TempDir, Store) {
         let dir = testing::tempdir();
-        let store = Store::create(dir.path(), 100).unwrap();
+        let store = Store::create(dir.path()).unwrap();
         (dir, store)
     }
 
@@ -282,21 +305,21 @@ mod tests {
     #[tokio::test]
     async fn get_missing_digest_is_none() {
         let (_dir, store) = store();
-        assert_eq!(store.get::<Vec<u8>>(&digest(b"missing")).await.unwrap(), None);
+        assert_eq!(store.get::<Bytes>(&digest(b"missing")).await.unwrap(), None);
     }
 
     #[tokio::test]
     async fn put_then_get() {
         let (_dir, store) = store();
-        let d = store.put(&b"hello".to_vec()).await.unwrap();
+        let d = store.put(&Bytes::from_static(b"hello")).await.unwrap();
         assert!(store.exists(&d).await.unwrap());
-        assert_eq!(store.get(&d).await.unwrap(), Some(b"hello".to_vec()));
+        assert_eq!(store.get(&d).await.unwrap(), Some(Bytes::from_static(b"hello")));
     }
 
     #[tokio::test]
     async fn put_returns_the_content_digest() {
         let (_dir, store) = store();
-        let d = store.put(&b"hello".to_vec()).await.unwrap();
+        let d = store.put(&Bytes::from_static(b"hello")).await.unwrap();
         assert_eq!(d, digest(b"hello"));
     }
 
@@ -305,11 +328,11 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
 
         let (_dir, store) = store();
-        let d = store.put(&b"hello".to_vec()).await.unwrap();
+        let d = store.put(&Bytes::from_static(b"hello")).await.unwrap();
 
         // Make the destination's parent directory read-only: if the
         // second put below actually tried to persist (rename a temp
-        // file, created elsewhere under `root/tmp`, into this
+        // file, created elsewhere under `root/.tmp`, into this
         // directory), that would now fail with a permission error.
         let path = store.path(&d);
         let dir = path.parent().unwrap();
@@ -318,7 +341,7 @@ mod tests {
         readonly.set_mode(0o500);
         std::fs::set_permissions(dir, readonly).unwrap();
 
-        let d2 = store.put(&b"hello".to_vec()).await.unwrap();
+        let d2 = store.put(&Bytes::from_static(b"hello")).await.unwrap();
         assert_eq!(d, d2);
 
         // Restore write permission so the tempdir can clean itself up.
@@ -331,18 +354,18 @@ mod tests {
         // instance wrote: proof it actually landed on disk.
         let dir = testing::tempdir();
 
-        let writer = Store::create(dir.path(), 100).unwrap();
-        let d = writer.put(&b"hello".to_vec()).await.unwrap();
+        let writer = Store::create(dir.path()).unwrap();
+        let d = writer.put(&Bytes::from_static(b"hello")).await.unwrap();
 
-        let reader = Store::create(dir.path(), 100).unwrap();
+        let reader = Store::create(dir.path()).unwrap();
         assert!(reader.exists(&d).await.unwrap());
-        assert_eq!(reader.get(&d).await.unwrap(), Some(b"hello".to_vec()));
+        assert_eq!(reader.get(&d).await.unwrap(), Some(Bytes::from_static(b"hello")));
     }
 
     #[tokio::test]
     async fn content_is_sharded_under_root() {
         let (dir, store) = store();
-        let d = store.put(&b"hello".to_vec()).await.unwrap();
+        let d = store.put(&Bytes::from_static(b"hello")).await.unwrap();
 
         let path = dir.path().join(d.hex(2));
         assert_eq!(std::fs::read(path).unwrap(), b"hello".to_vec());
@@ -362,7 +385,7 @@ mod tests {
         let len = file.metadata().await.unwrap().len();
         let d = store.copy_from_file(len, &mut file).await.unwrap();
         assert_eq!(d, digest(b"hello"));
-        assert_eq!(store.get(&d).await.unwrap(), Some(b"hello".to_vec()));
+        assert_eq!(store.get(&d).await.unwrap(), Some(Bytes::from_static(b"hello")));
     }
 
     #[tokio::test]
@@ -375,14 +398,14 @@ mod tests {
         let mut file = fs::File::open(&src).await.unwrap();
         let len = file.metadata().await.unwrap().len();
         let from_reader = store.copy_from_file(len, &mut file).await.unwrap();
-        let from_bytes = store.put(&b"hello".to_vec()).await.unwrap();
+        let from_bytes = store.put(&Bytes::from_static(b"hello")).await.unwrap();
         assert_eq!(from_reader, from_bytes);
     }
 
     #[tokio::test]
     async fn copy_from_produces_the_same_digest_as_put() {
         let (_dir, store) = store();
-        let content = b"hello".to_vec();
+        let content = Bytes::from_static(b"hello");
         let mut cursor = io::Cursor::new(&content);
         let d = store.copy_from(content.len() as u64, &mut cursor).await.unwrap();
         assert_eq!(d, digest(b"hello"));
@@ -392,7 +415,7 @@ mod tests {
     #[tokio::test]
     async fn path_points_at_the_stored_file() {
         let (dir, store) = store();
-        let d = store.put(&b"hello".to_vec()).await.unwrap();
+        let d = store.put(&Bytes::from_static(b"hello")).await.unwrap();
 
         let path = store.path(&d);
         assert_eq!(path, dir.path().join(d.hex(2)));
@@ -404,7 +427,7 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
 
         let (dir, store) = store();
-        let d = store.put(&b"hello".to_vec()).await.unwrap();
+        let d = store.put(&Bytes::from_static(b"hello")).await.unwrap();
 
         let path = dir.path().join(d.hex(2));
         let perms = std::fs::metadata(&path).unwrap().permissions();

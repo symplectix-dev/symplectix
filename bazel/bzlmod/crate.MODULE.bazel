@@ -27,6 +27,10 @@ crate.spec(
     version = "1",
 )
 crate.spec(
+    package = "bytes",
+    version = "1",
+)
+crate.spec(
     package = "bytemuck",
     version = "1.25",
 )
