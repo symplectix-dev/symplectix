@@ -3,6 +3,7 @@
 mod common;
 use common::{
     Example,
+    digest,
     digest_bytes,
     digest_parts,
 };
@@ -16,7 +17,7 @@ fn hashing_the_same_bytes_twice_gives_the_same_digest() {
 fn hashing_the_same_struct_twice_gives_the_same_digest() {
     let a = Example { name: "foo".to_string(), count: 1 };
     let b = Example { name: "foo".to_string(), count: 1 };
-    assert_eq!(cas::digest(&a), cas::digest(&b));
+    assert_eq!(digest(&a), digest(&b));
 }
 
 #[test]

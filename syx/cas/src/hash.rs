@@ -16,21 +16,11 @@ use tokio::io::{
 };
 
 /// Digest of `value`'s canonical byte encoding.
-pub fn digest<T: ToBytes>(value: &T) -> Digest {
-    let bytes = value
-        .to_bytes()
-        // Panicking here instead of returning a Result is safe for Vec<u8>/Bytes: Self::Error is
-        // Infallible, so to_bytes() can't fail. For a type whose ToBytes goes through CBOR (e.g.
-        // via cbor2::to_canonical_vec), the same holds in practice: that only fails on an I/O
-        // error from the writer (impossible when writing into an in-memory Vec<u8>) or a value
-        // CBOR can't represent, like NaN as a map key. `derive(Serialize)` always turns struct
-        // fields into string keys, and `HashMap`/`BTreeMap` require `Eq + Hash`/`Ord` on their key
-        // type, which `f32`/`f64` don't implement, so an ordinary derived struct/enum can't put a
-        // float (let alone a NaN) in a map key position to begin with.
-        .expect("serializing to bytes failed");
+pub fn digest<T: ToBytes>(value: &T) -> Result<Digest, T::Error> {
+    let bytes = value.to_bytes()?;
     let mut h = Hasher::new();
     h.part(bytes);
-    h.digest()
+    Ok(h.digest())
 }
 
 /// This value's canonical byte encoding.

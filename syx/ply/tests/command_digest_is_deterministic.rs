@@ -1,11 +1,14 @@
 //! `Command`'s digest is deterministic.
 
 mod common;
-use common::command;
+use common::{
+    command,
+    digest,
+};
 
 #[test]
 fn hashing_the_same_command_twice_gives_the_same_digest() {
     let a = command("echo", &["hi"]);
     let b = command("echo", &["hi"]);
-    assert_eq!(cas::digest(&a), cas::digest(&b));
+    assert_eq!(digest(&a), digest(&b));
 }

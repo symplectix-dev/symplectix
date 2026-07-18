@@ -3,6 +3,7 @@
 mod common;
 use common::{
     Example,
+    digest,
     digest_bytes,
     digest_parts,
 };
@@ -17,8 +18,8 @@ fn different_struct_fields_produce_different_digests() {
     let base = Example { name: "foo".to_string(), count: 1 };
     let other_name = Example { name: "bar".to_string(), count: 1 };
     let other_count = Example { name: "foo".to_string(), count: 2 };
-    assert_ne!(cas::digest(&base), cas::digest(&other_name));
-    assert_ne!(cas::digest(&base), cas::digest(&other_count));
+    assert_ne!(digest(&base), digest(&other_name));
+    assert_ne!(digest(&base), digest(&other_count));
 }
 
 #[test]

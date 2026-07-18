@@ -47,3 +47,9 @@ pub fn store() -> (testing::TempDir, cas::Store) {
     let store = cas::Store::open(dir.path()).unwrap();
     (dir, store)
 }
+
+/// `cas::digest`, unwrapped: every `ToBytes` impl used in this suite is
+/// expected to succeed, so tests don't need to handle the error case.
+pub fn digest<T: cas::ToBytes>(value: &T) -> cas::Digest {
+    cas::digest(value).unwrap()
+}
