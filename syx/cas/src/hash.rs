@@ -25,6 +25,7 @@ pub trait ToBytes {
     type Error: fmt::Debug;
     fn to_bytes(&self) -> Result<Bytes, Self::Error>;
 
+    /// Digest of `value`'s canonical byte encoding.
     fn digest(&self) -> Result<Digest, Self::Error> {
         self.to_bytes().map(|bytes| {
             let mut h = Hasher::new();
