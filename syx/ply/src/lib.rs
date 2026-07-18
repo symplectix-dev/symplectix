@@ -1,4 +1,4 @@
-//! ply: content addressing actions.
+//! ply: content addressing functions.
 
 mod blob;
 mod function;

@@ -1,7 +1,7 @@
 //! A `Store`'s behavior when stored content is corrupted on disk.
 
-mod support;
-use support::{
+mod common;
+use common::{
     Example,
     store,
 };

@@ -1,7 +1,7 @@
 //! Content stored in a `Store` is preserved faithfully.
 
-mod support;
-use support::{
+mod common;
+use common::{
     digest_bytes,
     store,
 };

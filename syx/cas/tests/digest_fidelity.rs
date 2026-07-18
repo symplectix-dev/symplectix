@@ -1,7 +1,7 @@
 //! A `Digest`'s bytes are preserved faithfully.
 
-mod support;
-use support::digest_bytes;
+mod common;
+use common::digest_bytes;
 
 #[test]
 fn digest_bytes_round_trip_through_digest_new() {

@@ -1,8 +1,8 @@
 //! A `Store`'s returned digest doesn't depend on which method ingested
 //! the content.
 
-mod support;
-use support::{
+mod common;
+use common::{
     digest_bytes,
     store,
 };

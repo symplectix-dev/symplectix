@@ -1,7 +1,7 @@
 //! Digest is deterministic.
 
-mod support;
-use support::{
+mod common;
+use common::{
     Example,
     digest_bytes,
     digest_parts,

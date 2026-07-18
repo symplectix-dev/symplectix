@@ -1,7 +1,7 @@
 //! `Hasher::read_from` behavior.
 
-mod support;
-use support::digest_bytes;
+mod common;
+use common::digest_bytes;
 
 #[tokio::test]
 async fn hashing_via_read_from_matches_hashing_in_memory_bytes() {

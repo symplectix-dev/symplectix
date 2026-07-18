@@ -45,7 +45,7 @@ rust.test_suite(
         "tests/store_missing.rs",
         "tests/store_persists.rs",
     ],
-    shared_srcs = ["tests/support.rs"],
+    shared_srcs = ["tests/common/mod.rs"],
     data = ["//:.rustfmt.toml"],
     deps = [
         ":cas",

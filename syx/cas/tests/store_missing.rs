@@ -1,7 +1,7 @@
 //! A digest that was never stored is reported as absent, not an error.
 
-mod support;
-use support::{
+mod common;
+use common::{
     digest_bytes,
     store,
 };

@@ -1,7 +1,7 @@
 //! `Digest::hex` formatting.
 
-mod support;
-use support::digest_bytes;
+mod common;
+use common::digest_bytes;
 
 #[test]
 fn hex_with_depth_zero_matches_plain_hex_formatting() {

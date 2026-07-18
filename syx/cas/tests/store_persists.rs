@@ -1,7 +1,7 @@
 //! What a `Store` persists to disk.
 
-mod support;
-use support::store;
+mod common;
+use common::store;
 
 #[tokio::test]
 async fn content_persists_across_store_instances() {

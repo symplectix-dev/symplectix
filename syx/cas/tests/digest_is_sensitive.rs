@@ -1,7 +1,7 @@
 //! Digest is sensitive to its input.
 
-mod support;
-use support::{
+mod common;
+use common::{
     Example,
     digest_bytes,
     digest_parts,

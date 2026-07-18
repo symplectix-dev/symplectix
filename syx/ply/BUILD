@@ -15,24 +15,26 @@ rust.library(
     ],
 )
 
-rust.test(
-    name = "ply_test",
+rust.test_suite(
+    name = "ply_test_suite",
     size = "small",
-    crate = ":ply",
+    srcs = [
+        "tests/command_digest_is_deterministic.rs",
+        "tests/command_digest_is_sensitive.rs",
+        "tests/function_digest_is_deterministic.rs",
+        "tests/function_digest_is_sensitive.rs",
+        "tests/function_resolves_from_store.rs",
+        "tests/tree_digest_is_deterministic.rs",
+        "tests/tree_digest_is_sensitive.rs",
+        "tests/tree_entries.rs",
+        "tests/tree_interns.rs",
+    ],
+    shared_srcs = ["tests/common/mod.rs"],
     data = ["//:.rustfmt.toml"],
     deps = [
+        ":ply",
+        "//syx/cas",
         "//syx/testing",
         "@crates//:tokio",
     ],
 )
-
-# rust.test_suite(
-#     name = "ply_test_suite",
-#     size = "small",
-#     srcs = [
-#         "tests/simple.rs",
-#         "tests/thread.rs",
-#     ],
-#     shared_srcs = ["tests/helper/mod.rs"],
-#     deps = [":plying"],
-# )
