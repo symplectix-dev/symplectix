@@ -72,9 +72,8 @@ impl Command {
 ///   process.
 ///
 /// TODO: add a field for which OCI image the VM boots from. The image is
-/// used directly as the VM's boot rootfs; `config`'s `Tree` is then
-/// materialized inside the already-booted VM, on top of it. The two are
-/// not merged or resolved into each other here.
+/// used directly as the VM's boot rootfs; `config` is then materialized inside
+/// the booted VM, on top of it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Function {
     Command(cas::Digest),
