@@ -44,8 +44,6 @@ impl Tree {
     }
 }
 
-cas::storable!(Tree);
-
 #[cfg(test)]
 mod tests {
     use super::*;

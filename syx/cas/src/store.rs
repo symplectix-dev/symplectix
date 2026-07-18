@@ -287,7 +287,21 @@ mod tests {
         value: u32,
     }
 
-    crate::storable!(Example);
+    impl ToBytes for Example {
+        type Error = cbor2::ser::Error;
+
+        fn to_bytes(&self) -> Result<Bytes, Self::Error> {
+            cbor2::to_canonical_vec(self).map(Bytes::from)
+        }
+    }
+
+    impl FromBytes for Example {
+        type Error = cbor2::de::Error;
+
+        fn from_bytes(bytes: Bytes) -> Result<Self, Self::Error> {
+            cbor2::from_slice(&bytes)
+        }
+    }
 
     fn store() -> (testing::TempDir, Store) {
         let dir = testing::tempdir();

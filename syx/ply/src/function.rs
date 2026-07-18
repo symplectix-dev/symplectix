@@ -61,8 +61,6 @@ impl Command {
     }
 }
 
-cas::storable!(Command);
-
 /// A reference to something runnable, addressed by how it's invoked:
 ///
 /// - `Command`: run once, directly, against input supplied at call time -- not part of this digest,
@@ -103,8 +101,6 @@ impl Function {
         Function::Reduce { command, config }
     }
 }
-
-cas::storable!(Function);
 
 #[cfg(test)]
 mod tests {

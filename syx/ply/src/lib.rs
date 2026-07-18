@@ -2,6 +2,7 @@
 
 mod blob;
 mod function;
+mod storable;
 
 pub use blob::{
     Node,

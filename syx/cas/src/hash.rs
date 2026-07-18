@@ -15,6 +15,24 @@ use tokio::io::{
     AsyncWriteExt as _,
 };
 
+/// Digest of `value`'s canonical byte encoding.
+pub fn digest<T: ToBytes>(value: &T) -> Digest {
+    let bytes = value
+        .to_bytes()
+        // Panicking here instead of returning a Result is safe for Vec<u8>/Bytes: Self::Error is
+        // Infallible, so to_bytes() can't fail. For a type whose ToBytes goes through CBOR (e.g.
+        // via cbor2::to_canonical_vec), the same holds in practice: that only fails on an I/O
+        // error from the writer (impossible when writing into an in-memory Vec<u8>) or a value
+        // CBOR can't represent, like NaN as a map key. `derive(Serialize)` always turns struct
+        // fields into string keys, and `HashMap`/`BTreeMap` require `Eq + Hash`/`Ord` on their key
+        // type, which `f32`/`f64` don't implement, so an ordinary derived struct/enum can't put a
+        // float (let alone a NaN) in a map key position to begin with.
+        .expect("serializing to bytes failed");
+    let mut h = Hasher::new();
+    h.part(bytes);
+    h.digest()
+}
+
 /// This value's canonical byte encoding.
 ///
 /// Implementations must keep this consistent with `FromBytes`:
@@ -24,15 +42,6 @@ use tokio::io::{
 pub trait ToBytes {
     type Error: fmt::Debug;
     fn to_bytes(&self) -> Result<Bytes, Self::Error>;
-
-    /// Digest of `value`'s canonical byte encoding.
-    fn digest(&self) -> Result<Digest, Self::Error> {
-        self.to_bytes().map(|bytes| {
-            let mut h = Hasher::new();
-            h.part(bytes);
-            h.digest()
-        })
-    }
 }
 
 /// The inverse of `ToBytes`.
@@ -54,59 +63,6 @@ impl FromBytes for Bytes {
     fn from_bytes(bytes: Bytes) -> Result<Self, Self::Error> {
         Ok(bytes)
     }
-}
-
-/// Implements `ToBytes`/`FromBytes` for `$ty` via its own
-/// `Serialize`/`Deserialize` impls, using canonical CBOR encoding (RFC
-/// 8949 deterministic encoding: smallest integer forms, definite-length
-/// items, sorted map keys).
-///
-/// Not a blanket impl over a marker trait: a blanket `impl<T: Marker>
-/// ToBytes for T` can only live in this crate (the orphan rule doesn't
-/// consider a trait bound on `T` enough to make `T` local), so a
-/// downstream crate wanting this for its own types can't write one. This
-/// macro expands to concrete, per-type impls instead, which downstream
-/// crates can invoke freely.
-#[macro_export]
-macro_rules! storable {
-    ($ty:ty) => {
-        impl $crate::ToBytes for $ty {
-            type Error = ::cbor2::ser::Error;
-
-            fn to_bytes(&self) -> Result<$crate::Bytes, Self::Error> {
-                // Plain `cbor2::to_vec` is not guaranteed deterministic (RFC 8949
-                // allows non-canonical encodings of the same value), so this must
-                // go through `to_canonical_vec` specifically.
-                ::cbor2::to_canonical_vec(self).map($crate::Bytes::from)
-            }
-        }
-
-        impl $crate::FromBytes for $ty {
-            type Error = ::cbor2::de::Error;
-
-            fn from_bytes(bytes: $crate::Bytes) -> Result<Self, Self::Error> {
-                ::cbor2::from_slice(&bytes)
-            }
-        }
-    };
-}
-
-/// Digest of `value`'s canonical byte encoding.
-pub fn digest<T: ToBytes>(value: &T) -> Digest {
-    value
-        .digest()
-        // Panicking here instead of returning a Result is safe for every ToBytes impl in this
-        // crate, and for anything built with the `storable!` macro.
-        // - Vec<u8>/Bytes: Self::Error is Infallible, so to_bytes() can't fail.
-        // - types from `storable!` only fail on:
-        //   1. an I/O error from the writer, and this is impossible because writing into an
-        //      in-memory Vec<u8>.
-        //   2. a value CBOR can't represent, like NaN as a map key. `derive(Serialize)` always
-        //      turns struct fields into string keys, and `HashMap`/`BTreeMap` require `Eq +
-        //      Hash`/`Ord` on their key type, which `f32`/`f64` don't implement. So ordinary types,
-        //      the only kinds of types anyone should use `storable!` on, can't put a float (let
-        //      alone a NaN) in a map key position to begin with.
-        .expect("serializing to bytes failed")
 }
 
 /// A digest's raw bytes.
@@ -287,7 +243,21 @@ mod tests {
         count: u32,
     }
 
-    crate::storable!(Example);
+    impl ToBytes for Example {
+        type Error = cbor2::ser::Error;
+
+        fn to_bytes(&self) -> Result<Bytes, Self::Error> {
+            cbor2::to_canonical_vec(self).map(Bytes::from)
+        }
+    }
+
+    impl FromBytes for Example {
+        type Error = cbor2::de::Error;
+
+        fn from_bytes(bytes: Bytes) -> Result<Self, Self::Error> {
+            cbor2::from_slice(&bytes)
+        }
+    }
 
     #[test]
     fn digest_is_deterministic() {

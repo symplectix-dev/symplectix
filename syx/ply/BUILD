@@ -6,6 +6,7 @@ rust.library(
         "src/blob.rs",
         "src/function.rs",
         "src/lib.rs",
+        "src/storable.rs",
     ],
     deps = [
         "//syx/cas",
