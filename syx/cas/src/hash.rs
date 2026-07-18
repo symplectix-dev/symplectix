@@ -186,7 +186,7 @@ impl Hasher {
     /// marks the end of the whole connection, not of this blob -- `len`
     /// is what says where this blob ends. It also lets this catch a
     /// truncated `r` as an error, and lets a caller like
-    /// `Store::copy_from` skip a second read+write pass once the
+    /// `Store::copy_from_file` skip a second read+write pass once the
     /// resulting digest turns out to already exist. REAPI's `ByteStream`
     /// needs the same thing for the same reason: its upload streams
     /// carry a blob's size (and an explicit `finish_write` flag) since

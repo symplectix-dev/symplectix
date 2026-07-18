@@ -47,8 +47,6 @@ pub struct Store {
     root:  PathBuf,
     /// Coalesces concurrent write calls for the same
     /// not-yet-persisted digest into a single write.
-    /// A performance optimization, not something
-    /// anything else here depends on for correctness.
     cache: Cache<Digest, ()>,
 }
 
@@ -95,21 +93,52 @@ impl Store {
             h.digest()
         };
 
-        self.ensure_persisted(digest, async {
-            let tmp = self.new_temp_file().await?;
-            fs::write(tmp.path(), &bytes).await?;
-            Ok(tmp)
-        })
-        .await?;
+        self.persist_bytes(digest, &bytes).await?;
+        Ok(digest)
+    }
 
+    /// Store the content read from `r` of `len` bytes,
+    /// addressed by its own digest.
+    ///
+    /// If `len` is small enough, `r` is hashed straight into memory and
+    /// handled like `put`. Otherwise, hashing and writing `r` to a temp file
+    /// happen in the same pass. This means that, unlike `copy_from_file`,
+    /// an already-stored duplicate still costs one temp-file write.
+    pub async fn copy_from<R>(&self, len: u64, r: &mut R) -> io::Result<Digest>
+    where
+        R: AsyncRead + Unpin,
+    {
+        const INLINE_MAX_BYTES: u64 = 64 * 1024;
+
+        if len <= INLINE_MAX_BYTES {
+            let mut bytes = Vec::with_capacity(len as usize);
+            let digest = {
+                let mut h = Hasher::new();
+                h.tee_read_from(len, r, &mut bytes).await?;
+                h.digest()
+            };
+            self.persist_bytes(digest, &bytes).await?;
+            return Ok(digest);
+        }
+
+        let tmp = self.new_temp_file().await?;
+        let mut file = fs::File::from_std(tmp.as_file().try_clone()?);
+
+        let digest = {
+            let mut h = Hasher::new();
+            h.tee_read_from(len, r, &mut file).await?;
+            h.digest()
+        };
+
+        self.persist_file(digest, future::ready(Ok(tmp))).await?;
         Ok(digest)
     }
 
     /// Store the content read from a seekable `r` of `len` bytes.
     ///
     /// Reads `r` once to compute the digest; only if that digest isn't already
-    /// stored does it seek back to the start and copy `r` in.
-    pub async fn copy_from<R>(&self, len: u64, r: &mut R) -> io::Result<Digest>
+    /// stored, seek back to the start and copy `r` in.
+    pub async fn copy_from_file<R>(&self, len: u64, r: &mut R) -> io::Result<Digest>
     where
         R: AsyncRead + AsyncSeek + Unpin,
     {
@@ -119,41 +148,15 @@ impl Store {
             h.digest()
         };
 
-        self.ensure_persisted(digest, async {
+        self.persist_file(digest, async {
             r.rewind().await?;
             let tmp = self.new_temp_file().await?;
-            let mut file = fs::File::create(tmp.path()).await?;
+            let mut file = fs::File::from_std(tmp.as_file().try_clone()?);
             tokio::io::copy(r, &mut file).await?;
             Ok(tmp)
         })
         .await?;
 
-        Ok(digest)
-    }
-
-    /// Store the content read from a one-shot `r` of `len` bytes
-    /// that can't be rewound (e.g. a socket), addressed by its own digest.
-    ///
-    /// Hashes and writes `r` in a single pass, so unlike `copy_from`, an
-    /// already-stored duplicate still costs one temp-file write -- the
-    /// write happens before the digest is even known, so there's nothing
-    /// to key a coalescing check on yet. Only the persist step that
-    /// follows (rename, read-only) is coalesced with other concurrent
-    /// callers, via `ensure_persisted`.
-    pub async fn copy_from_stream<R>(&self, len: u64, r: &mut R) -> io::Result<Digest>
-    where
-        R: AsyncRead + Unpin,
-    {
-        let tmp = self.new_temp_file().await?;
-        let mut file = fs::File::create(tmp.path()).await?;
-
-        let digest = {
-            let mut h = Hasher::new();
-            h.tee_read_from(len, r, &mut file).await?;
-            h.digest()
-        };
-
-        self.ensure_persisted(digest, future::ready(Ok(tmp))).await?;
         Ok(digest)
     }
 
@@ -167,13 +170,28 @@ impl Store {
             .expect("creating the temp file should not panic")
     }
 
+    /// Persist already-in-memory `bytes` at `digest` via a temp file,
+    /// coalescing concurrent writes for the same digest (see
+    /// `ensure_persisted`).
+    async fn persist_bytes<T>(&self, digest: Digest, bytes: &T) -> io::Result<()>
+    where
+        T: AsRef<[u8]>,
+    {
+        self.persist_file(digest, async {
+            let tmp = self.new_temp_file().await?;
+            fs::write(tmp.path(), bytes.as_ref()).await?;
+            Ok(tmp)
+        })
+        .await
+    }
+
     /// Ensure `digest` is persisted, running `write` (which produces a
     /// temp file holding the content) only if it isn't already there.
-    /// Concurrent `put`/`copy_from` calls for the same not-yet-persisted
+    /// Concurrent `put`/`copy_from`/`copy_from_file` calls for the same not-yet-persisted
     /// digest are coalesced into this single write, rather than each
     /// redoing it -- a pure performance optimization, not a correctness
     /// requirement (see `persist`).
-    async fn ensure_persisted<F>(&self, digest: Digest, write: F) -> io::Result<()>
+    async fn persist_file<F>(&self, digest: Digest, file: F) -> io::Result<()>
     where
         F: Future<Output = io::Result<tempfile::NamedTempFile>>,
     {
@@ -185,8 +203,8 @@ impl Store {
                 if fs::try_exists(&dst).await? {
                     return Ok(());
                 }
-                let tmp = write.await?;
-                self.persist(tmp, dst).await
+                let src = file.await?;
+                self.persist(src, dst).await
             })
             .await
             .map_err(|e| io::Error::new(e.kind(), e.to_string()))
@@ -331,9 +349,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn copy_from_accepts_a_file_and_streams_it_in() {
+    async fn copy_from_file_accepts_a_file_and_streams_it_in() {
         // A file already on disk (not just in-memory bytes) can be
-        // ingested via copy_from, streamed in without requiring the
+        // ingested via copy_from_file, streamed in without requiring the
         // caller to load it into memory first.
         let (_dir, store) = store();
         let src_dir = testing::tempdir();
@@ -342,13 +360,13 @@ mod tests {
 
         let mut file = fs::File::open(&src).await.unwrap();
         let len = file.metadata().await.unwrap().len();
-        let d = store.copy_from(len, &mut file).await.unwrap();
+        let d = store.copy_from_file(len, &mut file).await.unwrap();
         assert_eq!(d, digest(b"hello"));
         assert_eq!(store.get(&d).await.unwrap(), Some(b"hello".to_vec()));
     }
 
     #[tokio::test]
-    async fn copy_from_produces_the_same_digest_as_put() {
+    async fn copy_from_file_produces_the_same_digest_as_put() {
         let (_dir, store) = store();
         let src_dir = testing::tempdir();
         let src = src_dir.path().join("blob");
@@ -356,17 +374,17 @@ mod tests {
 
         let mut file = fs::File::open(&src).await.unwrap();
         let len = file.metadata().await.unwrap().len();
-        let from_reader = store.copy_from(len, &mut file).await.unwrap();
+        let from_reader = store.copy_from_file(len, &mut file).await.unwrap();
         let from_bytes = store.put(&b"hello".to_vec()).await.unwrap();
         assert_eq!(from_reader, from_bytes);
     }
 
     #[tokio::test]
-    async fn copy_from_stream_produces_the_same_digest_as_put() {
+    async fn copy_from_produces_the_same_digest_as_put() {
         let (_dir, store) = store();
         let content = b"hello".to_vec();
         let mut cursor = io::Cursor::new(&content);
-        let d = store.copy_from_stream(content.len() as u64, &mut cursor).await.unwrap();
+        let d = store.copy_from(content.len() as u64, &mut cursor).await.unwrap();
         assert_eq!(d, digest(b"hello"));
         assert_eq!(store.get(&d).await.unwrap(), Some(content));
     }
