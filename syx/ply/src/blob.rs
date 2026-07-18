@@ -9,7 +9,9 @@ use std::collections::{
 /// `Tree`, each referenced by digest rather than embedded.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Node {
+    /// A file's content.
     Blob(cas::Digest),
+    /// A nested `Tree`.
     Tree(cas::Digest),
 }
 

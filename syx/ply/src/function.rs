@@ -20,6 +20,7 @@ impl Command {
         Command { program: program.into(), args: Vec::new(), env: BTreeMap::new() }
     }
 
+    /// Append one argument.
     pub fn arg<S>(&mut self, arg: S) -> &mut Self
     where
         S: AsRef<str>,
@@ -28,6 +29,7 @@ impl Command {
         self
     }
 
+    /// Append each argument, in order.
     pub fn args<I, S>(&mut self, args: I) -> &mut Self
     where
         I: IntoIterator<Item = S>,
@@ -39,6 +41,7 @@ impl Command {
         self
     }
 
+    /// Set one environment variable.
     pub fn env<K, V>(&mut self, key: K, value: V) -> &mut Self
     where
         K: AsRef<str>,
@@ -48,6 +51,7 @@ impl Command {
         self
     }
 
+    /// Set each environment variable, in order.
     pub fn envs<I, K, V>(&mut self, vars: I) -> &mut Self
     where
         I: IntoIterator<Item = (K, V)>,
@@ -76,9 +80,23 @@ impl Command {
 /// the booted VM, on top of it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Function {
+    /// Run once, directly.
     Command(cas::Digest),
-    Map { command: cas::Digest, config: cas::Digest },
-    Reduce { command: cas::Digest, config: cas::Digest },
+    /// Call an already-running process with independent, per-item requests.
+    Map {
+        /// The persistent process to call.
+        command: cas::Digest,
+        /// Its configuration, a `Tree`.
+        config:  cas::Digest,
+    },
+    /// Call an already-running process with a sequential
+    /// accumulate-then-finalize request.
+    Reduce {
+        /// The persistent process to call.
+        command: cas::Digest,
+        /// Its configuration, a `Tree`.
+        config:  cas::Digest,
+    },
 }
 
 impl Function {
