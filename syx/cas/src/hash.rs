@@ -30,14 +30,20 @@ pub fn digest<T: ToBytes>(value: &T) -> Result<Digest, T::Error> {
 /// same logical value twice (in any order it was built) must always
 /// produce identical bytes.
 pub trait ToBytes {
+    /// Why encoding can fail.
     type Error: fmt::Debug;
+
+    /// Encode `self` into its canonical byte form.
     fn to_bytes(&self) -> Result<Bytes, Self::Error>;
 }
 
 /// The inverse of `ToBytes`.
 /// Build a value back from its own byte encoding.
 pub trait FromBytes: Sized {
+    /// Why decoding can fail.
     type Error: fmt::Debug;
+
+    /// Decode `bytes` back into `Self`.
     fn from_bytes(bytes: Bytes) -> Result<Self, Self::Error>;
 }
 
@@ -62,6 +68,7 @@ impl FromBytes for Bytes {
 pub struct Digest(#[serde(with = "serde_bytes")] [u8; 32]);
 
 impl Digest {
+    /// Wrap already-computed digest bytes.
     pub fn new(bytes: [u8; 32]) -> Self {
         Digest(bytes)
     }

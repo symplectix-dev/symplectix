@@ -26,7 +26,8 @@ async fn command_variant_and_its_command_resolve_from_store() {
         ply::Function::Command(command) => command,
         _ => panic!("expected Command"),
     };
-    let resolved_command: ply::Command = store.get(&resolved_command_digest).await.unwrap().unwrap();
+    let resolved_command: ply::Command =
+        store.get(&resolved_command_digest).await.unwrap().unwrap();
     assert_eq!(resolved_command, command);
 }
 
@@ -60,7 +61,8 @@ async fn map_variant_and_its_command_and_config_resolve_from_store() {
         _ => panic!("expected Map"),
     };
 
-    let resolved_command: ply::Command = store.get(&resolved_command_digest).await.unwrap().unwrap();
+    let resolved_command: ply::Command =
+        store.get(&resolved_command_digest).await.unwrap().unwrap();
     assert_eq!(resolved_command, command);
 
     let resolved_config: ply::Tree = store.get(&resolved_config_digest).await.unwrap().unwrap();
