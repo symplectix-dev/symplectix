@@ -120,7 +120,7 @@ mod tests {
 
     fn store() -> (testing::TempDir, cas::Store) {
         let dir = testing::tempdir();
-        let store = cas::Store::create(dir.path()).unwrap();
+        let store = cas::Store::open(dir.path()).unwrap();
         (dir, store)
     }
 

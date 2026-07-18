@@ -219,14 +219,11 @@ impl Hasher {
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
-
     use super::*;
 
     /// Digest of `parts`, combined in order: equal parts (in the same order)
     /// always give the same digest, different parts almost surely give
-    /// different ones. Pass content alone to content-address it, or fold in
-    /// metadata parts to address that too.
+    /// different ones.
     fn digest<I, T>(parts: I) -> Digest
     where
         I: IntoIterator<Item = T>,
@@ -237,110 +234,15 @@ mod tests {
         h.digest()
     }
 
-    #[test]
-    fn digest_is_deterministic() {
-        assert_eq!(digest([b"a".as_slice()]), digest([b"a".as_slice()]),);
-    }
-
-    #[test]
-    fn digest_from_array_round_trips() {
-        let want = digest([b"hello"]);
-        let bytes: [u8; 32] = want.as_ref().try_into().unwrap();
-        assert_eq!(Digest::new(bytes), want);
-    }
-
-    #[test]
-    fn order_matters() {
-        assert_ne!(
-            digest([b"a".as_slice(), b"b".as_slice()]),
-            digest([b"b".as_slice(), b"a".as_slice()]),
-        );
-    }
-
-    #[test]
-    fn framing_is_injective() {
-        // Length-prefixing must stop `("a", "b")` from colliding with `("ab",)`.
-        assert_ne!(digest([b"a".as_slice(), b"b".as_slice()]), digest([b"ab".as_slice()]));
-    }
-
-    #[test]
-    fn builder_matches_free_function() {
-        let mut h = Hasher::new();
-        h.part(b"a").part(b"b");
-        assert_eq!(h.digest(), digest([b"a".as_slice(), b"b".as_slice()]));
-    }
-
-    #[test]
-    fn empty_parts_is_stable() {
-        assert_eq!(digest(Vec::<&[u8]>::new()), digest(Vec::<&[u8]>::new()));
-    }
-
-    #[test]
-    fn hex_depth_zero_is_plain_hex() {
-        let d = digest([b"hello".as_slice()]);
-        assert_eq!(d.hex(0), format!("{d:x}"));
-    }
-
-    #[test]
-    fn hex_is_lowercase_64_chars() {
-        let d = digest([b"hello".as_slice()]);
-        let hex = d.hex(0);
-        assert_eq!(hex.len(), 64);
-        assert!(hex.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()));
-    }
-
-    #[test]
-    fn hex_splits_leading_bytes() {
-        let d = digest([b"hello".as_slice()]);
-        let plain = format!("{d:x}");
-        let want = format!("{}/{}/{}/{}", &plain[0..2], &plain[2..4], &plain[4..6], &plain[6..]);
-        assert_eq!(d.hex(3), want);
-    }
-
-    #[test]
-    #[should_panic]
-    fn sharded_hex_rejects_depth_32_or_more() {
-        digest([b"hello".as_slice()]).hex(32);
-    }
-
-    #[tokio::test]
-    async fn async_reader_matches_in_memory_bytes() {
-        let content = b"hello, reader".to_vec();
-        let mut h = Hasher::new();
-        h.read_from(content.len() as u64, io::Cursor::new(&content)).await.unwrap();
-        assert_eq!(h.digest(), digest([content.as_slice()]));
-    }
-
     #[tokio::test]
     async fn async_reader_is_chunked_not_buffered_at_once() {
         // Content larger than one BUF_SIZE read still hashes correctly,
         // proving the reader loops instead of assuming a single read call
-        // drains everything.
+        // drains everything. BUF_SIZE is private, so this can't move to
+        // the external test suite in tests/.
         let content = vec![0x42u8; BUF_SIZE * 2 + 1];
         let mut h = Hasher::new();
         h.read_from(content.len() as u64, io::Cursor::new(&content)).await.unwrap();
         assert_eq!(h.digest(), digest([content.as_slice()]));
-    }
-
-    #[tokio::test]
-    async fn async_reader_works_with_a_real_file() {
-        // A real tokio::fs::File (not just an in-memory Cursor) implements
-        // AsyncRead the same way; the caller supplies the length via `stat()`.
-        let path = testing::rlocation("_main/.rustfmt.toml");
-        let content = fs::read(&path).unwrap();
-        let file = tokio::fs::File::open(&path).await.unwrap();
-        let len = file.metadata().await.unwrap().len();
-
-        let mut h = Hasher::new();
-        h.read_from(len, file).await.unwrap();
-
-        assert_eq!(h.digest(), digest([content.as_slice()]));
-    }
-
-    #[tokio::test]
-    async fn async_reader_errors_on_early_eof() {
-        let content = b"short".to_vec();
-        let mut h = Hasher::new();
-        assert!(h.read_from(content.len() as u64 + 1, io::Cursor::new(&content)).await.is_err());
     }
 }

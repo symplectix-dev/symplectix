@@ -33,7 +33,18 @@ rust.test(
 rust.test_suite(
     name = "cas_test_suite",
     size = "small",
-    srcs = ["tests/storable_test.rs"],
+    srcs = [
+        "tests/digest_fidelity.rs",
+        "tests/digest_hex.rs",
+        "tests/digest_is_deterministic.rs",
+        "tests/digest_is_sensitive.rs",
+        "tests/hasher_read_from.rs",
+        "tests/store_corruption.rs",
+        "tests/store_fidelity.rs",
+        "tests/store_is_deterministic.rs",
+        "tests/store_missing.rs",
+        "tests/store_persists.rs",
+    ],
     shared_srcs = ["tests/support.rs"],
     data = ["//:.rustfmt.toml"],
     deps = [
