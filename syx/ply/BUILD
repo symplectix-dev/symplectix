@@ -29,8 +29,8 @@ rust.test_suite(
         "tests/tree_entries.rs",
         "tests/tree_interns.rs",
     ],
-    shared_srcs = ["tests/common/mod.rs"],
     data = ["//:.rustfmt.toml"],
+    shared_srcs = ["tests/common/mod.rs"],
     deps = [
         ":ply",
         "//syx/cas",
