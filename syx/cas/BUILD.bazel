@@ -1,0 +1,58 @@
+load("//bazel:rust.bzl", "rust")
+
+rust.library(
+    name = "cas",
+    srcs = [
+        "src/hash.rs",
+        "src/lib.rs",
+        "src/store.rs",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        "@crates//:bytes",
+        "@crates//:moka",
+        "@crates//:serde",
+        "@crates//:serde_bytes",
+        "@crates//:sha2",
+        "@crates//:tempfile",
+        "@crates//:tokio",
+    ],
+)
+
+rust.test(
+    name = "cas_test",
+    size = "small",
+    crate = ":cas",
+    data = ["//:.rustfmt.toml"],
+    deps = [
+        "//syx/testing",
+        "@crates//:tokio",
+    ],
+)
+
+rust.test_suite(
+    name = "cas_test_suite",
+    size = "small",
+    srcs = [
+        "tests/digest_fidelity.rs",
+        "tests/digest_hex.rs",
+        "tests/digest_is_deterministic.rs",
+        "tests/digest_is_sensitive.rs",
+        "tests/hasher_read_from.rs",
+        "tests/store_corruption.rs",
+        "tests/store_fidelity.rs",
+        "tests/store_is_deterministic.rs",
+        "tests/store_missing.rs",
+        "tests/store_persists.rs",
+    ],
+    data = ["//:.rustfmt.toml"],
+    shared_srcs = ["tests/common/mod.rs"],
+    deps = [
+        ":cas",
+        "//syx/testing",
+        "@crates//:cbor2",
+        "@crates//:serde",
+        "@crates//:serde_bytes",
+        "@crates//:tokio",
+    ],
+)

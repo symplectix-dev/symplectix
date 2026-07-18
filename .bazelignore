@@ -1,3 +1,5 @@
 tmp
 .claude
 .direnv
+.helix
+.vscode
