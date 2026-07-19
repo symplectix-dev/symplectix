@@ -7,6 +7,7 @@ use std::io;
 use std::path::PathBuf;
 use std::time::Duration;
 
+use async_compression::Level;
 use async_compression::tokio::bufread::ZstdDecoder;
 use async_compression::tokio::write::ZstdEncoder;
 use bytes::Bytes;
@@ -60,6 +61,9 @@ impl Store {
     const TMP: &str = ".tmp";
     const CACHE_TIME_TO_LIVE: Duration = Duration::from_secs(60);
     const CACHE_MAX_CAPACITY: u64 = 10_000;
+    /// zstd's own default (`ZSTD_CLEVEL_DEFAULT`), spelled out explicitly
+    /// instead of relying on `ZstdEncoder::new`'s implicit default.
+    const COMPRESSION_LEVEL: Level = Level::Precise(3);
 
     /// Open a store rooted at `root`, creating `root` and its `.tmp`
     /// subdirectory if they don't already exist.
@@ -170,7 +174,7 @@ impl Store {
 
         let tmp = self.new_temp_file().await?;
         let file = fs::File::from_std(tmp.as_file().try_clone()?);
-        let mut encoder = ZstdEncoder::new(file);
+        let mut encoder = ZstdEncoder::with_quality(file, Self::COMPRESSION_LEVEL);
 
         let digest = {
             let mut h = Hasher::new();
@@ -201,7 +205,7 @@ impl Store {
             r.rewind().await?;
             let tmp = self.new_temp_file().await?;
             let file = fs::File::from_std(tmp.as_file().try_clone()?);
-            let mut encoder = ZstdEncoder::new(file);
+            let mut encoder = ZstdEncoder::with_quality(file, Self::COMPRESSION_LEVEL);
             tokio::io::copy(r, &mut encoder).await?;
             encoder.shutdown().await?;
             Ok(tmp)
@@ -228,7 +232,7 @@ impl Store {
         self.persist_file(digest, async {
             let tmp = self.new_temp_file().await?;
             let file = fs::File::from_std(tmp.as_file().try_clone()?);
-            let mut encoder = ZstdEncoder::new(file);
+            let mut encoder = ZstdEncoder::with_quality(file, Self::COMPRESSION_LEVEL);
             encoder.write_all(bytes.as_ref()).await?;
             encoder.shutdown().await?;
             Ok(tmp)
