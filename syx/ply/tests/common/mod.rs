@@ -13,9 +13,9 @@ pub fn command(program: &str, args: &[&str]) -> ply::Command {
     command
 }
 
-pub fn store() -> (testing::TempDir, cas::Store) {
+pub fn store() -> (testing::TempDir, ply::Store) {
     let dir = testing::tempdir();
-    let store = cas::Store::open(dir.path()).unwrap();
+    let store = ply::Store::open(dir.path(), 16 * 1024 * 1024).unwrap();
     (dir, store)
 }
 
@@ -23,4 +23,13 @@ pub fn store() -> (testing::TempDir, cas::Store) {
 /// expected to succeed, so tests don't need to handle the error case.
 pub fn digest<T: cas::ToBytes>(value: &T) -> cas::Digest {
     cas::digest(value).unwrap()
+}
+
+/// `len` random bytes, which zstd can't meaningfully shrink.
+pub fn incompressible_bytes(len: usize) -> Vec<u8> {
+    use rand::RngExt as _;
+
+    let mut out = vec![0u8; len];
+    rand::rng().fill(&mut out[..]);
+    out
 }

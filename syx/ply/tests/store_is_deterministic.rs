@@ -23,13 +23,13 @@ async fn copy_from_file_produces_the_same_digest_as_put() {
 
     let mut file = tokio::fs::File::open(&src).await.unwrap();
     let len = file.metadata().await.unwrap().len();
-    let from_reader = store.copy_from_file(len, &mut file).await.unwrap();
+    let from_reader = store.copy_from(len, &mut file).await.unwrap();
     let from_bytes = store.put(&cas::Bytes::from_static(b"hello")).await.unwrap();
     assert_eq!(from_reader, from_bytes);
 }
 
 #[tokio::test]
-async fn copy_from_produces_the_same_digest_as_put() {
+async fn copy_from_bytes_produces_the_same_digest_as_put() {
     let (_dir, store) = store();
     let content = cas::Bytes::from_static(b"hello");
     let mut cursor = std::io::Cursor::new(&content);

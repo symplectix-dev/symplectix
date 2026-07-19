@@ -4,19 +4,22 @@ rust.library(
     name = "cas",
     srcs = [
         "src/hash.rs",
+        "src/hash_test.rs",
         "src/lib.rs",
         "src/store.rs",
+        "src/store_test.rs",
     ],
     visibility = ["//visibility:public"],
     deps = [
-        "@crates//:async-compression",
+        "@crates//:bitflags",
         "@crates//:bytes",
-        "@crates//:moka",
+        "@crates//:fastcdc",
+        "@crates//:futures",
         "@crates//:serde",
         "@crates//:serde_bytes",
         "@crates//:sha2",
-        "@crates//:tempfile",
         "@crates//:tokio",
+        "@crates//:zstd",
     ],
 )
 
@@ -27,6 +30,8 @@ rust.test(
     data = ["//:.rustfmt.toml"],
     deps = [
         "//syx/testing",
+        "@crates//:rand",
+        "@crates//:tempfile",
         "@crates//:tokio",
     ],
 )
@@ -36,15 +41,9 @@ rust.test_suite(
     size = "small",
     srcs = [
         "tests/digest_fidelity.rs",
-        "tests/digest_hex.rs",
         "tests/digest_is_deterministic.rs",
         "tests/digest_is_sensitive.rs",
         "tests/hasher_read_from.rs",
-        "tests/store_corruption.rs",
-        "tests/store_fidelity.rs",
-        "tests/store_is_deterministic.rs",
-        "tests/store_missing.rs",
-        "tests/store_persists.rs",
     ],
     data = ["//:.rustfmt.toml"],
     shared_srcs = ["tests/common/mod.rs"],
@@ -55,6 +54,5 @@ rust.test_suite(
         "@crates//:serde",
         "@crates//:serde_bytes",
         "@crates//:tokio",
-        "@crates//:zstd",
     ],
 )
