@@ -156,5 +156,18 @@ crate.spec(
     package = "tree-sitter-md",
     version = "0.5",
 )
+crate.spec(
+    package = "zstd",
+    version = "0.13",
+)
+
+# TODO: see bazel_dep.MODULE.bazel for why this is disabled
+# (bazelbuild/rules_rust#3993).
+# crate.annotation(
+#     crate = "zstd-sys",
+#     gen_build_script = "off",
+#     link_deps = ["@@zstd+//:zstd"],
+# )
+
 crate.from_specs()
 use_repo(crate, "crates")

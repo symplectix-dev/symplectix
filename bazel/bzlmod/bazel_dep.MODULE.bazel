@@ -38,6 +38,14 @@ bazel_dep(name = "rules_cc", version = "0.2.17")
 # (CMake, configure-make, GNU Make, boost, ninja, Meson).
 # bazel_dep(name = "rules_foreign_cc", version = "0.14.0")
 
+# TODO: link zstd-sys against this instead of vendor-build.
+# See also crate.annotation() in crate.MODULE.bazel.
+#
+# Currently broken: @zstd//:zstd is static-only, and rules_rust's linker
+# args for static native libs assume a dylib is available too.
+# This may be fixed by bazelbuild/rules_rust#3993, not yet merged.
+# bazel_dep(name = "zstd", version = "1.5.7.bcr.1")
+
 # Rust rules for Bazel
 rules_rust_version = "0.71.3"
 
