@@ -7,6 +7,11 @@ crate.spec(
     version = "1",
 )
 crate.spec(
+    features = ["tokio", "zstd"],
+    package = "async-compression",
+    version = "0.4",
+)
+crate.spec(
     package = "arc-swap",
     version = "1.9",
 )
