@@ -2,6 +2,7 @@
 
 mod common;
 use common::{
+    decompress,
     digest_bytes,
     store,
 };
@@ -38,5 +39,5 @@ async fn path_points_at_the_stored_file() {
 
     let path = store.path(&d);
     assert_eq!(path, dir.path().join(d.hex(2)));
-    assert_eq!(std::fs::read(path).unwrap(), b"hello".to_vec());
+    assert_eq!(decompress(&std::fs::read(path).unwrap()), b"hello".to_vec());
 }

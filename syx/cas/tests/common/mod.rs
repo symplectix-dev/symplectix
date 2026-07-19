@@ -48,6 +48,12 @@ pub fn store() -> (testing::TempDir, cas::Store) {
     (dir, store)
 }
 
+/// Decompress bytes a `Store` wrote directly to disk, for tests reading
+/// a stored file (via `Store::path`) instead of going through `get`.
+pub fn decompress(bytes: &[u8]) -> Vec<u8> {
+    zstd::decode_all(bytes).unwrap()
+}
+
 /// `cas::digest`, unwrapped: every `ToBytes` impl used in this suite is
 /// expected to succeed, so tests don't need to handle the error case.
 pub fn digest<T: cas::ToBytes>(value: &T) -> cas::Digest {

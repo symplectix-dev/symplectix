@@ -1,7 +1,10 @@
 //! What a `Store` persists to disk.
 
 mod common;
-use common::store;
+use common::{
+    decompress,
+    store,
+};
 
 #[tokio::test]
 async fn content_persists_across_store_instances() {
@@ -23,7 +26,7 @@ async fn content_is_sharded_under_root() {
     let d = store.put(&cas::Bytes::from_static(b"hello")).await.unwrap();
 
     let path = dir.path().join(d.hex(2));
-    assert_eq!(std::fs::read(path).unwrap(), b"hello".to_vec());
+    assert_eq!(decompress(&std::fs::read(path).unwrap()), b"hello".to_vec());
 }
 
 #[tokio::test]

@@ -7,12 +7,16 @@ use std::io;
 use std::path::PathBuf;
 use std::time::Duration;
 
+use async_compression::tokio::bufread::ZstdDecoder;
+use async_compression::tokio::write::ZstdEncoder;
 use bytes::Bytes;
 use moka::future::Cache;
 use tokio::io::{
     AsyncRead,
+    AsyncReadExt as _,
     AsyncSeek,
     AsyncSeekExt as _,
+    AsyncWriteExt as _,
 };
 use tokio::{
     fs,
@@ -94,22 +98,31 @@ impl Store {
     }
 
     /// The path content addressed by `digest` whether or not
-    /// it's actually been stored yet. For a caller that wants
-    /// to work with the file directly (e.g. mmap it)
-    /// instead of loading it via `get`.
+    /// it's actually been stored yet.
+    ///
+    /// The file at this path holds zstd-compressed bytes, not the raw
+    /// content `digest` was computed from -- a caller that wants to work
+    /// with the raw bytes directly (e.g. mmap it) instead of loading it
+    /// via `get` must decompress it first.
     pub fn path(&self, digest: &Digest) -> PathBuf {
         self.root.join(digest.hex(2))
     }
 
     /// Reads the content at `digest`, if present.
     pub async fn get<T: FromBytes>(&self, digest: &Digest) -> io::Result<Option<T>> {
-        let bytes = match fs::read(self.path(digest)).await {
-            Ok(bytes) => Bytes::from(bytes),
+        let compressed = match fs::read(self.path(digest)).await {
+            Ok(bytes) => bytes,
             Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
             Err(e) => return Err(e),
         };
 
-        let content = T::from_bytes(bytes)
+        let mut bytes = Vec::new();
+        ZstdDecoder::new(io::Cursor::new(compressed))
+            .read_to_end(&mut bytes)
+            .await
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+
+        let content = T::from_bytes(Bytes::from(bytes))
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("{e:?}")))?;
 
         Ok(Some(content))
@@ -156,13 +169,15 @@ impl Store {
         }
 
         let tmp = self.new_temp_file().await?;
-        let mut file = fs::File::from_std(tmp.as_file().try_clone()?);
+        let file = fs::File::from_std(tmp.as_file().try_clone()?);
+        let mut encoder = ZstdEncoder::new(file);
 
         let digest = {
             let mut h = Hasher::new();
-            h.tee_read_from(len, r, &mut file).await?;
+            h.tee_read_from(len, r, &mut encoder).await?;
             h.digest()
         };
+        encoder.shutdown().await?;
 
         self.persist_file(digest, future::ready(Ok(tmp))).await?;
         Ok(digest)
@@ -185,8 +200,10 @@ impl Store {
         self.persist_file(digest, async {
             r.rewind().await?;
             let tmp = self.new_temp_file().await?;
-            let mut file = fs::File::from_std(tmp.as_file().try_clone()?);
-            tokio::io::copy(r, &mut file).await?;
+            let file = fs::File::from_std(tmp.as_file().try_clone()?);
+            let mut encoder = ZstdEncoder::new(file);
+            tokio::io::copy(r, &mut encoder).await?;
+            encoder.shutdown().await?;
             Ok(tmp)
         })
         .await?;
@@ -210,7 +227,10 @@ impl Store {
     {
         self.persist_file(digest, async {
             let tmp = self.new_temp_file().await?;
-            fs::write(tmp.path(), bytes.as_ref()).await?;
+            let file = fs::File::from_std(tmp.as_file().try_clone()?);
+            let mut encoder = ZstdEncoder::new(file);
+            encoder.write_all(bytes.as_ref()).await?;
+            encoder.shutdown().await?;
             Ok(tmp)
         })
         .await

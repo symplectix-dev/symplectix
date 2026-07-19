@@ -9,6 +9,7 @@ rust.library(
     ],
     visibility = ["//visibility:public"],
     deps = [
+        "@crates//:async-compression",
         "@crates//:bytes",
         "@crates//:moka",
         "@crates//:serde",
@@ -54,5 +55,6 @@ rust.test_suite(
         "@crates//:serde",
         "@crates//:serde_bytes",
         "@crates//:tokio",
+        "@crates//:zstd",
     ],
 )
