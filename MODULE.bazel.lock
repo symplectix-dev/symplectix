@@ -3748,9 +3748,10 @@
     },
     "@@rules_rust+//crate_universe/private:internal_extensions.bzl%cu_nr": {
       "general": {
-        "bzlTransitiveDigest": "UzM1RE96whoqKV9tv7Bik4wKEXtlwgvGiPWgExo2Q4M=",
-        "usagesDigest": "ZmL90WEq2B6/NJ8rtHAqdnDPn+/9xG/GWR5K4UU4tyo=",
+        "bzlTransitiveDigest": "N5252EBbxPruGUNdjDIzrwyJOwTCjPLemyYCFUqkBls=",
+        "usagesDigest": "cXwM8V1dYpvU0qY6LVYuUUf4Ql389ZhymEzwJhYVr2o=",
         "recordedInputs": [
+          "REPO_MAPPING:apple_support+,bazel_skylib bazel_skylib+",
           "REPO_MAPPING:bazel_features+,bazel_features_globals bazel_features++version_extension+bazel_features_globals",
           "REPO_MAPPING:bazel_features+,bazel_features_version bazel_features++version_extension+bazel_features_version",
           "REPO_MAPPING:rules_cc+,bazel_skylib bazel_skylib+",
@@ -3759,11 +3760,10 @@
           "REPO_MAPPING:rules_cc+,platforms platforms",
           "REPO_MAPPING:rules_cc+,rules_cc rules_cc+",
           "REPO_MAPPING:rules_cc++compatibility_proxy+cc_compatibility_proxy,rules_cc rules_cc+",
+          "REPO_MAPPING:rules_rust+,apple_support apple_support+",
           "REPO_MAPPING:rules_rust+,bazel_features bazel_features+",
           "REPO_MAPPING:rules_rust+,bazel_skylib bazel_skylib+",
           "REPO_MAPPING:rules_rust+,bazel_tools bazel_tools",
-          "REPO_MAPPING:rules_rust+,cui rules_rust++cu+cui",
-          "REPO_MAPPING:rules_rust+,rrc rules_rust++i2+rrc",
           "REPO_MAPPING:rules_rust+,rules_cc rules_cc+",
           "REPO_MAPPING:rules_rust+,rules_rust rules_rust+"
         ],
@@ -3781,6 +3781,7 @@
                 "@@rules_rust+//crate_universe:src/cli/splice.rs",
                 "@@rules_rust+//crate_universe:src/cli/vendor.rs",
                 "@@rules_rust+//crate_universe:src/config.rs",
+                "@@rules_rust+//crate_universe:src/config/label_injection.rs",
                 "@@rules_rust+//crate_universe:src/context.rs",
                 "@@rules_rust+//crate_universe:src/context/crate_context.rs",
                 "@@rules_rust+//crate_universe:src/context/platforms.rs",
@@ -3796,13 +3797,13 @@
                 "@@rules_rust+//crate_universe:src/metadata/metadata_annotation.rs",
                 "@@rules_rust+//crate_universe:src/rendering.rs",
                 "@@rules_rust+//crate_universe:src/rendering/template_engine.rs",
+                "@@rules_rust+//crate_universe:src/rendering/templates/defs_bzl_shim.j2",
                 "@@rules_rust+//crate_universe:src/rendering/templates/module_bzl.j2",
                 "@@rules_rust+//crate_universe:src/rendering/templates/partials/header.j2",
                 "@@rules_rust+//crate_universe:src/rendering/templates/partials/module/aliases_map.j2",
                 "@@rules_rust+//crate_universe:src/rendering/templates/partials/module/deps_map.j2",
                 "@@rules_rust+//crate_universe:src/rendering/templates/partials/module/repo_git.j2",
                 "@@rules_rust+//crate_universe:src/rendering/templates/partials/module/repo_http.j2",
-                "@@rules_rust+//crate_universe:src/rendering/templates/vendor_module.j2",
                 "@@rules_rust+//crate_universe:src/rendering/verbatim/alias_rules.bzl",
                 "@@rules_rust+//crate_universe:src/select.rs",
                 "@@rules_rust+//crate_universe:src/splicing.rs",
@@ -3827,11 +3828,11 @@
               "binary": "cargo-bazel",
               "cargo_lockfile": "@@rules_rust+//crate_universe:Cargo.lock",
               "cargo_toml": "@@rules_rust+//crate_universe:Cargo.toml",
-              "version": "1.95.0",
-              "timeout": 900,
+              "version": "1.96.1",
               "rust_toolchain_cargo_template": "@rust_host_tools//:bin/{tool}",
               "rust_toolchain_rustc_template": "@rust_host_tools//:bin/{tool}",
-              "compressed_windows_toolchain_names": false
+              "compressed_windows_toolchain_names": false,
+              "timeout": 900
             }
           }
         },
