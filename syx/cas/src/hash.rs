@@ -1,6 +1,5 @@
 //! The digest primitive everything else in `cas` is addressed by.
 
-use std::fmt::Write as _;
 use std::{
     fmt,
     io,
@@ -14,6 +13,10 @@ use tokio::io::{
     AsyncWrite,
     AsyncWriteExt as _,
 };
+
+#[cfg(test)]
+#[path = "hash_test.rs"]
+mod tests;
 
 /// Digest of `value`'s canonical byte encoding.
 pub fn digest<T: ToBytes>(value: &T) -> Result<Digest, T::Error> {
@@ -72,36 +75,11 @@ impl Digest {
     pub fn new(bytes: [u8; 32]) -> Self {
         Digest(bytes)
     }
-
-    /// Format as a sharded hex string: `depth` leading two-character
-    /// segments, then the rest, joined by `/`. For example, depth=3
-    /// gives "ab/cd/ef/<remaining 58 hex chars>". depth=0 means no
-    /// sharding. `depth` must be less than 32.
-    pub fn hex(&self, depth: usize) -> String {
-        assert!(depth < 32, "depth must be less than 32, got {depth}");
-        let mut out = String::with_capacity(self.0.len() * 2 + depth);
-        for (i, b) in self.0.iter().enumerate() {
-            write!(out, "{b:02x}").expect("writing to a String never fails");
-            if i < depth {
-                out.push('/');
-            }
-        }
-        out
-    }
 }
 
 impl AsRef<[u8]> for Digest {
     fn as_ref(&self) -> &[u8] {
         &self.0
-    }
-}
-
-impl fmt::UpperHex for Digest {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for b in &self.0 {
-            write!(f, "{b:02X}")?;
-        }
-        Ok(())
     }
 }
 
@@ -211,35 +189,5 @@ impl Hasher {
     /// Finalize and return the digest's bytes.
     pub fn digest(self) -> Digest {
         Digest(self.hasher.finalize().into())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// Digest of `parts`, combined in order: equal parts (in the same order)
-    /// always give the same digest, different parts almost surely give
-    /// different ones.
-    fn digest<I, T>(parts: I) -> Digest
-    where
-        I: IntoIterator<Item = T>,
-        T: AsRef<[u8]>,
-    {
-        let mut h = Hasher::new();
-        h.parts(parts);
-        h.digest()
-    }
-
-    #[tokio::test]
-    async fn async_reader_is_chunked_not_buffered_at_once() {
-        // Content larger than one BUF_SIZE read still hashes correctly,
-        // proving the reader loops instead of assuming a single read call
-        // drains everything. BUF_SIZE is private, so this can't move to
-        // the external test suite in tests/.
-        let content = vec![0x42u8; BUF_SIZE * 2 + 1];
-        let mut h = Hasher::new();
-        h.read_from(content.len() as u64, io::Cursor::new(&content)).await.unwrap();
-        assert_eq!(h.digest(), digest([content.as_slice()]));
     }
 }

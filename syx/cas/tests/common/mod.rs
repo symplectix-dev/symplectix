@@ -3,6 +3,29 @@
 // suite separately, so not every item here is used by every one.
 #![allow(dead_code)]
 
+/// `cas::digest`, unwrapped: every `ToBytes` impl used in this suite is
+/// expected to succeed, so tests don't need to handle the error case.
+pub fn digest<T: cas::ToBytes>(value: &T) -> cas::Digest {
+    cas::digest(value).unwrap()
+}
+
+pub fn digest_bytes(bytes: &[u8]) -> cas::Digest {
+    let mut h = cas::Hasher::new();
+    h.part(bytes);
+    h.digest()
+}
+
+/// Digest of `parts`, combined in order.
+pub fn digest_parts<I, T>(parts: I) -> cas::Digest
+where
+    I: IntoIterator<Item = T>,
+    T: AsRef<[u8]>,
+{
+    let mut h = cas::Hasher::new();
+    h.parts(parts);
+    h.digest()
+}
+
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct Example {
     pub name:  String,
@@ -23,33 +46,4 @@ impl cas::FromBytes for Example {
     fn from_bytes(bytes: cas::Bytes) -> Result<Self, Self::Error> {
         cbor2::from_slice(&bytes)
     }
-}
-
-pub fn digest_bytes(bytes: &[u8]) -> cas::Digest {
-    let mut h = cas::Hasher::new();
-    h.part(bytes);
-    h.digest()
-}
-
-/// Digest of `parts`, combined in order.
-pub fn digest_parts<I, T>(parts: I) -> cas::Digest
-where
-    I: IntoIterator<Item = T>,
-    T: AsRef<[u8]>,
-{
-    let mut h = cas::Hasher::new();
-    h.parts(parts);
-    h.digest()
-}
-
-pub fn store() -> (testing::TempDir, cas::Store) {
-    let dir = testing::tempdir();
-    let store = cas::Store::open(dir.path()).unwrap();
-    (dir, store)
-}
-
-/// `cas::digest`, unwrapped: every `ToBytes` impl used in this suite is
-/// expected to succeed, so tests don't need to handle the error case.
-pub fn digest<T: cas::ToBytes>(value: &T) -> cas::Digest {
-    cas::digest(value).unwrap()
 }

@@ -11,4 +11,10 @@ pub use hash::{
     ToBytes,
     digest,
 };
-pub use store::Store;
+pub use store::{
+    Storage,
+    copy_from,
+    get,
+    put,
+    read_into,
+};

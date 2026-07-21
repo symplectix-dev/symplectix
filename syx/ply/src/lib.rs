@@ -3,6 +3,7 @@
 mod blob;
 mod function;
 mod storable;
+mod store;
 
 pub use blob::{
     Node,
@@ -12,3 +13,4 @@ pub use function::{
     Command,
     Function,
 };
+pub use store::Store;
