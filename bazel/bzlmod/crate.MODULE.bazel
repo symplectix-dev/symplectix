@@ -116,8 +116,8 @@ crate.spec(
 
 # Embedded LSM-tree key-value store.
 crate.spec(
-    package = "fjall",
     features = ["bytes_1"],
+    package = "fjall",
     version = "3.1",
 )
 
