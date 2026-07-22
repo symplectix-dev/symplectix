@@ -1,9 +1,12 @@
 //! Wires up `cas::ToBytes`/`cas::FromBytes` for this crate's types, via
 //! their own `Serialize`/`Deserialize` impls, using canonical CBOR
-//! encoding. This is `ply`'s own choice of encoding for its own types,
+//! encoding. This is `func`'s own choice of encoding for its own types,
 //! not something `cas` needs an opinion on.
 
-use crate::Tree;
+use crate::{
+    Command,
+    Function,
+};
 
 macro_rules! storable {
     ($ty:ty) => {
@@ -28,4 +31,5 @@ macro_rules! storable {
     };
 }
 
-storable!(Tree);
+storable!(Command);
+storable!(Function);
