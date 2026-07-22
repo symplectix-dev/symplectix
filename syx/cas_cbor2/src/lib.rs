@@ -4,8 +4,8 @@
 
 use quote::quote;
 use syn::{
-    parse_macro_input,
     DeriveInput,
+    parse_macro_input,
 };
 
 #[proc_macro_derive(ToBytes)]
