@@ -4,11 +4,11 @@ rust.library(
     name = "ply",
     srcs = [
         "src/blob.rs",
-        "src/function.rs",
         "src/lib.rs",
         "src/storable.rs",
         "src/store.rs",
     ],
+    visibility = ["//visibility:public"],
     deps = [
         "//syx/cas",
         "@crates//:cbor2",
@@ -22,11 +22,6 @@ rust.test_suite(
     name = "ply_test_suite",
     size = "small",
     srcs = [
-        "tests/command_digest_is_deterministic.rs",
-        "tests/command_digest_is_sensitive.rs",
-        "tests/function_digest_is_deterministic.rs",
-        "tests/function_digest_is_sensitive.rs",
-        "tests/function_resolves_from_store.rs",
         "tests/store_chunks_large_content.rs",
         "tests/store_fidelity.rs",
         "tests/store_is_deterministic.rs",

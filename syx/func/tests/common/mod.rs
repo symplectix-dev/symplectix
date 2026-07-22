@@ -1,10 +1,16 @@
-//! Shared fixtures for `ply`'s external test suite.
+//! Shared fixtures for `func`'s external test suite.
 #![allow(dead_code)]
 
 pub fn digest_bytes(bytes: &[u8]) -> cas::Digest {
     let mut h = cas::Hasher::new();
     h.part(bytes);
     h.digest()
+}
+
+pub fn command(program: &str, args: &[&str]) -> func::Command {
+    let mut command = func::Command::new(program);
+    command.args(args);
+    command
 }
 
 pub fn store() -> (testing::TempDir, ply::Store) {
@@ -17,13 +23,4 @@ pub fn store() -> (testing::TempDir, ply::Store) {
 /// expected to succeed, so tests don't need to handle the error case.
 pub fn digest<T: cas::ToBytes>(value: &T) -> cas::Digest {
     cas::digest(value).unwrap()
-}
-
-/// `len` random bytes, which zstd can't meaningfully shrink.
-pub fn incompressible_bytes(len: usize) -> Vec<u8> {
-    use rand::RngExt as _;
-
-    let mut out = vec![0u8; len];
-    rand::rng().fill(&mut out[..]);
-    out
 }

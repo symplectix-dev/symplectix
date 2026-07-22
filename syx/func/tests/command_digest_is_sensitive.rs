@@ -22,9 +22,9 @@ fn different_args_produce_different_command_digests() {
 
 #[test]
 fn different_env_produces_different_command_digests() {
-    let mut a = ply::Command::new("run");
+    let mut a = func::Command::new("run");
     a.env("KEY", "a");
-    let mut b = ply::Command::new("run");
+    let mut b = func::Command::new("run");
     b.env("KEY", "b");
     assert_ne!(digest(&a), digest(&b));
 }
