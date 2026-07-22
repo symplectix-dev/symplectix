@@ -8,6 +8,7 @@ use syn::{
     parse_macro_input,
 };
 
+/// Derives `cas::ToBytes` via canonical CBOR.
 #[proc_macro_derive(ToBytes)]
 pub fn derive_to_bytes(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
@@ -29,6 +30,7 @@ pub fn derive_to_bytes(input: proc_macro::TokenStream) -> proc_macro::TokenStrea
     .into()
 }
 
+/// Derives `cas::FromBytes` via canonical CBOR.
 #[proc_macro_derive(FromBytes)]
 pub fn derive_from_bytes(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
