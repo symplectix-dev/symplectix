@@ -5,8 +5,8 @@ rust.library(
     srcs = [
         "src/function.rs",
         "src/lib.rs",
-        "src/storable.rs",
     ],
+    proc_macro_deps = ["//syx/cas_cbor2"],
     visibility = ["//visibility:public"],
     deps = [
         "//syx/cas",

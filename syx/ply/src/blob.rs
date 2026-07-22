@@ -23,7 +23,16 @@ pub enum Node {
 /// Uniqueness is on the name, not the value, so `Tree` can represent a
 /// multiset of items as long as each has a distinct name, which is the
 /// normal case (files always have distinct paths).
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+    cas_cbor2::ToBytes,
+    cas_cbor2::FromBytes,
+)]
 pub struct Tree {
     entries: BTreeMap<String, Node>,
     /// Additional blobs a producer created while building this tree but

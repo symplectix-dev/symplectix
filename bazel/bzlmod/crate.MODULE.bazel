@@ -241,6 +241,24 @@ crate.spec(
     version = "3.9",
 )
 
+# Parses a derive macro's input into a syntax tree.
+crate.spec(
+    package = "syn",
+    version = "2",
+)
+
+# Quasi-quotation for generating token streams.
+crate.spec(
+    package = "quote",
+    version = "1",
+)
+
+# Shared token stream type between proc macros and the compiler.
+crate.spec(
+    package = "proc-macro2",
+    version = "1",
+)
+
 # TODO: see bazel_dep.MODULE.bazel for why this is disabled
 # (bazelbuild/rules_rust#3993).
 # crate.annotation(

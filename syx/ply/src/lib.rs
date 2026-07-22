@@ -1,7 +1,6 @@
 //! ply: content addressing functions.
 
 mod blob;
-mod storable;
 mod store;
 
 pub use blob::{

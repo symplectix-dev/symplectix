@@ -7,7 +7,16 @@ use std::collections::BTreeMap;
 /// with. Named to match `std::process::Command`. Shared by
 /// `Function::Command` (run once) and `Function::Map`/`Function::Reduce`
 /// (kept running, invoked repeatedly).
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+    cas_cbor2::ToBytes,
+    cas_cbor2::FromBytes,
+)]
 pub struct Command {
     program: String,
     args:    Vec<String>,
@@ -78,7 +87,17 @@ impl Command {
 /// TODO: add a field for which OCI image the VM boots from. The image is
 /// used directly as the VM's boot rootfs; `config` is then materialized inside
 /// the booted VM, on top of it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+    cas_cbor2::ToBytes,
+    cas_cbor2::FromBytes,
+)]
 pub enum Function {
     /// Run once, directly.
     Command(cas::Digest),

@@ -5,9 +5,9 @@ rust.library(
     srcs = [
         "src/blob.rs",
         "src/lib.rs",
-        "src/storable.rs",
         "src/store.rs",
     ],
+    proc_macro_deps = ["//syx/cas_cbor2"],
     visibility = ["//visibility:public"],
     deps = [
         "//syx/cas",
