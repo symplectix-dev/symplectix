@@ -44,13 +44,13 @@ runs:
         BUILDBUDDY_API_KEY: ${{ inputs.buildbuddy-api-key }}
       run: |
         {
+          # Caches the fully materialized external repositories in the remote cache,
+          # so a CI runner can skip re-running the repository rule entirely.
+          #
           # This flag is a startup option and cannot be conditioned on --config=remote
           # (startup:remote is silently ignored by Bazel), so it is written here and only
           # takes effect when this step runs, i.e. when the remote cache is available.
-          # TODO: Enable once the issue is resolved (likely in Bazel 9.2).
-          # https://github.com/bazel-contrib/rules_python/issues/3791
-          # https://github.com/bazelbuild/bazel/issues/29656
-          # echo "startup --experimental_remote_repo_contents_cache"
+          echo "startup --experimental_remote_repo_contents_cache"
 
           # Authenticate with the remote cache.
           echo "common:remote --remote_header=x-buildbuddy-api-key=$BUILDBUDDY_API_KEY"
