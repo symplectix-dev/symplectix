@@ -1,22 +1,9 @@
 //! The digest primitive everything else in `cas` is addressed by.
 
-use std::{
-    fmt,
-    io,
-};
+use std::fmt;
 
 use bytes::Bytes;
 use sha2::Digest as _;
-use tokio::io::{
-    AsyncRead,
-    AsyncReadExt as _,
-    AsyncWrite,
-    AsyncWriteExt as _,
-};
-
-#[cfg(test)]
-#[path = "hash_test.rs"]
-mod tests;
 
 /// Digest of `value`'s canonical byte encoding.
 pub fn digest<T: ToBytes>(value: &T) -> Result<Digest, T::Error> {
@@ -92,10 +79,6 @@ impl fmt::LowerHex for Digest {
     }
 }
 
-/// Read size for streaming a reader's bytes into a digest,
-/// so a large part is never buffered whole in memory.
-const BUF_SIZE: usize = 1 << 16;
-
 /// Builds a length-prefixed `Digest` over an ordered sequence of parts.
 ///
 /// This framing is self-delimiting, so no two distinct sequences
@@ -135,55 +118,6 @@ impl Hasher {
             self.part(part);
         }
         self
-    }
-
-    /// Fold a part of known `len` bytes, read from `r`, into the digest.
-    ///
-    /// `len` is what says where this blob ends: a source that can outlive
-    /// a single blob (a persistent socket, a multiplexed stream),
-    /// EOF only marks the end of the whole connection, not of this blob.
-    ///
-    /// `r` is trusted to have at least `len` bytes available; an
-    /// `AsyncRead` cannot report its own length up front without being
-    /// fully consumed, so the caller must already know it. Returns an
-    /// error if `r` runs out before `len` bytes are read. Reads exactly
-    /// `len` bytes and no more, so any bytes in `r` beyond that are left
-    /// untouched -- neither read nor checked.
-    pub async fn read_from(
-        &mut self,
-        len: u64,
-        r: impl AsyncRead + Unpin,
-    ) -> io::Result<&mut Self> {
-        self.tee_read_from(len, r, tokio::io::sink()).await
-    }
-
-    /// Like `read_from`, but also forwards each chunk to `w` as it's
-    /// read, so a source can be hashed and copied to `w` in a single
-    /// pass without materializing it whole in memory.
-    pub async fn tee_read_from(
-        &mut self,
-        len: u64,
-        mut r: impl AsyncRead + Unpin,
-        mut w: impl AsyncWrite + Unpin,
-    ) -> io::Result<&mut Self> {
-        self.hasher.update(len.to_be_bytes());
-
-        let mut remaining = len;
-        let mut buf = [0u8; BUF_SIZE];
-        while remaining > 0 {
-            let want = remaining.min(BUF_SIZE as u64) as usize;
-            let n = r.read(&mut buf[..want]).await?;
-            if n == 0 {
-                return Err(io::Error::new(
-                    io::ErrorKind::UnexpectedEof,
-                    format!("reader ended {remaining} bytes short of the declared length {len}"),
-                ));
-            }
-            self.hasher.update(&buf[..n]);
-            w.write_all(&buf[..n]).await?;
-            remaining -= n as u64;
-        }
-        Ok(self)
     }
 
     /// Finalize and return the digest's bytes.
