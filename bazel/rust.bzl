@@ -4,6 +4,7 @@ load(
     "rust_binary",
     "rust_doc_test",
     "rust_library",
+    "rust_proc_macro",
     "rust_test",
     "rust_test_suite",
 )
@@ -20,6 +21,7 @@ rust = struct(
     build_script = cargo_build_script,
     library = rust_library,
     doc_test = rust_doc_test,
+    proc_macro = rust_proc_macro,
     test = rust_test,
     test_suite = rust_test_suite,
     fuzz_binary = rust_fuzz_binary,

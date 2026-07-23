@@ -24,7 +24,7 @@ jobs:
     steps:
       - name: Validate PR title
         run: |
-          [[ "${GITHUB_EVENT_PULL_REQUEST_TITLE}" =~ ^[a-z]{1}[a-z/_-]*:\ [a-z]{1}.*[^.]$ ]]
+          [[ "${GITHUB_EVENT_PULL_REQUEST_TITLE}" =~ ^[a-z]{1}[a-z0-9/_-]*:\ [a-z]{1}.*[^.]$ ]]
         env:
           GITHUB_EVENT_PULL_REQUEST_TITLE: ${{ github.event.pull_request.title }}
 
