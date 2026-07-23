@@ -1,12 +1,12 @@
 //! Function: a content-addressed reference to something runnable, in one
-//! of three calling conventions.
+//! of two calling conventions.
 
 use std::collections::BTreeMap;
 
 /// A program, its arguments, and the environment variables to invoke it
-/// with. Named to match `std::process::Command`. Shared by
-/// `Function::Command` (run once) and `Function::Map`/`Function::Reduce`
-/// (kept running, invoked repeatedly).
+/// with. Shared by:
+/// - `Function::Action` (run once)
+/// - `Function::Server` (kept warm across calls, invoked repeatedly)
 #[derive(
     Debug,
     Clone,
@@ -30,7 +30,7 @@ impl Command {
     }
 
     /// Append one argument.
-    pub fn arg<S>(&mut self, arg: S) -> &mut Self
+    pub fn arg<S>(mut self, arg: S) -> Self
     where
         S: AsRef<str>,
     {
@@ -39,19 +39,17 @@ impl Command {
     }
 
     /// Append each argument, in order.
-    pub fn args<I, S>(&mut self, args: I) -> &mut Self
+    pub fn args<I, S>(mut self, args: I) -> Self
     where
         I: IntoIterator<Item = S>,
         S: AsRef<str>,
     {
-        for arg in args {
-            self.arg(arg);
-        }
+        self.args.extend(args.into_iter().map(|a| a.as_ref().to_owned()));
         self
     }
 
     /// Set one environment variable.
-    pub fn env<K, V>(&mut self, key: K, value: V) -> &mut Self
+    pub fn env<K, V>(mut self, key: K, value: V) -> Self
     where
         K: AsRef<str>,
         V: AsRef<str>,
@@ -61,32 +59,27 @@ impl Command {
     }
 
     /// Set each environment variable, in order.
-    pub fn envs<I, K, V>(&mut self, vars: I) -> &mut Self
+    pub fn envs<I, K, V>(mut self, vars: I) -> Self
     where
         I: IntoIterator<Item = (K, V)>,
         K: AsRef<str>,
         V: AsRef<str>,
     {
-        for (key, value) in vars {
-            self.env(key, value);
-        }
+        self.env
+            .extend(vars.into_iter().map(|(k, v)| (k.as_ref().to_owned(), v.as_ref().to_owned())));
         self
     }
 }
 
 /// A reference to something runnable, addressed by how it's invoked:
 ///
-/// - `Command`: run once, directly, against input supplied at call time -- not part of this digest,
-///   since it's a specific run's data, not this reference's own identity. Combined dynamically
-///   (e.g. for cache lookups) by whatever executes it.
-/// - `Map`: independent, per-item calls to an already-running, persistent process (embarrassingly
-///   parallel).
-/// - `Reduce`: a sequential accumulate-then-finalize call to an already-running, persistent
-///   process.
-///
-/// TODO: add a field for which OCI image the VM boots from. The image is
-/// used directly as the VM's boot rootfs; `config` is then materialized inside
-/// the booted VM, on top of it.
+/// - `Action`: run once, directly, against input supplied at call time. Cached at the granularity
+///   of the whole input: "has this exact input been processed before?".
+/// - `Server`: independent, per-blob calls to a server process. Cached per blob, not per call: "has
+///   this specific item been processed before?".
+// TODO: add a field for which OCI image the VM boots from. The image is
+// used directly as the VM's boot rootfs; `config` is then materialized inside
+// the booted VM, on top of it.
 #[derive(
     Debug,
     Clone,
@@ -100,18 +93,15 @@ impl Command {
 )]
 pub enum Function {
     /// Run once, directly.
-    Command(cas::Digest),
-    /// Call an already-running process with independent, per-item requests.
-    Map {
-        /// The persistent process to call.
+    Action {
+        /// The program to run.
         command: cas::Digest,
-        /// Its configuration, a `Tree`.
+        /// Its configuration, a `Tree`, materialized before `command` runs.
         config:  cas::Digest,
     },
-    /// Call an already-running process with a sequential
-    /// accumulate-then-finalize request.
-    Reduce {
-        /// The persistent process to call.
+    /// Call a process kept warm across independent, per-blob requests.
+    Server {
+        /// The process to call, started on demand and shut down when idle.
         command: cas::Digest,
         /// Its configuration, a `Tree`.
         config:  cas::Digest,
@@ -119,21 +109,15 @@ pub enum Function {
 }
 
 impl Function {
-    /// Run `command` once, directly, against input supplied at call time.
-    pub fn command(command: cas::Digest) -> Self {
-        Function::Command(command)
+    /// Run `command` once, directly, configured by `config` (a `Tree`),
+    /// against input supplied at call time.
+    pub fn action(command: cas::Digest, config: cas::Digest) -> Self {
+        Function::Action { command, config }
     }
 
-    /// Run `command` as a persistent process, configured by `config` (a
+    /// Run `server`, kept warm across calls, configured by `config` (a
     /// `Tree`), called with independent per-item requests.
-    pub fn map(command: cas::Digest, config: cas::Digest) -> Self {
-        Function::Map { command, config }
-    }
-
-    /// Run `command` as a persistent process, configured by `config` (a
-    /// `Tree`), called with a sequential accumulate-then-finalize
-    /// request.
-    pub fn reduce(command: cas::Digest, config: cas::Digest) -> Self {
-        Function::Reduce { command, config }
+    pub fn server(command: cas::Digest, config: cas::Digest) -> Self {
+        Function::Server { command, config }
     }
 }

@@ -7,18 +7,19 @@ use common::{
 };
 
 #[test]
-fn hashing_the_same_command_function_twice_gives_the_same_digest() {
+fn hashing_the_same_action_function_twice_gives_the_same_digest() {
     let command = digest_bytes(b"command");
-    let a = func::Function::command(command);
-    let b = func::Function::command(command);
+    let config = digest_bytes(b"config");
+    let a = func::Function::action(command, config);
+    let b = func::Function::action(command, config);
     assert_eq!(digest(&a), digest(&b));
 }
 
 #[test]
-fn hashing_the_same_map_function_twice_gives_the_same_digest() {
+fn hashing_the_same_server_function_twice_gives_the_same_digest() {
     let command = digest_bytes(b"command");
     let config = digest_bytes(b"config");
-    let a = func::Function::map(command, config);
-    let b = func::Function::map(command, config);
+    let a = func::Function::server(command, config);
+    let b = func::Function::server(command, config);
     assert_eq!(digest(&a), digest(&b));
 }

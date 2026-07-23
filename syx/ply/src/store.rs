@@ -1,4 +1,5 @@
 //! A fjall-backed `cas::Storage`, and `ply`'s content-addressed store.
+
 use std::io;
 use std::path::Path;
 
@@ -17,6 +18,13 @@ use tokio::task;
 /// any manifest -- safe to eventually sweep, never a manifest pointing
 /// at missing data. GC roots are expected to come from outside this
 /// crate (e.g. a log of which digests are still in use).
+// TODO: support more operations
+// - A gRPC service exposing `Store` via REAPI protos like:
+//   - `bytestream.ByteStream.Read` for ranged blob reads
+//   - `ContentAddressableStorage.GetTree` for tree structure
+// - Explicit CLI-driven blob handling.
+// - groupcache-style cache sync between `Store` peers.
+// - Durability sync to a remote backend (e.g. S3).
 #[derive(Clone)]
 pub struct Store {
     // Not read after construction for now.

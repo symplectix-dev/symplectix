@@ -8,9 +8,7 @@ pub fn digest_bytes(bytes: &[u8]) -> cas::Digest {
 }
 
 pub fn command(program: &str, args: &[&str]) -> func::Command {
-    let mut command = func::Command::new(program);
-    command.args(args);
-    command
+    func::Command::new(program).args(args)
 }
 
 pub fn store() -> (testing::TempDir, ply::Store) {

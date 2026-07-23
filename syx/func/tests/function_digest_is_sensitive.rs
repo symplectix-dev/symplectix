@@ -7,41 +7,42 @@ use common::{
 };
 
 #[test]
-fn different_command_produces_different_command_function_digests() {
-    let a = func::Function::command(digest_bytes(b"command-a"));
-    let b = func::Function::command(digest_bytes(b"command-b"));
-    assert_ne!(digest(&a), digest(&b));
-}
-
-#[test]
-fn different_command_produces_different_map_function_digests() {
+fn different_command_produces_different_action_function_digests() {
     let config = digest_bytes(b"config");
-    let a = func::Function::map(digest_bytes(b"command-a"), config);
-    let b = func::Function::map(digest_bytes(b"command-b"), config);
+    let a = func::Function::action(digest_bytes(b"command-a"), config);
+    let b = func::Function::action(digest_bytes(b"command-b"), config);
     assert_ne!(digest(&a), digest(&b));
 }
 
 #[test]
-fn different_config_produces_different_map_function_digests() {
+fn different_config_produces_different_action_function_digests() {
     let command = digest_bytes(b"command");
-    let a = func::Function::map(command, digest_bytes(b"config-a"));
-    let b = func::Function::map(command, digest_bytes(b"config-b"));
+    let a = func::Function::action(command, digest_bytes(b"config-a"));
+    let b = func::Function::action(command, digest_bytes(b"config-b"));
     assert_ne!(digest(&a), digest(&b));
 }
 
 #[test]
-fn map_and_reduce_with_the_same_command_and_config_have_different_digests() {
+fn different_command_produces_different_server_function_digests() {
+    let config = digest_bytes(b"config");
+    let a = func::Function::server(digest_bytes(b"command-a"), config);
+    let b = func::Function::server(digest_bytes(b"command-b"), config);
+    assert_ne!(digest(&a), digest(&b));
+}
+
+#[test]
+fn different_config_produces_different_server_function_digests() {
+    let command = digest_bytes(b"command");
+    let a = func::Function::server(command, digest_bytes(b"config-a"));
+    let b = func::Function::server(command, digest_bytes(b"config-b"));
+    assert_ne!(digest(&a), digest(&b));
+}
+
+#[test]
+fn action_and_server_variants_do_not_collide_on_the_same_command_and_config() {
     let command = digest_bytes(b"command");
     let config = digest_bytes(b"config");
-    let map = func::Function::map(command, config);
-    let reduce = func::Function::reduce(command, config);
-    assert_ne!(digest(&map), digest(&reduce));
-}
-
-#[test]
-fn command_and_map_variants_do_not_collide_on_the_same_command() {
-    let command = digest_bytes(b"command");
-    let a = func::Function::command(command);
-    let b = func::Function::map(command, digest_bytes(b"config"));
+    let a = func::Function::action(command, config);
+    let b = func::Function::server(command, config);
     assert_ne!(digest(&a), digest(&b));
 }
