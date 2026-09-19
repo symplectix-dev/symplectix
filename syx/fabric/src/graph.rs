@@ -171,7 +171,7 @@ impl Builder {
         let max_forgetter_duration =
             max_forgetter_duration.unwrap_or(storage::DEFAULT_MAX_FORGETTER_DURATION);
         // Its own subdirectory, the same way `db_backend`'s default gets
-        // `forgetter_dir.join("db")` above: `Forgetter::open` lists every
+        // `forgetter_dir.join("db")` above: `Logger::open` lists every
         // entry in whatever directory it's given and treats matches as
         // its own segments, so it needs one nothing else ever writes
         // into, not `forgetter_dir` itself (which `db`/`blobs` also live
@@ -182,7 +182,7 @@ impl Builder {
         // `max_forgetter_duration` likewise becomes `forgetter`'s own
         // rotate-by-time cadence, so a segment that never crosses
         // `flush_threshold` still doesn't sit active forever.
-        let (forgetter, replayed) = forgetter::Forgetter::open(
+        let (forgetter, replayed) = forgetter::Logger::open(
             forgetter_dir.join("forgetter"),
             max_pending_segments,
             flush_threshold,
@@ -229,7 +229,7 @@ impl Graph {
     /// yourself.
     #[allow(clippy::too_many_arguments)]
     const fn new(
-        forgetter: Arc<forgetter::Forgetter>,
+        forgetter: Arc<forgetter::Logger>,
         staged: Arc<storage::KeyDir>,
         db: slatedb::Db,
         blobs: Arc<dyn ObjectStore>,

@@ -37,7 +37,7 @@ const MAGIC_LEN: u64 = MAGIC.len() as u64;
 
 /// A segment's open file, whether it's the one currently being appended
 /// to or one already rotated out. Reading works the same either way;
-/// only `forgetter`'s own committer ever writes to one.
+/// only `logger`'s own committer ever writes to one.
 #[derive(Clone)]
 pub struct Segment {
     /// This segment's open file. `mmap` itself, once sealing calls for
@@ -76,10 +76,10 @@ impl Segment {
     }
 
     /// Opens the segment file at `path`, checking that it's really one
-    /// of `forgetter`'s own before treating it as one.
+    /// of `logger`'s own before treating it as one.
     ///
     /// Returns `None` for anything that isn't confidently one of
-    /// `forgetter`'s own segments.
+    /// `logger`'s own segments.
     ///
     /// Seals a `Some` result before returning it: once `MAGIC` is
     /// confirmed, this is a real segment, and this call's own view of
@@ -98,16 +98,16 @@ impl Segment {
     }
 
     /// Recovers the segment file at `path`: confirms it's really one of
-    /// `forgetter`'s own (`open_raw`), then reads its records
+    /// `logger`'s own (`open_raw`), then reads its records
     /// structurally and discards any torn tail found past the last
     /// complete one. Deletes `path` entirely if nothing valid remains.
     ///
     /// Returns `None` for anything that isn't confidently one of
-    /// `forgetter`'s own segments, or that turned out to hold no valid
+    /// `logger`'s own segments, or that turned out to hold no valid
     /// records at all.
     pub(super) async fn open(path: &Path) -> io::Result<Option<(Segment, Slots)>> {
         let Some(segment) = Self::open_raw(path).await? else {
-            // Not confidently one of `forgetter`'s own. Left untouched,
+            // Not confidently one of `logger`'s own. Left untouched,
             // whatever it is.
             return Ok(None);
         };
@@ -144,7 +144,7 @@ impl Segment {
         fs::OpenOptions::new().write(true).open(&path).await?.set_len(len).await?;
         Self::open_raw(&path).await?.ok_or_else(|| {
             io::Error::other(format!(
-                "forgetter: {path:?} lost its magic after truncating to {len} bytes"
+                "logger: {path:?} lost its magic after truncating to {len} bytes"
             ))
         })
     }
@@ -176,7 +176,7 @@ impl Segment {
     /// still-active segment.
     pub async fn slots(&self) -> io::Result<impl Iterator<Item = Slot> + Send> {
         if !self.sealed() {
-            return Err(io::Error::other("forgetter: slots() called on a still-active segment"));
+            return Err(io::Error::other("logger: slots() called on a still-active segment"));
         }
         Ok(self.parse().await?.1)
     }
@@ -282,7 +282,7 @@ impl<T: RangeBounds<u64> + Send + Sync> BytesIndex for T {
 }
 
 impl File {
-    /// Opens an existing segment file read-only, for one `Forgetter::open`
+    /// Opens an existing segment file read-only, for one `Logger::open`
     /// found already on disk left over from a previous run.
     async fn open(path: PathBuf) -> io::Result<Self> {
         task::spawn_blocking(move || std::fs::File::open(path).map(Arc::new).map(File))

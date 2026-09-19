@@ -3,7 +3,7 @@
 //!
 //! # Data layout
 //!
-//! ## Forgetter
+//! ## Logger
 //!
 //! Not-yet-packed blobs are staged in `forgetter`, a local durable log,
 //! not in `db`. `db` only ever holds pointers to already-packed content;
@@ -82,7 +82,7 @@ mod tests;
 
 use forgetter::{
     self,
-    Forgetter,
+    Logger,
 };
 
 /// A digest's position among whatever `forgetter` currently holds, not
@@ -99,7 +99,7 @@ use forgetter::{
 /// Grouped by segment rather than a flat digest map: `forget` needs
 /// exactly that grouping, and `get`/`contains` can afford to check every
 /// segment's own small map in turn, since there are at most
-/// `max_pending + 1` of them at once (see `Forgetter::save`'s own
+/// `max_pending + 1` of them at once (see `Logger::save`'s own
 /// backpressure) rather than scanning every staged digest across all of
 /// them.
 ///
@@ -119,7 +119,7 @@ impl KeyDir {
         Self { by_file: SkipMap::new() }
     }
 
-    /// Rebuilds the index from whatever `Forgetter::open` recovered on
+    /// Rebuilds the index from whatever `Logger::open` recovered on
     /// disk, reading each one's own `key(32 bytes) || encoded value` back
     /// via `Locator::bytes` (the same shape `put_blob` writes). A record
     /// that doesn't decode and hash back to its own key is dropped.
@@ -278,7 +278,7 @@ impl Entry {
 pub struct Cas<'a> {
     db:         &'a slatedb::Db,
     blobs:      &'a Arc<dyn ObjectStore>,
-    forgetter:  &'a Arc<Forgetter>,
+    forgetter:  &'a Arc<Logger>,
     staged:     &'a Arc<KeyDir>,
     cas_prefix: &'a str,
     flushing:   &'a Flushing,
@@ -301,7 +301,7 @@ impl<'a> Cas<'a> {
     pub(crate) fn new(
         db: &'a slatedb::Db,
         blobs: &'a Arc<dyn ObjectStore>,
-        forgetter: &'a Arc<Forgetter>,
+        forgetter: &'a Arc<Logger>,
         staged: &'a Arc<KeyDir>,
         cas_prefix: &'a str,
         flushing: &'a Flushing,
@@ -663,7 +663,7 @@ fn pack_path(cas_prefix: &str, pack_id: Digest) -> Path {
 async fn flush_pending(
     db: &slatedb::Db,
     blobs: &Arc<dyn ObjectStore>,
-    forgetter: &Forgetter,
+    forgetter: &Logger,
     staged: &KeyDir,
     cas_prefix: &str,
     flushing: &Flushing,
@@ -697,7 +697,7 @@ pub(crate) struct PackTarget {
 /// Spawns the task that packs whatever `forgetter` rotates out, so a
 /// segment doesn't just sit pending forever if nothing else happens to
 /// call `flush_pending` afterward. Reacts to `rotated`
-/// (`Forgetter::rotated`), which fires for every rotation regardless of
+/// (`Logger::rotated`), which fires for every rotation regardless of
 /// cause, so this needs no polling to stay responsive.
 ///
 /// Holds `forgetter` only weakly, so waiting on `rotated`, potentially
@@ -706,7 +706,7 @@ pub(crate) struct PackTarget {
 /// once `forgetter` is gone, which is what wakes this up to notice and
 /// exit rather than leak.
 pub(crate) fn spawn_flush_loop(
-    forgetter: std::sync::Weak<Forgetter>,
+    forgetter: std::sync::Weak<Logger>,
     mut rotated: tokio::sync::watch::Receiver<()>,
     target: PackTarget,
 ) {
@@ -734,7 +734,7 @@ pub(crate) fn spawn_flush_loop(
 async fn flush_segments(
     db: &slatedb::Db,
     blobs: &Arc<dyn ObjectStore>,
-    forgetter: &Forgetter,
+    forgetter: &Logger,
     staged: &KeyDir,
     cas_prefix: &str,
     segments: Vec<forgetter::FileId>,

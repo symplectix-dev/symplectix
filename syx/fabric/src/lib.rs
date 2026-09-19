@@ -30,7 +30,7 @@ pub struct Graph {
     // Durably holds not-yet-packed content until it's forgotten (packed
     // elsewhere). The only thing `Graph` can't default: everything below
     // can fall back to living under the same directory.
-    forgetter: Arc<forgetter::Forgetter>,
+    forgetter: Arc<forgetter::Logger>,
     // Maps a blob's digest to where `forgetter` is holding it; see
     // `storage::KeyDir`'s own doc for why this lives here and not
     // in `forgetter` itself.

@@ -35,7 +35,7 @@ use super::{
 /// to keep reading it the same way.
 pub(super) const RECORD_HEADER_LEN: u64 = 4;
 
-/// What `spawn` hands back to `Forgetter`: everything it needs to observe
+/// What `spawn` hands back to `Logger`: everything it needs to observe
 /// and drive a running committer, without exposing the committer itself.
 pub(super) struct Handle {
     commands: mpsc::UnboundedSender<Command>,
@@ -45,7 +45,7 @@ pub(super) struct Handle {
 
 /// The active segment right now: which `FileId` it is, and a handle to
 /// read from it. `Handle::segment_if_active` compares against `file` to
-/// tell `Forgetter::find` whether a lookup belongs here or in `pending`.
+/// tell `Logger::find` whether a lookup belongs here or in `pending`.
 struct ActiveSegment {
     file:    FileId,
     segment: Segment,
@@ -77,7 +77,7 @@ impl Handle {
         self.active_segment_len.load(Ordering::Relaxed)
     }
 
-    /// The active segment, if `file` is currently it. `Forgetter::find`
+    /// The active segment, if `file` is currently it. `Logger::find`
     /// falls back to `pending` when this is `None`.
     pub(super) async fn segment_if_active(&self, file: FileId) -> Option<Segment> {
         let active = self.active.read().await;
@@ -90,8 +90,8 @@ impl Handle {
         let (reply, response) = oneshot::channel();
         self.commands
             .send(Command::Save(Save { value, reply }))
-            .map_err(|_| io::Error::other("forgetter: committer task is gone"))?;
-        response.await.map_err(|_| io::Error::other("forgetter: committer task is gone"))?
+            .map_err(|_| io::Error::other("logger: committer task is gone"))?;
+        response.await.map_err(|_| io::Error::other("logger: committer task is gone"))?
     }
 
     /// Closes the active segment out as a new pending segment and starts
@@ -100,8 +100,8 @@ impl Handle {
         let (reply, response) = oneshot::channel();
         self.commands
             .send(Command::Rotate(Rotate { reply }))
-            .map_err(|_| io::Error::other("forgetter: committer task is gone"))?;
-        response.await.map_err(|_| io::Error::other("forgetter: committer task is gone"))?
+            .map_err(|_| io::Error::other("logger: committer task is gone"))?;
+        response.await.map_err(|_| io::Error::other("logger: committer task is gone"))?
     }
 
     /// A clone of the active segment right now. Exists for tests: lets
@@ -116,8 +116,8 @@ impl Handle {
 
 /// Builds a committer around a fresh active segment, wired to
 /// `pending`, spawns it in its own task, and returns the `Handle`
-/// `Forgetter` uses to observe and drive it. Kept separate from
-/// `Forgetter::open`'s own setup so a future multi-committer `Forgetter`
+/// `Logger` uses to observe and drive it. Kept separate from
+/// `Logger::open`'s own setup so a future multi-committer `Logger`
 /// could spin up several of these the same way, each with its own
 /// segment and channel.
 pub(super) async fn spawn(
@@ -201,7 +201,7 @@ impl Committer {
     const MAX_BATCH_SIZE: usize = 1024;
 
     /// Runs until the `Handle` holding the other end of `commands` is
-    /// dropped, and with it the `Forgetter` it backs.
+    /// dropped, and with it the `Logger` it backs.
     async fn run(mut self) {
         // A `Rotate` peeked while draining a batch.
         let mut carried: Option<Command> = None;
@@ -383,7 +383,7 @@ impl Committer {
     /// as inert space in this segment until it's forgotten.
     ///
     /// If recovery itself fails, the segment is still on disk. The next
-    /// `Forgetter::open` will find and replay it like any other segment.
+    /// `Logger::open` will find and replay it like any other segment.
     async fn poison(&mut self) -> io::Result<()> {
         let old_id = self.file_id;
         // The replaced `ActiveSegment` is discarded: whatever it

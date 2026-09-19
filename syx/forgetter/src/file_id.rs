@@ -1,4 +1,4 @@
-//! A segment's identity: `{id:020}.log` in `Forgetter`'s directory.
+//! A segment's identity: `{id:020}.log` in `Logger`'s directory.
 
 use std::ffi::OsStr;
 use std::fmt;

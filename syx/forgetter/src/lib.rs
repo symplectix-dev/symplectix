@@ -53,7 +53,7 @@ impl BytesIndex for Slot {
 /// Where a record physically lives: which segment, and where within it.
 /// Carries the `Segment` itself (a cheap, `Clone`-able handle) internally,
 /// not just `file`, so `bytes` can read directly from it without a
-/// separate lookup back into `Forgetter` that could race against that
+/// separate lookup back into `Logger` that could race against that
 /// same segment being forgotten in between. `file`/`segment`/`slot`
 /// stay private: a `Locator` only ever comes from `save` or `open`'s
 /// replay, never built by hand from mismatched parts.
@@ -76,14 +76,14 @@ impl Locator {
     }
 
     /// Reads the bytes this locator points at, straight from its own
-    /// segment: no separate lookup back into `Forgetter` that could
+    /// segment: no separate lookup back into `Logger` that could
     /// race against that same segment being forgotten in between.
     pub async fn bytes(&self) -> io::Result<Bytes> {
         self.segment.bytes(self.slot).await
     }
 }
 
-/// What `Forgetter::open` recovered from segments already on disk.
+/// What `Logger::open` recovered from segments already on disk.
 /// Assembling a `Locator` needs nothing beyond what's already in each
 /// segment's own `(FileId, Segment, Slots)`, so this just chains all of
 /// them into one `Locator` sequence rather than building its own state
@@ -137,7 +137,7 @@ impl Found {
 
 /// A place to durably drop content and forget about it, until it's ready
 /// to be packed elsewhere. `committer::spawn` runs the actual write path
-/// in its own task; `Forgetter` holds the same active/pending state
+/// in its own task; `Logger` holds the same active/pending state
 /// through shared `Arc`s, so its own reads never see something the
 /// committer doesn't.
 ///
@@ -145,7 +145,7 @@ impl Found {
 /// values addressable by their own key encodes that key into the bytes
 /// it hands to `save` itself, and decodes it back out of whatever
 /// `find`/`Found::segment` later reads.
-pub struct Forgetter {
+pub struct Logger {
     /// The directory segments live in.
     dir:         PathBuf,
     /// Observes and drives the running committer task; see `Handle`'s
@@ -164,7 +164,7 @@ pub struct Forgetter {
     max_pending: u16,
 }
 
-impl Forgetter {
+impl Logger {
     /// Opens `dir`, creating it if needed, and replays whatever segments
     /// are already there.
     ///
@@ -248,7 +248,7 @@ impl Forgetter {
         let pending_len = self.pending.len();
         if pending_len >= self.max_pending as usize {
             return Err(io::Error::other(format!(
-                "forgetter: {pending_len} segments already pending (max {})",
+                "logger: {pending_len} segments already pending (max {})",
                 self.max_pending
             )));
         }
@@ -295,11 +295,11 @@ impl Forgetter {
 
     /// Subscribes to rotation events. `changed()` on the returned
     /// receiver resolves on every rotation, from any cause, until every
-    /// sender (this `Forgetter`'s own, and the committer's) is dropped,
+    /// sender (this `Logger`'s own, and the committer's) is dropped,
     /// after which it returns `Err` instead, the same way
     /// `mpsc::Receiver::recv` returns `None` once every `Sender` is
     /// gone. A caller can hold the receiver across an unbounded wait
-    /// without that keeping this `Forgetter` alive.
+    /// without that keeping this `Logger` alive.
     ///
     /// Reuse one receiver to react to every rotation: like any `watch`
     /// channel, it only remembers the latest change, not a history of

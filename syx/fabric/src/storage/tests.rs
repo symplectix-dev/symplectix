@@ -31,13 +31,13 @@ fn local_fs() -> (testing::TempDir, Arc<dyn ObjectStore>) {
 
 /// Everything a test needs to drive a `Cas` against: a fresh in-memory
 /// `slatedb::Db`, packs written to `packs_backend`, and blobs staged in
-/// a `Forgetter` rooted at a fresh local `TempDir`. No test overrides
+/// a `Logger` rooted at a fresh local `TempDir`. No test overrides
 /// `cas_prefix`/chunking/encoding, so `cas()` just uses their defaults.
 struct Env {
     _forgetter_dir: testing::TempDir,
     db: slatedb::Db,
     blobs: Arc<dyn ObjectStore>,
-    forgetter: Arc<Forgetter>,
+    forgetter: Arc<Logger>,
     staged: Arc<KeyDir>,
     flushing: Flushing,
 }
@@ -47,7 +47,7 @@ impl Env {
         let db = slatedb::Db::builder("test", in_memory()).build().await.unwrap();
         let forgetter_dir = testing::tempdir();
         let (forgetter, mut replayed) =
-            Forgetter::open(forgetter_dir.path(), u16::MAX, threshold, None).await.unwrap();
+            Logger::open(forgetter_dir.path(), u16::MAX, threshold, None).await.unwrap();
         assert!(replayed.next().is_none());
         let forgetter = Arc::new(forgetter);
         let staged = Arc::new(KeyDir::rebuild(replayed, Codec::new()).await);
