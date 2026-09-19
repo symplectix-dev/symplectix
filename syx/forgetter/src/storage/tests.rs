@@ -34,32 +34,25 @@ fn local_fs() -> (testing::TempDir, Arc<dyn ObjectStore>) {
 /// a `Logger` rooted at a fresh local `TempDir`. No test overrides
 /// `cas_prefix`/chunking/encoding, so `cas()` just uses their defaults.
 struct Env {
-    _forgetter_dir: testing::TempDir,
-    db: slatedb::Db,
-    blobs: Arc<dyn ObjectStore>,
-    forgetter: Arc<Logger>,
-    staged: Arc<KeyDir>,
-    flushing: Flushing,
+    _logger_dir: testing::TempDir,
+    db:          slatedb::Db,
+    blobs:       Arc<dyn ObjectStore>,
+    logger:      Arc<Logger>,
+    staged:      Arc<KeyDir>,
+    flushing:    Flushing,
 }
 
 impl Env {
     async fn with_threshold(blobs_backend: Arc<dyn ObjectStore>, threshold: u64) -> Self {
         let db = slatedb::Db::builder("test", in_memory()).build().await.unwrap();
-        let forgetter_dir = testing::tempdir();
-        let (forgetter, mut replayed) =
-            Logger::open(forgetter_dir.path(), u16::MAX, threshold, None).await.unwrap();
+        let logger_dir = testing::tempdir();
+        let (logger, mut replayed) =
+            Logger::open(logger_dir.path(), u16::MAX, threshold, None).await.unwrap();
         assert!(replayed.next().is_none());
-        let forgetter = Arc::new(forgetter);
+        let logger = Arc::new(logger);
         let staged = Arc::new(KeyDir::rebuild(replayed, Codec::new()).await);
         let flushing = Flushing::new();
-        Self {
-            _forgetter_dir: forgetter_dir,
-            db,
-            blobs: blobs_backend,
-            forgetter,
-            staged,
-            flushing,
-        }
+        Self { _logger_dir: logger_dir, db, blobs: blobs_backend, logger, staged, flushing }
     }
 
     async fn new(blobs_backend: Arc<dyn ObjectStore>) -> Self {
@@ -70,7 +63,7 @@ impl Env {
         Cas::new(
             &self.db,
             &self.blobs,
-            &self.forgetter,
+            &self.logger,
             &self.staged,
             DEFAULT_CAS_PREFIX,
             &self.flushing,
@@ -97,13 +90,13 @@ fn encode(flags: ContentFlags, raw: Vec<u8>) -> Vec<u8> {
     Codec::new().encode(flags, raw)
 }
 
-/// Forces `forgetter`'s active segment out, then packs everything
+/// Forces `logger`'s active segment out, then packs everything
 /// currently pending. `Cas::flush_pending` deliberately doesn't rotate
 /// the active segment itself, so tests that want a deterministic
 /// "everything staged so far is now packed" use this instead of calling
 /// `flush_pending` alone.
 async fn flush(cas: Cas<'_>) {
-    let _ = cas.forgetter.rotate().await;
+    let _ = cas.logger.rotate().await;
     cas.flush_pending().await.unwrap();
 }
 
@@ -179,7 +172,7 @@ async fn identical_chunks_across_different_blobs_are_stored_once() {
 }
 
 #[tokio::test]
-async fn flush_pending_moves_a_staged_entry_out_of_the_forgetter_and_into_a_pack() {
+async fn flush_pending_moves_a_staged_entry_out_of_the_logger_and_into_a_pack() {
     let env = Env::with_threshold(in_memory(), 1024 * 1024).await;
     let cas = env.cas();
 

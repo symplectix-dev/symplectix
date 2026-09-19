@@ -9,8 +9,11 @@ use std::collections::{
     BTreeMap,
     BTreeSet,
 };
+use std::path::Path;
+use std::sync::Arc;
 
 use content_addressing as cas;
+use object_store::ObjectStore;
 
 /// A program, its arguments, and the environment variables to invoke it
 /// with. Shared by:
@@ -181,4 +184,26 @@ impl Tree {
 
 pub fn command(program: &str, args: &[&str]) -> Command {
     Command::new(program).args(args)
+}
+
+/// A `Forgetter` backed by a local-filesystem `ObjectStore` rooted at
+/// `root`, staging not-yet-packed blobs in a `logger` subdirectory of
+/// `root`.
+pub async fn forgetter(root: impl AsRef<Path>) -> forgetter::Forgetter {
+    let root = root.as_ref();
+    let backend: Arc<dyn ObjectStore> =
+        Arc::new(object_store::local::LocalFileSystem::new_with_prefix(root).unwrap());
+    forgetter::Forgetter::builder(root.join("logger"))
+        .db_prefix("test")
+        .db_backend(backend)
+        .build()
+        .await
+        .unwrap()
+}
+
+/// A `Forgetter` backed by a local temporary directory.
+pub async fn temp_forgetter() -> (testing::TempDir, forgetter::Forgetter) {
+    let dir = testing::tempdir();
+    let f = forgetter(dir.path()).await;
+    (dir, f)
 }

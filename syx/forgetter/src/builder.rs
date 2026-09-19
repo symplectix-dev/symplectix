@@ -1,4 +1,3 @@
-//! A content-addressable (hyper)graph.
 use std::io;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -11,24 +10,25 @@ use tokio::fs;
 
 use crate::{
     Cas,
-    Graph,
+    Forgetter,
+    Logger,
     storage,
 };
 
-/// Builds a `Graph`, opening the `slatedb::Db` it and its blob-storage
+/// Builds a `Forgetter`, opening the `slatedb::Db` it and its blob-storage
 /// parts share.
 ///
-/// `forgetter_dir` is the only thing that must be specified: a local
-/// directory `Graph` durably holds not-yet-packed blobs in. Everything
-/// else, including where `db`/`blobs` physically live, defaults to also
-/// living under `forgetter_dir` via a local `object_store`, so a `Graph`
-/// works standalone with zero external setup; override `db_backend`/
-/// `blobs` to point at S3 (or any other `object_store` backend) instead.
+/// `dir` is the only thing that must be specified: a local directory
+/// `Forgetter` durably holds not-yet-packed blobs in. Everything else,
+/// including where `db`/`blobs` physically live, defaults to also living
+/// under `dir` via a local `object_store`, so a `Forgetter` works
+/// standalone with zero external setup; override `db_backend`/`blobs` to
+/// point at S3 (or any other `object_store` backend) instead.
 pub struct Builder {
-    // forgetter
-    forgetter_dir:          PathBuf,
-    max_forgetter_duration: Option<Duration>,
-    max_pending_segments:   Option<u16>,
+    // logger
+    dir: PathBuf,
+    max_logger_duration: Option<Duration>,
+    max_pending_segments: Option<u16>,
 
     // db
     db_prefix:  Option<String>,
@@ -45,10 +45,10 @@ pub struct Builder {
 }
 
 impl Builder {
-    fn new(forgetter_dir: impl Into<PathBuf>) -> Self {
+    fn new(dir: impl Into<PathBuf>) -> Self {
         Self {
-            forgetter_dir: forgetter_dir.into(),
-            max_forgetter_duration: None,
+            dir: dir.into(),
+            max_logger_duration: None,
             max_pending_segments: None,
             db_prefix: None,
             db_backend: None,
@@ -60,14 +60,14 @@ impl Builder {
         }
     }
 
-    /// How long `forgetter` lets a segment stay active before rotating
+    /// How long `Logger` lets a segment stay active before rotating
     /// it out on its own, regardless of `flush_threshold`.
-    pub fn max_forgetter_duration(mut self, max_forgetter_duration: Duration) -> Self {
-        self.max_forgetter_duration = Some(max_forgetter_duration);
+    pub fn max_logger_duration(mut self, max_logger_duration: Duration) -> Self {
+        self.max_logger_duration = Some(max_logger_duration);
         self
     }
 
-    /// How many pending (rotated, not yet packed) segments `forgetter`
+    /// How many pending (rotated, not yet packed) segments `Logger`
     /// lets accumulate before refusing further writes.
     pub fn max_pending_segments(mut self, max_pending_segments: u16) -> Self {
         self.max_pending_segments = Some(max_pending_segments);
@@ -82,8 +82,8 @@ impl Builder {
         self
     }
 
-    /// Where `db` (the pointer/relation store) lives. Defaults to a
-    /// local `object_store` under `forgetter_dir` when not set.
+    /// Where `db` (the pointer store) lives. Defaults to a local
+    /// `object_store` under `dir` when not set.
     pub fn db_backend(mut self, db_backend: Arc<dyn ObjectStore>) -> Self {
         self.db_backend = Some(db_backend);
         self
@@ -96,7 +96,7 @@ impl Builder {
         self
     }
 
-    /// How many bytes `forgetter` stages before rotating a segment out
+    /// How many bytes `Logger` stages before rotating a segment out
     /// on its own and making it worth consolidating into a pack.
     pub fn flush_threshold(mut self, flush_threshold: u64) -> Self {
         self.flush_threshold = Some(flush_threshold);
@@ -129,16 +129,11 @@ impl Builder {
         self
     }
 
-    /// Opens `db` and `forgetter`, and builds the `Graph`.
-    // TODO: `Graph`'s own relation storage will need its own merge
-    // operator eventually, e.g. for growable reference sets, see
-    // hypergraph.md. Nothing registers one on `db` today, since the blob
-    // storage engine no longer needs merge semantics now that
-    // not-yet-packed content lives in `forgetter`, not `db`.
-    pub async fn build(self) -> io::Result<Graph> {
+    /// Opens `db` and `Logger`, and builds the `Forgetter`.
+    pub async fn build(self) -> io::Result<Forgetter> {
         let Self {
-            forgetter_dir,
-            max_forgetter_duration,
+            dir,
+            max_logger_duration,
             max_pending_segments,
             db_prefix,
             db_backend,
@@ -152,7 +147,7 @@ impl Builder {
         let db_backend = match db_backend {
             Some(backend) => backend,
             None => {
-                let dir = forgetter_dir.join("db");
+                let dir = dir.join("db");
                 fs::create_dir_all(&dir).await?;
                 let local = LocalFileSystem::new_with_prefix(dir).map_err(io::Error::other)?;
                 Arc::new(local) as Arc<dyn ObjectStore>
@@ -168,29 +163,29 @@ impl Builder {
         let max_pending_segments =
             max_pending_segments.unwrap_or(storage::DEFAULT_MAX_PENDING_SEGMENTS);
         let flush_threshold = flush_threshold.unwrap_or(storage::DEFAULT_FLUSH_THRESHOLD);
-        let max_forgetter_duration =
-            max_forgetter_duration.unwrap_or(storage::DEFAULT_MAX_FORGETTER_DURATION);
+        let max_logger_duration =
+            max_logger_duration.unwrap_or(storage::DEFAULT_MAX_LOGGER_DURATION);
         // Its own subdirectory, the same way `db_backend`'s default gets
-        // `forgetter_dir.join("db")` above: `Logger::open` lists every
-        // entry in whatever directory it's given and treats matches as
-        // its own segments, so it needs one nothing else ever writes
-        // into, not `forgetter_dir` itself (which `db`/`blobs` also live
-        // under by default). `flush_threshold` doubles as `forgetter`'s
-        // own rotate threshold: the size at which a segment is worth
-        // consolidating into a pack is the same size at which it's worth
-        // rotating out of the active slot in the first place.
-        // `max_forgetter_duration` likewise becomes `forgetter`'s own
-        // rotate-by-time cadence, so a segment that never crosses
-        // `flush_threshold` still doesn't sit active forever.
-        let (forgetter, replayed) = forgetter::Logger::open(
-            forgetter_dir.join("forgetter"),
+        // `dir.join("db")` above: `Logger::open` lists every entry in
+        // whatever directory it's given and treats matches as its own
+        // segments, so it needs one nothing else ever writes into, not
+        // `dir` itself (which `db`/`blobs` also live under by default).
+        // `flush_threshold` doubles as `Logger`'s own rotate threshold:
+        // the size at which a segment is worth consolidating into a pack
+        // is the same size at which it's worth rotating out of the
+        // active slot in the first place. `max_logger_duration` likewise
+        // becomes `Logger`'s own rotate-by-time cadence, so a segment
+        // that never crosses `flush_threshold` still doesn't sit active
+        // forever.
+        let (logger, replayed) = Logger::open(
+            dir.join("forgetter"),
             max_pending_segments,
             flush_threshold,
-            Some(max_forgetter_duration),
+            Some(max_logger_duration),
         )
         .await?;
-        let rotated = forgetter.rotated();
-        let forgetter = Arc::new(forgetter);
+        let rotated = logger.rotated();
+        let logger = Arc::new(logger);
         let staged = Arc::new(storage::KeyDir::rebuild(replayed, codec).await);
 
         let blobs = blobs_backend.unwrap_or_else(|| db_backend.clone());
@@ -199,11 +194,11 @@ impl Builder {
             Arc::from(cas_prefix.unwrap_or_else(|| storage::DEFAULT_CAS_PREFIX.to_string()));
 
         let flushing = storage::Flushing::new();
-        // Packs whatever `forgetter` rotates out, reacting directly to
-        // its own rotation events rather than needing a write to happen
+        // Packs whatever `Logger` rotates out, reacting directly to its
+        // own rotation events rather than needing a write to happen
         // afterward to notice.
         storage::spawn_flush_loop(
-            Arc::downgrade(&forgetter),
+            Arc::downgrade(&logger),
             rotated,
             storage::PackTarget {
                 db:         db.clone(),
@@ -213,23 +208,23 @@ impl Builder {
                 flushing:   flushing.clone(),
             },
         );
-        Ok(Graph::new(forgetter, staged, db, blobs, flushing, cas_prefix, chunking, codec))
+        Ok(Forgetter::new(logger, staged, db, blobs, flushing, cas_prefix, chunking, codec))
     }
 }
 
-impl Graph {
-    /// Starts building a `Graph`. See [`Builder`]'s own doc for what's
-    /// required vs. defaulted.
-    pub fn builder(forgetter_dir: impl Into<PathBuf>) -> Builder {
-        Builder::new(forgetter_dir)
+impl Forgetter {
+    /// Starts building a `Forgetter`. See [`Builder`]'s own doc for
+    /// what's required vs. defaulted.
+    pub fn builder(dir: impl Into<PathBuf>) -> Builder {
+        Builder::new(dir)
     }
 
-    /// Only `Builder::build` calls this. Construct a `Graph` via
-    /// `Graph::builder` instead of opening `db`/building these parts
+    /// Only `Builder::build` calls this. Construct a `Forgetter` via
+    /// `Forgetter::builder` instead of opening `db`/building these parts
     /// yourself.
     #[allow(clippy::too_many_arguments)]
     const fn new(
-        forgetter: Arc<forgetter::Logger>,
+        logger: Arc<Logger>,
         staged: Arc<storage::KeyDir>,
         db: slatedb::Db,
         blobs: Arc<dyn ObjectStore>,
@@ -238,17 +233,18 @@ impl Graph {
         chunking: cas::Chunking,
         codec: cas::Codec,
     ) -> Self {
-        Self { forgetter, staged, db, blobs, flushing, cas_prefix, chunking, codec }
+        Self { logger, staged, db, blobs, flushing, cas_prefix, chunking, codec }
     }
 
-    /// The blob-storage facet of this `Graph`: `get`/`put`/`read_into`/
-    /// `copy_from`/`flush_pending`. A cheap, borrowed view. Construct it
-    /// fresh wherever it's needed rather than holding onto one.
+    /// The blob-storage facet of this `Forgetter`: `get`/`put`/
+    /// `read_into`/`copy_from`/`flush_pending`. A cheap, borrowed view.
+    /// Construct it fresh wherever it's needed rather than holding onto
+    /// one.
     pub fn cas(&self) -> Cas<'_> {
         Cas::new(
             &self.db,
             &self.blobs,
-            &self.forgetter,
+            &self.logger,
             &self.staged,
             &self.cas_prefix,
             &self.flushing,

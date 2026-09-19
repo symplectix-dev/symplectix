@@ -2,8 +2,8 @@ use std::path::Path;
 
 use tokio::io::AsyncWriteExt as _;
 
+use super::committer::RECORD_HEADER_LEN;
 use super::*;
-use crate::committer::RECORD_HEADER_LEN;
 
 /// `Logger::open` with a `max_pending` high enough that no test other
 /// than `save_refuses_once_max_pending_segments_are_stuck` needs to
