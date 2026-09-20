@@ -29,61 +29,49 @@ fn local_fs() -> (testing::TempDir, Arc<dyn ObjectStore>) {
     (tmp, backend)
 }
 
-/// Everything a test needs to drive a `Cas` against: a fresh in-memory
-/// `slatedb::Db`, packs written to `packs_backend`, and blobs staged in
-/// a `Forgetter` rooted at a fresh local `TempDir`. No test overrides
-/// `cas_prefix`/chunking/encoding, so `cas()` just uses their defaults.
+/// A `Storage` to drive tests against: a fresh in-memory `slatedb::Db`,
+/// packs written to `blobs_backend`, and blobs staged in a `Logger`
+/// rooted at a fresh local `TempDir`, which this keeps alive alongside
+/// it. No test overrides `cas_prefix`/chunking/encoding, so those just
+/// use their defaults.
 struct Env {
-    _forgetter_dir: testing::TempDir,
-    db: slatedb::Db,
-    blobs: Arc<dyn ObjectStore>,
-    forgetter: Arc<Forgetter>,
-    staged: Arc<KeyDir>,
-    flushing: Flushing,
+    _logger_dir: testing::TempDir,
+    storage:     Storage,
 }
 
 impl Env {
     async fn with_threshold(blobs_backend: Arc<dyn ObjectStore>, threshold: u64) -> Self {
         let db = slatedb::Db::builder("test", in_memory()).build().await.unwrap();
-        let forgetter_dir = testing::tempdir();
-        let (forgetter, mut replayed) =
-            Forgetter::open(forgetter_dir.path(), u16::MAX, threshold, None).await.unwrap();
+        let logger_dir = testing::tempdir();
+        let (logger, mut replayed) =
+            Logger::open(logger_dir.path(), u16::MAX, threshold, None).await.unwrap();
         assert!(replayed.next().is_none());
-        let forgetter = Arc::new(forgetter);
-        let staged = Arc::new(KeyDir::rebuild(replayed, Codec::new()).await);
-        let flushing = Flushing::new();
-        Self {
-            _forgetter_dir: forgetter_dir,
+        let storage = Storage::new(
+            Arc::new(logger),
+            Arc::new(KeyDir::rebuild(replayed, Codec::new()).await),
             db,
-            blobs: blobs_backend,
-            forgetter,
-            staged,
-            flushing,
-        }
+            blobs_backend,
+            Flushing::new(),
+            Arc::from(DEFAULT_CAS_PREFIX),
+            Chunking::new(),
+            Codec::new(),
+        );
+        Self { _logger_dir: logger_dir, storage }
     }
 
     async fn new(blobs_backend: Arc<dyn ObjectStore>) -> Self {
         Self::with_threshold(blobs_backend, DEFAULT_FLUSH_THRESHOLD).await
     }
 
-    fn cas(&self) -> Cas<'_> {
-        Cas::new(
-            &self.db,
-            &self.blobs,
-            &self.forgetter,
-            &self.staged,
-            DEFAULT_CAS_PREFIX,
-            &self.flushing,
-            Chunking::new(),
-            Codec::new(),
-        )
+    fn cas(&self) -> &Storage {
+        &self.storage
     }
 }
 
 /// Some chunk digest referenced by `exclude`'s own manifest, other than
 /// `exclude` itself, for tests that need an existing chunk key to target
 /// for corruption without independently recomputing chunk digests.
-async fn any_key_except(cas: Cas<'_>, exclude: Digest) -> Digest {
+async fn any_key_except(cas: &Storage, exclude: Digest) -> Digest {
     let (_, manifest_bytes) = cas.load(&exclude).await.unwrap().expect("manifest present");
     let manifest = decode_chunks(&manifest_bytes).unwrap();
     manifest
@@ -97,13 +85,13 @@ fn encode(flags: ContentFlags, raw: Vec<u8>) -> Vec<u8> {
     Codec::new().encode(flags, raw)
 }
 
-/// Forces `forgetter`'s active segment out, then packs everything
-/// currently pending. `Cas::flush_pending` deliberately doesn't rotate
-/// the active segment itself, so tests that want a deterministic
+/// Forces `logger`'s active segment out, then packs everything
+/// currently pending. `Storage::flush_pending` deliberately doesn't
+/// rotate the active segment itself, so tests that want a deterministic
 /// "everything staged so far is now packed" use this instead of calling
 /// `flush_pending` alone.
-async fn flush(cas: Cas<'_>) {
-    let _ = cas.forgetter.rotate().await;
+async fn flush(cas: &Storage) {
+    let _ = cas.logger.rotate().await;
     cas.flush_pending().await.unwrap();
 }
 
@@ -112,9 +100,10 @@ async fn a_single_chunks_digest_is_the_content_digest_not_a_wrapped_one() {
     // This is what makes a small standalone blob dedup against the
     // same content appearing as one chunk inside a larger blob: both
     // are keyed by the exact same digest. Runs against both inner
-    // object stores, since this is a property of `cas`'s own digest
-    // scheme, not of whichever store happens to be holding the packs.
-    async fn check(cas: Cas<'_>) {
+    // object stores, since this is a property of this module's own
+    // digest scheme, not of whichever store happens to be holding the
+    // packs.
+    async fn check(cas: &Storage) {
         let content = testing::random_bytes(4096); // well under CHUNK_MIN_SIZE
         let content_digest = Hasher::new().part(&content).digest();
         let d = cas.put(&Bytes::from(content)).await.unwrap();
@@ -144,13 +133,13 @@ async fn identical_chunks_across_different_blobs_are_stored_once() {
     };
 
     // How many keys after putting `blob` and flushing it into packs.
-    async fn count_keys(cas: Cas<'_>, blob: Bytes) -> usize {
+    async fn count_keys(cas: &Storage, blob: Bytes) -> usize {
         cas.put(&blob).await.unwrap();
         flush(cas).await;
         cas.entry_count().await.unwrap()
     }
 
-    async fn check(cas: Cas<'_>, blob_a: &Bytes, blob_b: &Bytes, baseline: usize) {
+    async fn check(cas: &Storage, blob_a: &Bytes, blob_b: &Bytes, baseline: usize) {
         cas.put(blob_a).await.unwrap();
         flush(cas).await;
         let count_before = cas.entry_count().await.unwrap();
@@ -169,8 +158,8 @@ async fn identical_chunks_across_different_blobs_are_stored_once() {
     let mem_keys = count_keys(Env::new(in_memory()).await.cas(), blob_b.clone()).await;
     let (_tmp, inner) = local_fs();
     let tmp_keys = count_keys(Env::new(inner).await.cas(), blob_b.clone()).await;
-    // The baseline is a property of blob_b's content and cas's chunking,
-    // not of which backend computed it.
+    // The baseline is a property of blob_b's content and this module's
+    // chunking, not of which backend computed it.
     assert_eq!(mem_keys, tmp_keys);
 
     check(Env::new(in_memory()).await.cas(), &blob_a, &blob_b, mem_keys).await;
@@ -179,17 +168,17 @@ async fn identical_chunks_across_different_blobs_are_stored_once() {
 }
 
 #[tokio::test]
-async fn flush_pending_moves_a_staged_entry_out_of_the_forgetter_and_into_a_pack() {
+async fn flush_pending_moves_a_staged_entry_out_of_the_logger_and_into_a_pack() {
     let env = Env::with_threshold(in_memory(), 1024 * 1024).await;
     let cas = env.cas();
 
     let content = Bytes::from_static(b"0123456789");
     let d = cas.put(&content).await.unwrap();
-    assert!(env.staged.contains(d));
+    assert!(cas.staged.contains(d));
     assert!(cas.get_entry(d).await.unwrap().is_none());
 
     flush(cas).await;
-    assert!(!env.staged.contains(d));
+    assert!(!cas.staged.contains(d));
     assert!(cas.get_entry(d).await.unwrap().is_some());
 
     assert_eq!(cas.get::<Bytes>(&d).await.unwrap(), Some(content));
@@ -197,7 +186,7 @@ async fn flush_pending_moves_a_staged_entry_out_of_the_forgetter_and_into_a_pack
 
 #[tokio::test]
 async fn get_returns_invalid_data_for_tampered_content() {
-    async fn check(cas: Cas<'_>) {
+    async fn check(cas: &Storage) {
         let d = cas.put(&Bytes::from_static(b"hello")).await.unwrap();
         flush(cas).await;
 
@@ -237,7 +226,7 @@ async fn get_returns_invalid_data_for_a_tampered_chunk() {
 
 #[tokio::test]
 async fn read_into_returns_invalid_data_for_tampered_content() {
-    async fn check(cas: Cas<'_>) {
+    async fn check(cas: &Storage) {
         let d = cas.put(&Bytes::from_static(b"hello")).await.unwrap();
         flush(cas).await;
 
@@ -277,7 +266,7 @@ async fn read_into_returns_invalid_data_for_a_tampered_chunk() {
 
 #[tokio::test]
 async fn get_returns_invalid_data_for_a_tampered_manifest() {
-    async fn check(cas: Cas<'_>) {
+    async fn check(cas: &Storage) {
         let content = testing::random_bytes(Chunking::MAX_SIZE * 2);
         let d = cas.put(&Bytes::from(content)).await.unwrap();
         flush(cas).await;
@@ -297,7 +286,7 @@ async fn get_returns_invalid_data_for_a_tampered_manifest() {
 
 #[tokio::test]
 async fn get_returns_invalid_data_when_manifest_references_a_missing_chunk() {
-    async fn check(cas: Cas<'_>) {
+    async fn check(cas: &Storage) {
         let (present_digest, present_raw) =
             (Hasher::new().part(b"present").digest(), b"present".to_vec());
         cas.put_blob(

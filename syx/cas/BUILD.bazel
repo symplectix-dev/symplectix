@@ -1,17 +1,16 @@
 load("//bazel:rust.bzl", "rust")
 
 rust.library(
-    name = "fabric",
+    name = "cas",
     srcs = [
-        "src/graph.rs",
+        "src/builder.rs",
         "src/lib.rs",
-        "src/storage.rs",
-        "src/storage/tests.rs",
+        "src/tests.rs",
     ],
     visibility = ["//visibility:public"],
     deps = [
         "//syx/content_addressing",
-        "//syx/forgetter",
+        "//syx/logger",
         "@crates//:bytes",
         "@crates//:crossbeam-skiplist",
         "@crates//:dashmap",
@@ -23,16 +22,16 @@ rust.library(
 )
 
 rust.test(
-    name = "fabric_test",
+    name = "cas_test",
     size = "small",
-    crate = ":fabric",
+    crate = ":cas",
     deps = [
         "//syx/testing",
     ],
 )
 
 rust.test(
-    name = "fabric_remote_object_store_test",
+    name = "cas_remote_object_store_test",
     size = "small",
     srcs = ["tests/remote_object_store.rs"],
     data = ["@minio_static//file"],
@@ -45,7 +44,7 @@ rust.test(
         "@platforms//os:linux",
     ],
     deps = [
-        ":fabric",
+        ":cas",
         "//syx/content_addressing",
         "//syx/testing",
         "@crates//:aws-sdk-s3",
@@ -56,25 +55,37 @@ rust.test(
 )
 
 rust.test_suite(
-    name = "fabric_test_suite",
+    name = "cas_test_suite",
     size = "small",
     srcs = [
-        "tests/graph_chunks_large_content.rs",
-        "tests/graph_fidelity.rs",
-        "tests/graph_is_deterministic.rs",
-        "tests/graph_missing.rs",
-        "tests/graph_persists.rs",
-        "tests/graph_reads_into_a_writer.rs",
-        "tests/graph_skips_compression_when_not_worthwhile.rs",
+        "tests/chunks_large_content.rs",
+        "tests/command_digest_is_deterministic.rs",
+        "tests/command_digest_is_sensitive.rs",
+        "tests/fidelity.rs",
+        "tests/function_digest_is_deterministic.rs",
+        "tests/function_digest_is_sensitive.rs",
+        "tests/function_resolves.rs",
+        "tests/is_deterministic.rs",
+        "tests/missing.rs",
+        "tests/persists.rs",
+        "tests/reads_into_a_writer.rs",
+        "tests/skips_compression_when_not_worthwhile.rs",
+        "tests/tree_digest_is_deterministic.rs",
+        "tests/tree_digest_is_sensitive.rs",
+        "tests/tree_entries.rs",
+        "tests/tree_interns.rs",
     ],
     data = ["//:.rustfmt.toml"],
+    proc_macro_deps = ["//syx/cas_cbor2"],
     shared_srcs = ["tests/common/mod.rs"],
     deps = [
-        ":fabric",
+        ":cas",
         "//syx/cas_testing",
         "//syx/content_addressing",
         "//syx/testing",
+        "@crates//:cbor2",
         "@crates//:object_store",
+        "@crates//:serde",
         "@crates//:tokio",
     ],
 )

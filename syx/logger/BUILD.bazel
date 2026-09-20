@@ -1,0 +1,28 @@
+load("//bazel:rust.bzl", "rust")
+
+rust.library(
+    name = "logger",
+    srcs = [
+        "src/committer.rs",
+        "src/file_id.rs",
+        "src/lib.rs",
+        "src/segment.rs",
+        "src/tests.rs",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        "@crates//:bytes",
+        "@crates//:crossbeam-skiplist",
+        "@crates//:memmap2",
+        "@crates//:tokio",
+    ],
+)
+
+rust.test(
+    name = "logger_test",
+    size = "small",
+    crate = ":logger",
+    deps = [
+        "//syx/testing",
+    ],
+)

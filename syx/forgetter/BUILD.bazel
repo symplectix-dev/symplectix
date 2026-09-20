@@ -2,51 +2,6 @@ load("//bazel:rust.bzl", "rust")
 
 rust.library(
     name = "forgetter",
-    srcs = [
-        "src/committer.rs",
-        "src/file_id.rs",
-        "src/lib.rs",
-        "src/segment.rs",
-        "src/tests.rs",
-    ],
+    srcs = ["src/lib.rs"],
     visibility = ["//visibility:public"],
-    deps = [
-        "@crates//:bytes",
-        "@crates//:crossbeam-skiplist",
-        "@crates//:memmap2",
-        "@crates//:tokio",
-    ],
-)
-
-rust.test(
-    name = "forgetter_test",
-    size = "small",
-    crate = ":forgetter",
-    deps = [
-        "//syx/testing",
-    ],
-)
-
-rust.test_suite(
-    name = "forgetter_test_suite",
-    size = "small",
-    srcs = [
-        "tests/command_digest_is_deterministic.rs",
-        "tests/command_digest_is_sensitive.rs",
-        "tests/function_digest_is_deterministic.rs",
-        "tests/function_digest_is_sensitive.rs",
-        "tests/tree_digest_is_deterministic.rs",
-        "tests/tree_digest_is_sensitive.rs",
-        "tests/tree_entries.rs",
-        "tests/tree_interns.rs",
-    ],
-    data = ["//:.rustfmt.toml"],
-    proc_macro_deps = ["//syx/cas_cbor2"],
-    shared_srcs = ["tests/common/mod.rs"],
-    deps = [
-        "//syx/cas_testing",
-        "//syx/content_addressing",
-        "@crates//:cbor2",
-        "@crates//:serde",
-    ],
 )
