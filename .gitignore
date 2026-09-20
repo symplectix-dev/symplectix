@@ -1,10 +1,10 @@
-/tmp
+/.bazel/*
 /bazel-*
 /bazel/bazelrc/user.bazelrc
-/target
-
 /.direnv
 /.pre-commit-config.yaml
+/target
+/tmp
 
 .env
 .venv

@@ -1,8 +1,9 @@
 load("@buildifier_prebuilt//:rules.bzl", "buildifier", "buildifier_test")
 
 _exclude_patterns = [
-    "./.git/*",
+    "./.bazel/*",
     "./.direnv/*",
+    "./.git/*",
     "./.helix/*",
 ]
 
