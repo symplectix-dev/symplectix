@@ -1,7 +1,7 @@
-//! Shared fixtures for `forgetter`'s external test suite.
+//! Shared fixtures for `cas`'s external test suite.
 //!
 //! `Command`/`Function`/`Tree`/`Node` are test-only illustrations of what
-//! gets content-addressed on top of `forgetter`, not part of its public
+//! gets content-addressed on top of `cas`, not part of its public
 //! API.
 #![allow(dead_code)]
 
@@ -12,7 +12,7 @@ use std::collections::{
 use std::path::Path;
 use std::sync::Arc;
 
-use content_addressing as cas;
+use content_addressing::Digest;
 use object_store::ObjectStore;
 
 /// A program, its arguments, and the environment variables to invoke it
@@ -104,29 +104,29 @@ pub enum Function {
     /// Run once, directly.
     Action {
         /// The program to run.
-        command: cas::Digest,
+        command: Digest,
         /// Its configuration, a `Tree`, materialized before `command` runs.
-        config:  cas::Digest,
+        config:  Digest,
     },
     /// Call a process kept warm across independent, per-blob requests.
     Server {
         /// The process to call, started on demand and shut down when idle.
-        command: cas::Digest,
+        command: Digest,
         /// Its configuration, a `Tree`.
-        config:  cas::Digest,
+        config:  Digest,
     },
 }
 
 impl Function {
     /// Run `command` once, directly, configured by `config` (a `Tree`),
     /// against input supplied at call time.
-    pub fn action(command: cas::Digest, config: cas::Digest) -> Self {
+    pub fn action(command: Digest, config: Digest) -> Self {
         Function::Action { command, config }
     }
 
     /// Run `server`, kept warm across calls, configured by `config` (a
     /// `Tree`), called with independent per-item requests.
-    pub fn server(command: cas::Digest, config: cas::Digest) -> Self {
+    pub fn server(command: Digest, config: Digest) -> Self {
         Function::Server { command, config }
     }
 }
@@ -136,9 +136,9 @@ impl Function {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Node {
     /// A file's content.
-    Blob(cas::Digest),
+    Blob(Digest),
     /// A nested `Tree`.
-    Tree(cas::Digest),
+    Tree(Digest),
 }
 
 /// A content-addressed tree of blobs: names mapped to a `Blob` or a
@@ -169,14 +169,14 @@ pub struct Tree {
     /// materialized. A digest is either reachable via this tree or not,
     /// so this is a set: interning the same digest twice doesn't change
     /// the tree.
-    interns: BTreeSet<cas::Digest>,
+    interns: BTreeSet<Digest>,
 }
 
 impl Tree {
     /// Build a `Tree` from `entries` and `interns`.
     pub fn new(
         entries: impl IntoIterator<Item = (String, Node)>,
-        interns: impl IntoIterator<Item = cas::Digest>,
+        interns: impl IntoIterator<Item = Digest>,
     ) -> Self {
         Tree { entries: entries.into_iter().collect(), interns: interns.into_iter().collect() }
     }
@@ -186,14 +186,14 @@ pub fn command(program: &str, args: &[&str]) -> Command {
     Command::new(program).args(args)
 }
 
-/// A `Forgetter` backed by a local-filesystem `ObjectStore` rooted at
+/// A `Storage` backed by a local-filesystem `ObjectStore` rooted at
 /// `root`, staging not-yet-packed blobs in a `logger` subdirectory of
 /// `root`.
-pub async fn forgetter(root: impl AsRef<Path>) -> forgetter::Forgetter {
+pub async fn store(root: impl AsRef<Path>) -> cas::Storage {
     let root = root.as_ref();
     let backend: Arc<dyn ObjectStore> =
         Arc::new(object_store::local::LocalFileSystem::new_with_prefix(root).unwrap());
-    forgetter::Forgetter::builder(root.join("logger"))
+    cas::Storage::builder(root.join("store"))
         .db_prefix("test")
         .db_backend(backend)
         .build()
@@ -201,9 +201,9 @@ pub async fn forgetter(root: impl AsRef<Path>) -> forgetter::Forgetter {
         .unwrap()
 }
 
-/// A `Forgetter` backed by a local temporary directory.
-pub async fn temp_forgetter() -> (testing::TempDir, forgetter::Forgetter) {
+/// A `Storage` backed by a local temporary directory.
+pub async fn temp_store() -> (testing::TempDir, cas::Storage) {
     let dir = testing::tempdir();
-    let f = forgetter(dir.path()).await;
+    let f = store(dir.path()).await;
     (dir, f)
 }

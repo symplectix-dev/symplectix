@@ -1,4 +1,4 @@
-//! Content-addressed blob storage: chunking, encoding on the way in,
+//! Content-addressed blob storage: chunking and encoding on the way in,
 //! decoding and verifying on the way out.
 //!
 //! # Data layout
@@ -62,6 +62,13 @@ use futures::stream::{
     self,
     FuturesUnordered,
 };
+use logger::{
+    FileId,
+    Locator,
+    Logger,
+    Replay,
+    Slot,
+};
 use object_store::path::Path;
 use object_store::{
     GetOptions,
@@ -77,13 +84,9 @@ use tokio::io::{
 use tokio::sync::OwnedMutexGuard;
 use tokio::task;
 
-use crate::{
-    FileId,
-    Locator,
-    Logger,
-    Replay,
-    Slot,
-};
+mod builder;
+
+pub use builder::Builder;
 
 #[cfg(test)]
 mod tests;
@@ -171,11 +174,11 @@ fn other(e: impl std::error::Error + Send + Sync + 'static) -> io::Error {
 }
 
 /// The default `db_prefix`, for the common case of `db_backend` existing
-/// solely for this `Forgetter`'s own `db`.
+/// solely for this `Storage`'s own `db`.
 pub(crate) const DEFAULT_DB_PREFIX: &str = "";
 
 /// The default `cas_prefix`, for the common case of `blobs` existing
-/// solely for this `Forgetter`'s own blob storage.
+/// solely for this `Storage`'s own blobs.
 pub(crate) const DEFAULT_CAS_PREFIX: &str = "cas/";
 
 /// The default `flush_threshold`, 32 MiB, enough to consolidate several
@@ -183,7 +186,7 @@ pub(crate) const DEFAULT_CAS_PREFIX: &str = "cas/";
 pub(crate) const DEFAULT_FLUSH_THRESHOLD: u64 = Chunking::AVG_SIZE as u64 * 64;
 
 /// The default `max_logger_duration`: bounds how long a blob can stay
-/// invisible to every other reader of `Forgetter` even when write volume
+/// invisible to every other reader of `Storage` even when write volume
 /// never crosses `flush_threshold` on its own.
 pub(crate) const DEFAULT_MAX_LOGGER_DURATION: Duration = Duration::from_secs(30);
 
@@ -200,14 +203,13 @@ pub(crate) struct Flushing {
     mutex:    Arc<tokio::sync::Mutex<()>>,
     /// Consecutive `flush_pending` failures, reset to 0 on success.
     /// Purely observational: nothing in this crate reads it to change
-    /// its own behavior. `Cas::flush_failures` exposes it so a caller
-    /// can decide for itself whether (and how) to react to a flush path
-    /// that's stuck.
+    /// its own behavior. `Storage::flush_failures` exposes it so a
+    /// caller can decide for itself whether (and how) to react to a
+    /// flush path that's stuck.
     failures: Arc<AtomicU32>,
 }
 
 impl Flushing {
-    /// Builds `Flushing` for `Forgetter` to hold directly.
     pub(crate) fn new() -> Self {
         Self {
             mutex:    Arc::new(tokio::sync::Mutex::new(())),
@@ -273,23 +275,23 @@ impl Entry {
     }
 }
 
-/// The blob-storage facet of a `Forgetter`: chunking, encoding/decoding,
-/// and physical storage of blobs, addressed by digest.
-/// A borrowed view, not an owned type. Construct one fresh per call via
-/// `Forgetter::cas()` rather than holding onto one.
-#[derive(Clone, Copy)]
-pub struct Cas<'a> {
-    db:         &'a slatedb::Db,
-    blobs:      &'a Arc<dyn ObjectStore>,
-    logger:     &'a Arc<Logger>,
-    staged:     &'a Arc<KeyDir>,
-    cas_prefix: &'a str,
-    flushing:   &'a Flushing,
+/// A content-addressed store. Build one with [`Storage::builder`].
+///
+/// Cheap to clone: every field is an `Arc` or a handle of its own.
+#[derive(Clone)]
+pub struct Storage {
+    logger:     Arc<Logger>,
+    staged:     Arc<KeyDir>,
+    /// Where a digest's bytes ended up once packed.
+    db:         slatedb::Db,
+    blobs:      Arc<dyn ObjectStore>,
+    flushing:   Flushing,
+    cas_prefix: Arc<str>,
     chunking:   Chunking,
     codec:      Codec,
 }
 
-impl<'a> Cas<'a> {
+impl Storage {
     /// How many chunks `copy_from`/`read_into` keep in flight at once.
     /// A large blob's chunks would otherwise be staged or fetched one at
     /// a time, each fully awaited before the next starts: group commit
@@ -299,23 +301,25 @@ impl<'a> Cas<'a> {
     /// chunk holds up to `Chunking::MAX_SIZE` bytes in memory.
     const MAX_CONCURRENT_CHUNKS: usize = 8;
 
-    /// Only `Forgetter::cas()` calls this.
+    /// Only `Builder::build` calls this. Construct a `Storage` via
+    /// `Storage::builder` instead of opening `db`/building these parts
+    /// yourself.
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn new(
-        db: &'a slatedb::Db,
-        blobs: &'a Arc<dyn ObjectStore>,
-        logger: &'a Arc<Logger>,
-        staged: &'a Arc<KeyDir>,
-        cas_prefix: &'a str,
-        flushing: &'a Flushing,
+    pub(crate) const fn new(
+        logger: Arc<Logger>,
+        staged: Arc<KeyDir>,
+        db: slatedb::Db,
+        blobs: Arc<dyn ObjectStore>,
+        flushing: Flushing,
+        cas_prefix: Arc<str>,
         chunking: Chunking,
         codec: Codec,
     ) -> Self {
-        Self { db, blobs, logger, staged, cas_prefix, flushing, chunking, codec }
+        Self { logger, staged, db, blobs, flushing, cas_prefix, chunking, codec }
     }
 
     fn entry_key(&self, key: Digest) -> Vec<u8> {
-        entry_key(self.cas_prefix, key)
+        entry_key(&self.cas_prefix, key)
     }
 
     /// Test-only: mirrors `entry_key`'s prefix, for a range scan over
@@ -346,7 +350,7 @@ impl<'a> Cas<'a> {
     }
 
     fn pack_path(&self, pack_id: Digest) -> Path {
-        pack_path(self.cas_prefix, pack_id)
+        pack_path(&self.cas_prefix, pack_id)
     }
 
     /// Fetch `length` bytes at `offset` from pack `pack_id`.
@@ -381,14 +385,14 @@ impl<'a> Cas<'a> {
         Ok(Some(self.get_range(entry.pack_id, entry.offset, entry.length).await?))
     }
 
-    /// Stages `bytes` under `key` durably in `Logger`. Always
-    /// succeeds as long as `Logger` itself accepts the write,
-    /// regardless of how the flush path is doing.
+    /// Stages `bytes` under `key` durably in `logger`. Always succeeds
+    /// as long as `logger` itself accepts the write, regardless of how
+    /// the flush path is doing.
     ///
-    /// Doesn't trigger a flush itself: `Forgetter`'s own background flush
-    /// loop reacts to `Logger`'s own rotation events directly, so
-    /// every rotation gets picked up regardless of whether a `put_blob`
-    /// call happens to follow it.
+    /// Doesn't trigger a flush itself: the background flush loop reacts
+    /// to `logger`'s own rotation events directly, so every rotation
+    /// gets picked up regardless of whether a `put_blob` call happens to
+    /// follow it.
     async fn put_blob(&self, key: Digest, bytes: Bytes) -> io::Result<()> {
         let mut combined = BytesMut::with_capacity(32 + bytes.len());
         combined.extend_from_slice(key.as_ref());
@@ -399,10 +403,10 @@ impl<'a> Cas<'a> {
         Ok(())
     }
 
-    /// Consolidates whatever `Logger` has already rotated out into
-    /// pack objects. Doesn't force the still-active segment to rotate:
+    /// Consolidates whatever `logger` has already rotated out into pack
+    /// objects. Doesn't force the still-active segment to rotate:
     /// content staged there stays unpacked, though still readable via
-    /// `get`, until `Logger` rotates it out on its own.
+    /// `get`, until `logger` rotates it out on its own.
     ///
     /// If another call is already in progress, this returns immediately
     /// without doing anything, rather than waiting its turn.
@@ -411,24 +415,24 @@ impl<'a> Cas<'a> {
             return Ok(());
         };
         flush_pending(
-            self.db,
-            self.blobs,
-            self.logger,
-            self.staged,
-            self.cas_prefix,
-            self.flushing,
+            &self.db,
+            &self.blobs,
+            &self.logger,
+            &self.staged,
+            &self.cas_prefix,
+            &self.flushing,
             guard,
         )
         .await
     }
 
     /// How many times `flush_pending` has failed in a row, whether
-    /// triggered by `Forgetter`'s own background flush loop or by an
-    /// explicit `flush_pending` call. Reset to 0 as soon as one
-    /// succeeds. Purely observational: nothing in this crate reacts to
-    /// it on its own (`put_blob` always accepts writes regardless); a
-    /// caller that wants to alert on, or otherwise react to, a stuck
-    /// flush path polls this itself.
+    /// triggered by the background flush loop or by an explicit
+    /// `flush_pending` call. Reset to 0 as soon as one succeeds. Purely
+    /// observational: nothing in this crate reacts to it on its own
+    /// (`put_blob` always accepts writes regardless); a caller that
+    /// wants to alert on, or otherwise react to, a stuck flush path
+    /// polls this itself.
     pub fn flush_failures(&self) -> u32 {
         self.flushing.failures()
     }
@@ -518,10 +522,9 @@ impl<'a> Cas<'a> {
         // fetching one chunk overlaps with writing out the previous one.
         // `buffered` (not `buffer_unordered`) keeps results in the original
         // chunk order, which `w` needs.
-        let cas = *self;
         let mut loads = stream::iter(chunks)
-            .map(move |chunk| async move {
-                let result = cas.load(&chunk.digest).await;
+            .map(|chunk| async move {
+                let result = self.load(&chunk.digest).await;
                 (chunk, result)
             })
             .buffered(Self::MAX_CONCURRENT_CHUNKS);
@@ -652,12 +655,12 @@ fn pack_path(cas_prefix: &str, pack_id: Digest) -> Path {
 
 /// Consolidates every currently-pending `Logger` segment into pack
 /// objects, taking owned references so `spawn_flush_loop`'s background
-/// task can call this without borrowing from any particular `Cas<'_>`.
+/// task can call this without borrowing from any particular `Storage`.
 ///
 /// Doesn't rotate the active segment out itself: that's `Logger`'s
 /// own call, not something this forces just because a flush was
 /// requested. Content still in the active segment stays unpacked, though
-/// still readable (`Cas::get_blob` falls back to `staged`), until
+/// still readable (`Storage::get_blob` falls back to `staged`), until
 /// `Logger` rotates it out on its own.
 ///
 /// `_guard` must come from `Flushing::try_claim`: callers claim it
@@ -705,7 +708,7 @@ pub(crate) struct PackTarget {
 ///
 /// Holds `logger` only weakly, so waiting on `rotated`, potentially
 /// forever, doesn't keep it, and its committer task, alive past every
-/// `Forgetter` handle sharing it being dropped. `rotated` itself then
+/// `Storage` handle sharing it being dropped. `rotated` itself then
 /// closes once `logger` is gone, which is what wakes this up to notice
 /// and exit rather than leak.
 pub(crate) fn spawn_flush_loop(

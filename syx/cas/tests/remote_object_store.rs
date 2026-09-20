@@ -1,4 +1,4 @@
-//! Round-trips content through `forgetter::Forgetter` backed by a real
+//! Round-trips content through `cas::Storage` backed by a real
 //! (local) S3-compatible remote, including a blob large enough to span
 //! multiple chunks (and so multiple staged entries plus a manifest), and
 //! confirms staged entries do consolidate into pack objects.
@@ -11,7 +11,10 @@ use aws_sdk_s3::config::{
     Credentials,
     Region,
 };
-use content_addressing as cas;
+use content_addressing::{
+    Bytes,
+    Digest,
+};
 use futures::StreamExt as _;
 use object_store::ObjectStore;
 use object_store::aws::AmazonS3Builder;
@@ -20,24 +23,24 @@ use testing::s3;
 
 const BUCKET: &str = "cas-test";
 
-/// `forgetter::Forgetter` backed by a real `AmazonS3`-compatible remote
+/// `cas::Storage` backed by a real `AmazonS3`-compatible remote
 /// against `s3_server`, with `BUCKET` created and ready. Also returns
 /// that same remote as an `Arc<dyn ObjectStore>`, for tests that need to
 /// inspect pack objects directly.
-async fn s3_forgetter(
+async fn s3_store(
     s3_server: &s3::Server,
     flush_threshold: u64,
-) -> (forgetter::Forgetter, Arc<dyn ObjectStore>) {
-    s3_forgetter_with(s3_server, flush_threshold, None).await
+) -> (cas::Storage, Arc<dyn ObjectStore>) {
+    s3_store_with(s3_server, flush_threshold, None).await
 }
 
-/// Like `s3_forgetter`, but also lets a test override `max_logger_duration`
+/// Like `s3_store`, but also lets a test override `max_logger_duration`
 /// (left at the crate's own default when `None`).
-async fn s3_forgetter_with(
+async fn s3_store_with(
     s3_server: &s3::Server,
     flush_threshold: u64,
     max_logger_duration: Option<std::time::Duration>,
-) -> (forgetter::Forgetter, Arc<dyn ObjectStore>) {
+) -> (cas::Storage, Arc<dyn ObjectStore>) {
     // A region is required by both clients below, but this server
     // doesn't validate it. "us-east-1" is just a conventional value.
     let s3_client = aws_sdk_s3::Client::from_conf(
@@ -73,11 +76,11 @@ async fn s3_forgetter_with(
     );
 
     let db_backend: Arc<dyn ObjectStore> = Arc::new(InMemory::new());
-    // Leaked, not returned: `Forgetter` keeps writing into this directory
+    // Leaked, not returned: `Storage` keeps writing into this directory
     // for as long as it lives, and these tests never outlive the
     // process, so there's nothing to clean up on drop that matters here.
     let root_dir = testing::tempdir().keep();
-    let mut builder = forgetter::Forgetter::builder(root_dir)
+    let mut builder = cas::Storage::builder(root_dir)
         .db_prefix("test")
         .db_backend(db_backend)
         .blobs(remote.clone())
@@ -85,22 +88,22 @@ async fn s3_forgetter_with(
     if let Some(d) = max_logger_duration {
         builder = builder.max_logger_duration(d);
     }
-    let forgetter = builder.build().await.unwrap();
-    (forgetter, remote)
+    let store = builder.build().await.unwrap();
+    (store, remote)
 }
 
 #[tokio::test]
 async fn get_returns_what_was_put() {
     let s3_server = s3::Server::spawn(testing::tempdir()).unwrap();
-    let (forgetter, _remote) = s3_forgetter(&s3_server, 1024 * 1024).await;
+    let (store, _remote) = s3_store(&s3_server, 1024 * 1024).await;
 
-    let content = cas::Bytes::from_static(b"hello");
-    let d = forgetter.cas().put(&content).await.unwrap();
-    assert_eq!(forgetter.cas().get::<cas::Bytes>(&d).await.unwrap(), Some(content));
+    let content = Bytes::from_static(b"hello");
+    let d = store.put(&content).await.unwrap();
+    assert_eq!(store.get::<Bytes>(&d).await.unwrap(), Some(content));
 
-    let content = cas::Bytes::from(testing::random_bytes(2 * 1024 * 1024));
-    let d = forgetter.cas().put(&content).await.unwrap();
-    assert_eq!(forgetter.cas().get::<cas::Bytes>(&d).await.unwrap(), Some(content));
+    let content = Bytes::from(testing::random_bytes(2 * 1024 * 1024));
+    let d = store.put(&content).await.unwrap();
+    assert_eq!(store.get::<Bytes>(&d).await.unwrap(), Some(content));
 }
 
 #[tokio::test]
@@ -109,14 +112,13 @@ async fn idle_content_eventually_gets_packed_without_further_activity() {
     // `flush_threshold` large enough that this one small `put` never
     // crosses it, and no further `put` ever happens after it: the only
     // thing that can ever rotate this segment out is `Logger`'s own
-    // `max_logger_duration` timer, which then wakes `Forgetter`'s
+    // `max_logger_duration` timer, which then wakes `Storage`'s
     // background flush loop to pack it.
-    let (forgetter, remote) =
-        s3_forgetter_with(&s3_server, 1024 * 1024, Some(std::time::Duration::from_millis(20)))
-            .await;
+    let (store, remote) =
+        s3_store_with(&s3_server, 1024 * 1024, Some(std::time::Duration::from_millis(20))).await;
 
-    let content = cas::Bytes::from_static(b"idle content");
-    let d = forgetter.cas().put(&content).await.unwrap();
+    let content = Bytes::from_static(b"idle content");
+    let d = store.put(&content).await.unwrap();
 
     for _ in 0..100 {
         if remote.list(None).count().await > 0 {
@@ -125,14 +127,14 @@ async fn idle_content_eventually_gets_packed_without_further_activity() {
         tokio::time::sleep(std::time::Duration::from_millis(20)).await;
     }
     assert!(remote.list(None).count().await > 0, "background flush loop never packed idle content");
-    assert_eq!(forgetter.cas().get::<cas::Bytes>(&d).await.unwrap(), Some(content));
+    assert_eq!(store.get::<Bytes>(&d).await.unwrap(), Some(content));
 }
 
 #[tokio::test]
 async fn crossing_the_threshold_eventually_flushes_and_stays_readable() {
     let s3_server = s3::Server::spawn(testing::tempdir()).unwrap();
     // Small enough that a single chunk's write crosses the threshold.
-    let (forgetter, remote) = s3_forgetter(&s3_server, 8).await;
+    let (store, remote) = s3_store(&s3_server, 8).await;
 
     // Crossing `flush_threshold` triggers `flush_pending` in the
     // background rather than waiting on it, so the pack shows up on
@@ -140,10 +142,10 @@ async fn crossing_the_threshold_eventually_flushes_and_stays_readable() {
     // it does. Content stays readable throughout either way, since `get`
     // checks the still-staged copy first and falls through to the pack
     // once it exists.
-    let v1 = cas::Bytes::from_static(b"abcdefg1");
-    let d1 = forgetter.cas().put(&v1).await.unwrap();
-    let v2 = cas::Bytes::from_static(b"abcdefg2");
-    let d2 = forgetter.cas().put(&v2).await.unwrap();
+    let v1 = Bytes::from_static(b"abcdefg1");
+    let d1 = store.put(&v1).await.unwrap();
+    let v2 = Bytes::from_static(b"abcdefg2");
+    let d2 = store.put(&v2).await.unwrap();
 
     for _ in 0..100 {
         if remote.list(None).count().await > 0 {
@@ -153,8 +155,8 @@ async fn crossing_the_threshold_eventually_flushes_and_stays_readable() {
     }
     assert!(remote.list(None).count().await > 0, "pack never showed up on remote");
 
-    assert_eq!(forgetter.cas().get::<cas::Bytes>(&d1).await.unwrap(), Some(v1));
-    assert_eq!(forgetter.cas().get::<cas::Bytes>(&d2).await.unwrap(), Some(v2));
+    assert_eq!(store.get::<Bytes>(&d1).await.unwrap(), Some(v1));
+    assert_eq!(store.get::<Bytes>(&d2).await.unwrap(), Some(v2));
 }
 
 #[tokio::test]
@@ -168,38 +170,38 @@ async fn content_in_different_packs_stays_independently_readable() {
     // earlier design where it forced a rotation itself. `flush_pending`
     // deliberately doesn't do that, so this test no longer controls
     // which values land in which pack.
-    let (forgetter, remote) = s3_forgetter(&s3_server, 8).await;
+    let (store, remote) = s3_store(&s3_server, 8).await;
 
-    async fn put_all(forgetter: &forgetter::Forgetter, values: &[cas::Bytes]) -> Vec<cas::Digest> {
+    async fn put_all(store: &cas::Storage, values: &[Bytes]) -> Vec<Digest> {
         let mut digests = Vec::with_capacity(values.len());
         for v in values {
-            digests.push(forgetter.cas().put(v).await.unwrap());
+            digests.push(store.put(v).await.unwrap());
         }
         digests
     }
 
     let pack_a = [
-        cas::Bytes::from_static(b"pack-a-value-1"),
-        cas::Bytes::from_static(b"pack-a-value-2"),
-        cas::Bytes::from_static(b"pack-a-value-3"),
+        Bytes::from_static(b"pack-a-value-1"),
+        Bytes::from_static(b"pack-a-value-2"),
+        Bytes::from_static(b"pack-a-value-3"),
     ];
-    let pack_a_digests = put_all(&forgetter, &pack_a).await;
+    let pack_a_digests = put_all(&store, &pack_a).await;
 
     let pack_b = [
-        cas::Bytes::from_static(b"pack-b-value-1"),
-        cas::Bytes::from_static(b"pack-b-value-2"),
-        cas::Bytes::from_static(b"pack-b-value-3"),
+        Bytes::from_static(b"pack-b-value-1"),
+        Bytes::from_static(b"pack-b-value-2"),
+        Bytes::from_static(b"pack-b-value-3"),
     ];
-    let pack_b_digests = put_all(&forgetter, &pack_b).await;
+    let pack_b_digests = put_all(&store, &pack_b).await;
 
     // Each `put` above crossing the threshold rotates its own segment,
-    // each of which wakes `Forgetter`'s background flush loop; those
+    // each of which wakes `Storage`'s background flush loop; those
     // race for `Flushing`'s claim, so most of them lose and give up
     // without retrying, leaving their segment un-packed. A single
     // explicit `flush_pending` call can lose that same race, so this
     // retries it until every value has actually landed on `remote`.
     for _ in 0..100 {
-        forgetter.cas().flush_pending().await.unwrap();
+        store.flush_pending().await.unwrap();
         if remote.list(None).count().await > 1 {
             break;
         }
@@ -209,6 +211,6 @@ async fn content_in_different_packs_stays_independently_readable() {
 
     let entries = pack_a.iter().zip(&pack_a_digests).chain(pack_b.iter().zip(&pack_b_digests));
     for (v, d) in entries {
-        assert_eq!(forgetter.cas().get::<cas::Bytes>(d).await.unwrap(), Some(v.clone()));
+        assert_eq!(store.get::<Bytes>(d).await.unwrap(), Some(v.clone()));
     }
 }

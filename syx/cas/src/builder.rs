@@ -3,45 +3,45 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use content_addressing as cas;
+use content_addressing::{
+    Chunking,
+    Codec,
+};
+use logger::Logger;
 use object_store::ObjectStore;
 use object_store::local::LocalFileSystem;
 use tokio::fs;
 
 use crate::{
-    Cas,
-    Forgetter,
-    Logger,
-    storage,
+    DEFAULT_CAS_PREFIX,
+    DEFAULT_DB_PREFIX,
+    DEFAULT_FLUSH_THRESHOLD,
+    DEFAULT_MAX_LOGGER_DURATION,
+    DEFAULT_MAX_PENDING_SEGMENTS,
+    Flushing,
+    KeyDir,
+    PackTarget,
+    Storage,
+    spawn_flush_loop,
 };
 
-/// Builds a `Forgetter`, opening the `slatedb::Db` it and its blob-storage
-/// parts share.
+/// Builds a [`Storage`].
 ///
-/// `dir` is the only thing that must be specified: a local directory
-/// `Forgetter` durably holds not-yet-packed blobs in. Everything else,
-/// including where `db`/`blobs` physically live, defaults to also living
-/// under `dir` via a local `object_store`, so a `Forgetter` works
-/// standalone with zero external setup; override `db_backend`/`blobs` to
-/// point at S3 (or any other `object_store` backend) instead.
+/// `dir` is the only required argument: the local directory
+/// not-yet-packed blobs are held in. `db` and `blobs` default to a local
+/// `object_store` under it, so a store opens with no external setup;
+/// override `db_backend`/`blobs` to put them on S3 or another backend.
 pub struct Builder {
-    // logger
     dir: PathBuf,
     max_logger_duration: Option<Duration>,
     max_pending_segments: Option<u16>,
-
-    // db
-    db_prefix:  Option<String>,
+    db_prefix: Option<String>,
     db_backend: Option<Arc<dyn ObjectStore>>,
-
-    // blobs
-    blobs_backend:   Option<Arc<dyn ObjectStore>>,
+    blobs_backend: Option<Arc<dyn ObjectStore>>,
     flush_threshold: Option<u64>,
-
-    // content addressing
     cas_prefix: Option<String>,
-    chunking:   Option<cas::Chunking>,
-    codec:      Option<cas::Codec>,
+    chunking: Option<Chunking>,
+    codec: Option<Codec>,
 }
 
 impl Builder {
@@ -103,34 +103,33 @@ impl Builder {
         self
     }
 
-    /// The key prefix blobs are staged and packed under. Named
-    /// `cas_prefix`, not just `prefix`, to avoid confusion with
-    /// `db_prefix`, the unrelated prefix `slatedb::Db` itself is opened
-    /// under.
+    /// The key prefix blobs are packed under, within `blobs`. Unrelated
+    /// to `db_prefix`.
     pub fn cas_prefix(mut self, cas_prefix: impl Into<String>) -> Self {
         self.cas_prefix = Some(cas_prefix.into());
         self
     }
 
     // TODO: `chunking` and `codec` can be overridden independently, but
-    // `cas::Codec::SNIFF_LEN` should stay below `cas::Chunking::MIN_SIZE`.
-    // Nothing breaks if it happens, but `Codec::encode` compresses a chunk
-    // twice instead of once.
+    // `Codec::SNIFF_LEN` should stay below `Chunking::MIN_SIZE`. Nothing
+    // breaks if it happens, but `Codec::encode` compresses a chunk twice
+    // instead of once.
 
     /// Overrides chunking behavior.
-    pub fn chunking(mut self, chunking: cas::Chunking) -> Self {
+    pub fn chunking(mut self, chunking: Chunking) -> Self {
         self.chunking = Some(chunking);
         self
     }
 
     /// Overrides encoding/decoding behavior.
-    pub fn codec(mut self, codec: cas::Codec) -> Self {
+    pub fn codec(mut self, codec: Codec) -> Self {
         self.codec = Some(codec);
         self
     }
 
-    /// Opens `db` and `Logger`, and builds the `Forgetter`.
-    pub async fn build(self) -> io::Result<Forgetter> {
+    /// Opens `db` and the log, and spawns the task that packs whatever
+    /// the log rotates out.
+    pub async fn build(self) -> io::Result<Storage> {
         let Self {
             dir,
             max_logger_duration,
@@ -153,32 +152,24 @@ impl Builder {
                 Arc::new(local) as Arc<dyn ObjectStore>
             }
         };
-        let db_prefix = db_prefix.unwrap_or_else(|| storage::DEFAULT_DB_PREFIX.to_string());
+        let db_prefix = db_prefix.unwrap_or_else(|| DEFAULT_DB_PREFIX.to_string());
         let db = slatedb::Db::builder(db_prefix, db_backend.clone())
             .build()
             .await
             .map_err(io::Error::other)?;
 
         let codec = codec.unwrap_or_default();
-        let max_pending_segments =
-            max_pending_segments.unwrap_or(storage::DEFAULT_MAX_PENDING_SEGMENTS);
-        let flush_threshold = flush_threshold.unwrap_or(storage::DEFAULT_FLUSH_THRESHOLD);
-        let max_logger_duration =
-            max_logger_duration.unwrap_or(storage::DEFAULT_MAX_LOGGER_DURATION);
-        // Its own subdirectory, the same way `db_backend`'s default gets
-        // `dir.join("db")` above: `Logger::open` lists every entry in
-        // whatever directory it's given and treats matches as its own
-        // segments, so it needs one nothing else ever writes into, not
-        // `dir` itself (which `db`/`blobs` also live under by default).
-        // `flush_threshold` doubles as `Logger`'s own rotate threshold:
-        // the size at which a segment is worth consolidating into a pack
-        // is the same size at which it's worth rotating out of the
-        // active slot in the first place. `max_logger_duration` likewise
-        // becomes `Logger`'s own rotate-by-time cadence, so a segment
-        // that never crosses `flush_threshold` still doesn't sit active
-        // forever.
+        let max_pending_segments = max_pending_segments.unwrap_or(DEFAULT_MAX_PENDING_SEGMENTS);
+        let flush_threshold = flush_threshold.unwrap_or(DEFAULT_FLUSH_THRESHOLD);
+        let max_logger_duration = max_logger_duration.unwrap_or(DEFAULT_MAX_LOGGER_DURATION);
+        // `Logger::open` claims a whole directory, treating every
+        // matching entry in it as one of its own segments, so it gets a
+        // subdirectory rather than `dir` itself, which `db` and `blobs`
+        // also default into. One threshold drives both rotation and
+        // packing: the size worth consolidating into a pack is the size
+        // worth rotating out of the active slot.
         let (logger, replayed) = Logger::open(
-            dir.join("forgetter"),
+            dir.join("logger"),
             max_pending_segments,
             flush_threshold,
             Some(max_logger_duration),
@@ -186,21 +177,20 @@ impl Builder {
         .await?;
         let rotated = logger.rotated();
         let logger = Arc::new(logger);
-        let staged = Arc::new(storage::KeyDir::rebuild(replayed, codec).await);
+        let staged = Arc::new(KeyDir::rebuild(replayed, codec).await);
 
         let blobs = blobs_backend.unwrap_or_else(|| db_backend.clone());
         let chunking = chunking.unwrap_or_default();
         let cas_prefix: Arc<str> =
-            Arc::from(cas_prefix.unwrap_or_else(|| storage::DEFAULT_CAS_PREFIX.to_string()));
+            Arc::from(cas_prefix.unwrap_or_else(|| DEFAULT_CAS_PREFIX.to_string()));
 
-        let flushing = storage::Flushing::new();
-        // Packs whatever `Logger` rotates out, reacting directly to its
-        // own rotation events rather than needing a write to happen
-        // afterward to notice.
-        storage::spawn_flush_loop(
+        let flushing = Flushing::new();
+        // Reacts to rotation events, so a segment still gets packed when
+        // no further write follows it.
+        spawn_flush_loop(
             Arc::downgrade(&logger),
             rotated,
-            storage::PackTarget {
+            PackTarget {
                 db:         db.clone(),
                 blobs:      Arc::clone(&blobs),
                 cas_prefix: Arc::clone(&cas_prefix),
@@ -208,48 +198,14 @@ impl Builder {
                 flushing:   flushing.clone(),
             },
         );
-        Ok(Forgetter::new(logger, staged, db, blobs, flushing, cas_prefix, chunking, codec))
+        Ok(Storage::new(logger, staged, db, blobs, flushing, cas_prefix, chunking, codec))
     }
 }
 
-impl Forgetter {
-    /// Starts building a `Forgetter`. See [`Builder`]'s own doc for
+impl Storage {
+    /// Starts building a `Storage`. See [`Builder`]'s own doc for
     /// what's required vs. defaulted.
     pub fn builder(dir: impl Into<PathBuf>) -> Builder {
         Builder::new(dir)
-    }
-
-    /// Only `Builder::build` calls this. Construct a `Forgetter` via
-    /// `Forgetter::builder` instead of opening `db`/building these parts
-    /// yourself.
-    #[allow(clippy::too_many_arguments)]
-    const fn new(
-        logger: Arc<Logger>,
-        staged: Arc<storage::KeyDir>,
-        db: slatedb::Db,
-        blobs: Arc<dyn ObjectStore>,
-        flushing: storage::Flushing,
-        cas_prefix: Arc<str>,
-        chunking: cas::Chunking,
-        codec: cas::Codec,
-    ) -> Self {
-        Self { logger, staged, db, blobs, flushing, cas_prefix, chunking, codec }
-    }
-
-    /// The blob-storage facet of this `Forgetter`: `get`/`put`/
-    /// `read_into`/`copy_from`/`flush_pending`. A cheap, borrowed view.
-    /// Construct it fresh wherever it's needed rather than holding onto
-    /// one.
-    pub fn cas(&self) -> Cas<'_> {
-        Cas::new(
-            &self.db,
-            &self.blobs,
-            &self.logger,
-            &self.staged,
-            &self.cas_prefix,
-            &self.flushing,
-            self.chunking,
-            self.codec,
-        )
     }
 }

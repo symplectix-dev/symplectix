@@ -1,52 +1,16 @@
-//! forgetter: a content-addressed, append-only log.
+//! forgetter: a derivation log, and the lineage read back out of it.
 //!
-//! `Logger` is the durable, content-agnostic append-only primitive (see
-//! its own module doc). `Forgetter` layers content addressing on top of
-//! it: chunking and encoding on the way in, packing not-yet-consolidated
-//! segments into `object_store` packs.
+//! A derivation records one execution: an action, the artifacts it
+//! consumed, and the artifacts it produced, each named by its `cas`
+//! digest rather than embedded. What an action computes, and where it
+//! keeps its own state, this crate never looks at.
+//!
+//! Neither type is built yet.
 
-use std::sync::Arc;
+/// Appends derivations. Owns a local directory and the task writing into
+/// it, so there is one writer.
+pub struct Log;
 
-use object_store::ObjectStore;
-
-mod builder;
-mod logger;
-mod storage;
-
-pub use builder::Builder;
-pub use logger::{
-    FileId,
-    Found,
-    Locator,
-    Logger,
-    Replay,
-    Segment,
-    Slot,
-};
-pub use storage::Cas;
-
-/// Content-addressed blob storage, built on `Logger`.
-#[derive(Clone)]
-pub struct Forgetter {
-    // Durably holds not-yet-packed content until it's forgotten (packed
-    // elsewhere). The only thing `Forgetter` can't default: everything
-    // below can fall back to living under the same directory.
-    logger: Arc<Logger>,
-    // Maps a blob's digest to where `logger` is holding it; see
-    // `storage::KeyDir`'s own doc for why this lives here and not
-    // in `Logger` itself.
-    staged: Arc<storage::KeyDir>,
-
-    // `db`: maps a digest to its packed location.
-    db: slatedb::Db,
-
-    // Packed blob object storage, and when to consolidate `logger`'s
-    // content into it.
-    blobs:    Arc<dyn ObjectStore>,
-    flushing: storage::Flushing,
-
-    // Content addressing, applies uniformly regardless of backend.
-    cas_prefix: Arc<str>,
-    chunking:   content_addressing::Chunking,
-    codec:      content_addressing::Codec,
-}
+/// Traces the log back as a graph of derivations. Needs only the object
+/// store a [`Log`] publishes to, so it can run anywhere.
+pub struct Lineage;
