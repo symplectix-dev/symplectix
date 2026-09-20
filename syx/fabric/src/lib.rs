@@ -1,22 +1,12 @@
-//! fabric: content-addressed trees and references to runnable things.
+//! fabric: a content-addressable (hyper)graph.
 
 use std::sync::Arc;
 
 use object_store::ObjectStore;
 
-mod blob;
-mod function;
 mod graph;
 mod storage;
 
-pub use blob::{
-    Node,
-    Tree,
-};
-pub use function::{
-    Command,
-    Function,
-};
 pub use graph::Builder;
 pub use storage::Cas;
 
@@ -26,7 +16,7 @@ pub use storage::Cas;
 /// derivations, and the relations between them all live in one address
 /// space, not across separate systems. That is what makes `Graph` a
 /// plausible git for application data: not just files, but any fact;
-/// not just commits a human makes, but any derivation a Function makes.
+/// not just commits a human makes, but any derivation a computation makes.
 ///
 /// A relation's source is just more content in the graph, so ingesting
 /// external data needs no special pipeline and nothing external to keep

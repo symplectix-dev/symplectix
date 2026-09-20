@@ -1,7 +1,14 @@
-//! Function: a content-addressed reference to something runnable, in one
-//! of two calling conventions.
+//! Shared fixtures for `forgetter`'s external test suite.
+//!
+//! `Command`/`Function`/`Tree`/`Node` are test-only illustrations of what
+//! gets content-addressed on top of `forgetter`, not part of its public
+//! API.
+#![allow(dead_code)]
 
-use std::collections::BTreeMap;
+use std::collections::{
+    BTreeMap,
+    BTreeSet,
+};
 
 use content_addressing as cas;
 
@@ -79,9 +86,6 @@ impl Command {
 ///   of the whole input: "has this exact input been processed before?".
 /// - `Server`: independent, per-blob calls to a server process. Cached per blob, not per call: "has
 ///   this specific item been processed before?".
-// TODO: add a field for which OCI image the VM boots from. The image is
-// used directly as the VM's boot rootfs; `config` is then materialized inside
-// the booted VM, on top of it.
 #[derive(
     Debug,
     Clone,
@@ -122,4 +126,59 @@ impl Function {
     pub fn server(command: cas::Digest, config: cas::Digest) -> Self {
         Function::Server { command, config }
     }
+}
+
+/// What a `Tree` entry's name points to: a file's content, or a nested
+/// `Tree`, each referenced by digest rather than embedded.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum Node {
+    /// A file's content.
+    Blob(cas::Digest),
+    /// A nested `Tree`.
+    Tree(cas::Digest),
+}
+
+/// A content-addressed tree of blobs: names mapped to a `Blob` or a
+/// nested `Tree`. Entries are sorted by name and a name can't appear
+/// twice, meaning the same entries built in any order produce the same
+/// `Tree`. Two entries may still point at the same underlying digest,
+/// for example two differently named files with the same content.
+/// Uniqueness is on the name, not the value, so `Tree` can represent a
+/// multiset of items as long as each has a distinct name, which is the
+/// normal case, since files always have distinct paths.
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+    cas_cbor2::ToBytes,
+    cas_cbor2::FromBytes,
+)]
+pub struct Tree {
+    entries: BTreeMap<String, Node>,
+    /// Additional blobs a producer created while building this tree but
+    /// that aren't reachable from any entry's name.
+    /// Recording them here keeps them from looking unreferenced to a GC
+    /// walking the CAS from live roots, since `entries` alone can't
+    /// express "reachable but not a real file" when every entry is
+    /// materialized. A digest is either reachable via this tree or not,
+    /// so this is a set: interning the same digest twice doesn't change
+    /// the tree.
+    interns: BTreeSet<cas::Digest>,
+}
+
+impl Tree {
+    /// Build a `Tree` from `entries` and `interns`.
+    pub fn new(
+        entries: impl IntoIterator<Item = (String, Node)>,
+        interns: impl IntoIterator<Item = cas::Digest>,
+    ) -> Self {
+        Tree { entries: entries.into_iter().collect(), interns: interns.into_iter().collect() }
+    }
+}
+
+pub fn command(program: &str, args: &[&str]) -> Command {
+    Command::new(program).args(args)
 }

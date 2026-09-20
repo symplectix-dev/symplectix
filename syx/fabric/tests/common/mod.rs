@@ -6,10 +6,6 @@ use std::sync::Arc;
 
 use object_store::ObjectStore;
 
-pub fn command(program: &str, args: &[&str]) -> fabric::Command {
-    fabric::Command::new(program).args(args)
-}
-
 /// A `Graph` backed by a local-filesystem `ObjectStore` rooted at `root`,
 /// staging not-yet-packed blobs in a `forgetter` subdirectory of `root`.
 pub async fn graph(root: impl AsRef<Path>) -> fabric::Graph {
