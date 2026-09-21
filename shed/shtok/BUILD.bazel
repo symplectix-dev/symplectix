@@ -1,9 +1,13 @@
 load("//bazel:rust.bzl", "rust")
 
+package(
+    default_testonly = True,
+    default_visibility = ["//:__subpackages__"],
+)
+
 rust.library(
     name = "shtok",
     srcs = ["src/lib.rs"],
-    visibility = ["//visibility:public"],
     deps = ["@crates//:itertools"],
 )
 
