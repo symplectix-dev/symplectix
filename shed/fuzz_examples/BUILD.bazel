@@ -1,5 +1,10 @@
 load("//bazel:rust.bzl", "rust")
 
+package(
+    default_testonly = True,
+    default_visibility = ["//:__subpackages__"],
+)
+
 rust.fuzz_binary(
     name = "should_not_fail",
     srcs = ["should_not_fail.rs"],
