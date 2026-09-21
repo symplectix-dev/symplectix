@@ -92,7 +92,7 @@ bazel_dep(name = "rules_pkg", version = "1.2.0")
 # bazel_dep(name = "rules_oci", version = "2.2.6")
 
 # Build Protobuf and gRPC code from proto_library
-# bazel_dep(name = "rules_proto_grpc", version = "5.5.0")
+bazel_dep(name = "rules_proto_grpc", version = "5.8.0")
 # bazel_dep(name = "rules_proto_grpc_doc", version = "<version number here>")
 # bazel_dep(name = "rules_proto_grpc_grpcgateway", version = "<version number here>")
 # bazel_dep(name = "rules_proto_grpc_buf", version = "<version number here>")
