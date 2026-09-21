@@ -1,9 +1,13 @@
 load("//bazel:rust.bzl", "rust")
 
+package(
+    default_testonly = True,
+    default_visibility = ["//:__subpackages__"],
+)
+
 rust.binary(
     name = "mdcstpp",
     srcs = ["src/main.rs"],
-    visibility = ["//visibility:public"],
     deps = [
         "@crates//:clap",
         "@crates//:tree-sitter",
