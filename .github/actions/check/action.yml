@@ -69,6 +69,19 @@ runs:
       shell: nix develop ./nix#ci --command bash --noprofile --norc -eo pipefail {0}
       run: bazel test //bazel:buildifier_test
 
+    # A shed package that forgot its package() defaults is reachable from
+    # the rest of the repository, which is the one thing shed exists to
+    # prevent. See shed/README.md.
+    - name: Check shed is testonly
+      shell: nix develop ./nix#ci --command bash --noprofile --norc -eo pipefail {0}
+      run: |
+        leaked=$(bazel query 'attr(testonly, 0, //shed/...)')
+        if [ -n "$leaked" ]; then
+          echo "not testonly:"
+          echo "$leaked"
+          exit 1
+        fi
+
     - name: Build
       shell: nix develop ./nix#ci --command bash --noprofile --norc -eo pipefail {0}
       run: bazel build //...
