@@ -52,10 +52,10 @@ Report ends up at `$CRITERION_HOME/report/index.html`.
 
 `rust.fuzz_binary` (`//bazel/private:rust_fuzz_binary.bzl`) builds a
 libFuzzer/ASan binary from a `#![no_main]` crate using `libfuzzer_sys::fuzz_target!`.
-See `//syx/fuzz_examples` for working examples. Run one with:
+See `//shed/fuzz_examples` for working examples. Run one with:
 
 ```sh
-bazel run //syx/fuzz_examples:buffer_overflow
+bazel run //shed/fuzz_examples:buffer_overflow
 ```
 
 ### Transitioned away from `hermetic_cc_toolchain`

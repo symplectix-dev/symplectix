@@ -1,4 +1,4 @@
-from syx.plying import _plying  # pyright: ignore[reportPrivateUsage]
+from shed.plying import _plying  # pyright: ignore[reportPrivateUsage]
 
 
 def test_sum() -> None:
