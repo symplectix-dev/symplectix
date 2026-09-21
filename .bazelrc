@@ -2,6 +2,9 @@ import %workspace%/bazel/bazelrc/preset.bazelrc
 import %workspace%/bazel/bazelrc/profile.bazelrc
 import %workspace%/bazel/bazelrc/remote.bazelrc
 
+# Create symlinks called bin (etc) inside a hidden directory.
+common --symlink_prefix=.bazel/
+
 # Build metadata is custom key-value string pairs
 # to supply in a build event.
 # https://www.buildbuddy.io/docs/guide-metadata/
