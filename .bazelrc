@@ -103,7 +103,7 @@ build:ci --config=release
 # Embeds workspace status (commit SHA, version tag, etc.) into build outputs.
 # Targets depending on STABLE_* keys are rebuilt when the status changes.
 # https://bazel.build/docs/user-manual#workspace_status
-common:stamp --stamp --workspace_status_command=$(pwd)/workspace_status.py
+common:stamp --stamp --workspace_status_command=$(pwd)/bazel/tools/workspace.sh
 common:ci --config=stamp
 
 # Always build pyo3 type stubs alongside native extension targets.
