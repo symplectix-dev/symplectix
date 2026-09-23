@@ -1,0 +1,94 @@
+load("//bazel:proto.bzl", "proto")
+load("//bazel:rust.bzl", "rust")
+load("//bazel:util.bzl", "util")
+
+package(
+    default_testonly = True,
+    default_visibility = ["//:__subpackages__"],
+)
+
+rust.binary(
+    name = "gen_arrow_schema",
+    srcs = ["main.rs"],
+    deps = [
+        "//shed/protoc_plugin",
+        "@crates//:anyhow",
+        "@crates//:prost-reflect",
+        "@crates//:prost-types",
+        "@crates//:thiserror",
+    ],
+)
+
+proto.plugin(
+    name = "arrow_schema",
+    outputs = ["{protopath}.arrow_schema.rs"],
+    tool = ":gen_arrow_schema",
+)
+
+util.select_file(
+    name = "order_schema_src",
+    srcs = "//shed/protoc_plugin/testdata:arrow_schema",
+    subpath = "order.arrow_schema.rs",
+)
+
+rust.library(
+    name = "order_schema_rs",
+    srcs = [":order_schema_src"],
+    crate_name = "order_schema",
+    tags = ["norustfmt"],
+    deps = ["@crates//:arrow-schema"],
+)
+
+util.select_file(
+    name = "product_schema_src",
+    srcs = "//shed/protoc_plugin/testdata:arrow_schema",
+    subpath = "product.arrow_schema.rs",
+)
+
+rust.library(
+    name = "product_schema_rs",
+    srcs = [":product_schema_src"],
+    crate_name = "product_schema",
+    tags = ["norustfmt"],
+    deps = ["@crates//:arrow-schema"],
+)
+
+util.select_file(
+    name = "review_schema_src",
+    srcs = "//shed/protoc_plugin/testdata:arrow_schema",
+    subpath = "review.arrow_schema.rs",
+)
+
+rust.library(
+    name = "review_schema_rs",
+    srcs = [":review_schema_src"],
+    crate_name = "review_schema",
+    tags = ["norustfmt"],
+    deps = ["@crates//:arrow-schema"],
+)
+
+util.select_file(
+    name = "customer_schema_src",
+    srcs = "//shed/protoc_plugin/testdata:arrow_schema",
+    subpath = "customer.arrow_schema.rs",
+)
+
+rust.library(
+    name = "customer_schema_rs",
+    srcs = [":customer_schema_src"],
+    crate_name = "customer_schema",
+    tags = ["norustfmt"],
+    deps = ["@crates//:arrow-schema"],
+)
+
+rust.test(
+    name = "schema_test",
+    srcs = ["schema_test.rs"],
+    deps = [
+        ":customer_schema_rs",
+        ":order_schema_rs",
+        ":product_schema_rs",
+        ":review_schema_rs",
+        "@crates//:arrow-schema",
+    ],
+)

@@ -1,0 +1,71 @@
+load("//bazel:proto.bzl", "proto")
+
+package(
+    default_testonly = True,
+    default_visibility = ["//:__subpackages__"],
+)
+
+proto.library(
+    name = "product_proto",
+    srcs = ["product.proto"],
+    deps = [
+        "@protobuf//:struct_proto",
+        "@protobuf//:wrappers_proto",
+    ],
+)
+
+proto.library(
+    name = "review_proto",
+    srcs = ["review.proto"],
+    deps = [
+        ":product_proto",
+        "@protobuf//:empty_proto",
+        "@protobuf//:wrappers_proto",
+    ],
+)
+
+proto.library(
+    name = "order_proto",
+    srcs = ["order.proto"],
+    deps = [
+        ":product_proto",
+        "@protobuf//:duration_proto",
+        "@protobuf//:timestamp_proto",
+        "@protobuf//:wrappers_proto",
+    ],
+)
+
+proto.library(
+    name = "customer_proto",
+    srcs = ["customer.proto"],
+    deps = [
+        ":product_proto",
+        ":review_proto",
+        "@protobuf//:any_proto",
+    ],
+)
+
+# One protoc run per plugin, over every proto here. A compile covers the
+# protos a library declares, not the ones it pulls in, so each library is
+# listed rather than relying on the deps between them.
+proto.compile(
+    name = "arrow_schema",
+    extra_plugins = ["//shed/protoc_plugin/arrow_schema"],
+    protos = [
+        ":customer_proto",
+        ":order_proto",
+        ":product_proto",
+        ":review_proto",
+    ],
+)
+
+proto.compile(
+    name = "message_descriptor_dump",
+    extra_plugins = ["//shed/protoc_plugin/message_descriptor_dump"],
+    protos = [
+        ":customer_proto",
+        ":order_proto",
+        ":product_proto",
+        ":review_proto",
+    ],
+)

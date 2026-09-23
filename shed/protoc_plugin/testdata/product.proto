@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package shed.protoc_plugin.testdata;
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/wrappers.proto";
+
+message Product {
+  int32 id = 1;
+
+  // Wrapped to keep unset apart from empty bytes.
+  google.protobuf.BytesValue image = 2;
+
+  // Dynamically typed, so there are no columns to fix.
+  google.protobuf.Struct attributes = 3;
+}
