@@ -1,0 +1,60 @@
+load("//bazel:proto.bzl", "proto")
+load("//bazel:rust.bzl", "rust")
+
+package(
+    default_testonly = True,
+    default_visibility = ["//:__subpackages__"],
+)
+
+rust.binary(
+    name = "gen_arrow_schema",
+    srcs = ["main.rs"],
+    deps = [
+        "//shed/protoc_plugin",
+        "@crates//:anyhow",
+        "@crates//:prost-reflect",
+        "@crates//:prost-types",
+        "@crates//:thiserror",
+    ],
+)
+
+proto.plugin(
+    name = "arrow_schema",
+    outputs = ["{protopath}.arrow_schema.rs"],
+    tool = ":gen_arrow_schema",
+)
+
+rust.library(
+    name = "product_schema_rs",
+    srcs = ["//shed/protoc_plugin/testdata:product_arrow_schema"],
+    crate_name = "product_schema",
+    tags = ["norustfmt"],
+    deps = ["@crates//:arrow"],
+)
+
+rust.library(
+    name = "review_schema_rs",
+    srcs = ["//shed/protoc_plugin/testdata:review_arrow_schema"],
+    crate_name = "review_schema",
+    tags = ["norustfmt"],
+    deps = ["@crates//:arrow"],
+)
+
+rust.library(
+    name = "customer_schema_rs",
+    srcs = ["//shed/protoc_plugin/testdata:customer_arrow_schema"],
+    crate_name = "customer_schema",
+    tags = ["norustfmt"],
+    deps = ["@crates//:arrow"],
+)
+
+rust.test(
+    name = "schema_test",
+    srcs = ["schema_test.rs"],
+    deps = [
+        ":customer_schema_rs",
+        ":product_schema_rs",
+        ":review_schema_rs",
+        "@crates//:arrow",
+    ],
+)

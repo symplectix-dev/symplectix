@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package shed.protoc_plugin.testdata;
+
+import "google/protobuf/empty.proto";
+import "shed/protoc_plugin/testdata/product.proto";
+
+message Review {
+  int32 id = 1;
+  Product product = 2;
+  optional google.protobuf.Empty empty = 3;
+}

@@ -1,0 +1,7 @@
+syntax = "proto3";
+
+package shed.protoc_plugin.testdata;
+
+message Product {
+  int32 id = 1;
+}

@@ -1,0 +1,57 @@
+load("//bazel:proto.bzl", "proto")
+
+package(
+    default_testonly = True,
+    default_visibility = ["//:__subpackages__"],
+)
+
+proto.library(
+    name = "product_proto",
+    srcs = ["product.proto"],
+)
+
+proto.library(
+    name = "review_proto",
+    srcs = ["review.proto"],
+    deps = [
+        ":product_proto",
+        "@protobuf//:empty_proto",
+    ],
+)
+
+proto.library(
+    name = "customer_proto",
+    srcs = ["customer.proto"],
+    deps = [
+        ":product_proto",
+        ":review_proto",
+        "@protobuf//:any_proto",
+    ],
+)
+
+# A compile covers the protos a library declares, not the ones it pulls
+# in, so each file needs its own. That is also what the plugin sees: one
+# output per input, holding only the messages that file declares.
+proto.compile(
+    name = "product_arrow_schema",
+    extra_plugins = ["//shed/protoc_plugin/arrow_schema"],
+    protos = [":product_proto"],
+)
+
+proto.compile(
+    name = "review_arrow_schema",
+    extra_plugins = ["//shed/protoc_plugin/arrow_schema"],
+    protos = [":review_proto"],
+)
+
+proto.compile(
+    name = "customer_arrow_schema",
+    extra_plugins = ["//shed/protoc_plugin/arrow_schema"],
+    protos = [":customer_proto"],
+)
+
+proto.compile(
+    name = "customer_message_descriptor_dump",
+    extra_plugins = ["//shed/protoc_plugin/message_descriptor_dump"],
+    protos = [":customer_proto"],
+)
