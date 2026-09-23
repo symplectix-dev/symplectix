@@ -3,10 +3,18 @@ syntax = "proto3";
 package shed.protoc_plugin.testdata;
 
 import "google/protobuf/empty.proto";
+import "google/protobuf/wrappers.proto";
 import "shed/protoc_plugin/testdata/product.proto";
 
 message Review {
   int32 id = 1;
   Product product = 2;
-  optional google.protobuf.Empty empty = 3;
+
+  // Carries nothing but its own presence. Parquet has no group
+  // without columns, so this cannot stay a struct.
+  google.protobuf.Empty marker = 3;
+
+  // Wrapped to keep unset apart from 0.0 and "".
+  google.protobuf.DoubleValue rating = 4;
+  google.protobuf.StringValue comment = 5;
 }

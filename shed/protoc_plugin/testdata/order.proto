@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package shed.protoc_plugin.testdata;
+
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/wrappers.proto";
+import "shed/protoc_plugin/testdata/product.proto";
+
+message Order {
+  int32 id = 1;
+
+  Product product = 2;
+
+  google.protobuf.Timestamp placed_at = 3;
+  google.protobuf.Duration fulfillment_duration = 4;
+
+  // Wrapped to keep unset apart from 0 and false.
+  google.protobuf.Int32Value quantity = 5;
+  google.protobuf.BoolValue gift = 6;
+
+  // The same, said the way proto3 got back in 3.15.
+  optional string coupon = 7;
+}

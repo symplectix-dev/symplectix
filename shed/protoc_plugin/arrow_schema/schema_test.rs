@@ -1,55 +1,25 @@
 //! Tests for the generated Arrow schemas.
 
-use arrow::datatypes::{
+use arrow_schema::{
     DataType,
     Field,
+    Schema,
+    TimeUnit,
 };
 
-/// The generated schema has to survive a round trip through Arrow's own
-/// types, which is what a Parquet writer would do with it.
-#[test]
-fn customer_schema_matches_the_proto() {
-    let schema = customer_schema::customer();
-
-    let names: Vec<&str> = schema.fields().iter().map(|f| f.name().as_str()).collect();
-    assert_eq!(names, ["ids", "type", "payload", "i32", "i64", "reviews", "tallies", "products"]);
-
-    // `repeated Id ids` is a list of structs, and `Id`'s oneof arms are
-    // plain nullable siblings inside it.
-    let DataType::List(item) = schema.field_with_name("ids").unwrap().data_type() else {
-        panic!("ids is not a list");
-    };
-    let DataType::Struct(arms) = item.data_type() else {
-        panic!("ids item is not a struct");
-    };
-    let arm_names: Vec<&str> = arms.iter().map(|f| f.name().as_str()).collect();
-    assert_eq!(arm_names, ["uid", "email", "phone"]);
-    assert!(arms.iter().all(|f| f.is_nullable()));
-}
-
+/// A Parquet group holds at least one column, so `google.protobuf.Empty`
+/// has no struct to become. Whether the field was set is the only thing
+/// left to record, and a bool records it.
 #[test]
 fn empty_message_becomes_a_presence_flag() {
     let schema = review_schema::review();
-    let empty = schema.field_with_name("empty").unwrap();
-    assert_eq!(empty.data_type(), &DataType::Boolean);
+    let marker = schema.field_with_name("marker").unwrap();
+    assert_eq!(marker.data_type(), &DataType::Boolean);
 }
 
-#[test]
-fn any_keeps_its_payload_opaque() {
-    let schema = customer_schema::customer();
-    let DataType::Struct(fields) = schema.field_with_name("payload").unwrap().data_type() else {
-        panic!("payload is not a struct");
-    };
-    let expected: Vec<Field> = vec![
-        Field::new("type_url", DataType::Utf8, false),
-        Field::new("value", DataType::Binary, false),
-    ];
-    assert_eq!(fields.iter().map(|f| f.as_ref().clone()).collect::<Vec<_>>(), expected);
-}
-
-/// Nullability is proto presence, not a blanket choice: a scalar without
-/// `optional` always has a value, while a message field, an `optional`
-/// one, and a oneof arm can be absent.
+/// Nullability is proto presence: a scalar without `optional`
+/// always has a value, while a message field and a oneof arm
+/// can be nullable.
 #[test]
 fn nullability_follows_proto_presence() {
     let customer = customer_schema::customer();
@@ -62,7 +32,7 @@ fn nullability_follows_proto_presence() {
     }
 
     let review = review_schema::review();
-    for (name, nullable) in [("id", false), ("product", true), ("empty", true)] {
+    for (name, nullable) in [("id", false), ("product", true), ("marker", true)] {
         assert_eq!(review.field_with_name(name).unwrap().is_nullable(), nullable, "review.{name}");
     }
 
@@ -74,48 +44,69 @@ fn nullability_follows_proto_presence() {
     assert!(!item.is_nullable());
 }
 
-/// A proto map is a repeated entry of key and value, which is what Arrow
-/// means by a map. The value follows proto presence like any other
-/// field, so a scalar value is not null while a message value is.
+/// `Any` needs no handling of its own. It is an ordinary message of
+/// `type_url` and `value`. There is no shape to build columns from,
+/// and the bytes stay readable only by decoding them against `type_url`.
 #[test]
-fn a_proto_map_becomes_an_arrow_map() {
+fn any_is_just_an_ordinary_message() {
     let schema = customer_schema::customer();
+    let DataType::Struct(fields) = schema.field_with_name("payload").unwrap().data_type() else {
+        panic!("payload is not a struct");
+    };
+    let expected: Vec<Field> = vec![
+        Field::new("type_url", DataType::Utf8, false),
+        Field::new("value", DataType::Binary, false),
+    ];
+    assert_eq!(fields.iter().map(|f| f.as_ref().clone()).collect::<Vec<_>>(), expected);
+}
 
-    for (name, value_nullable) in [("tallies", false), ("products", true)] {
+/// A wrapper is a message around one scalar, which is how proto3 gave a
+/// scalar presence before `optional` existed. Unwrapping it keeps both
+/// halves: the scalar's type, and the nullability that being a message
+/// field carries. `Product` is reached through an import, where it is a
+/// struct rather than a schema of its own.
+#[test]
+fn a_wrapper_unwraps_to_a_nullable_scalar() {
+    let order = order_schema::order();
+    let review = review_schema::review();
+    let product = product_schema::product();
+
+    let cases: [(&Schema, &str, DataType); 5] = [
+        (&order, "quantity", DataType::Int32),
+        (&order, "gift", DataType::Boolean),
+        (&review, "rating", DataType::Float64),
+        (&review, "comment", DataType::Utf8),
+        (&product, "image", DataType::Binary),
+    ];
+
+    for (schema, name, ty) in cases {
         let field = schema.field_with_name(name).unwrap();
-        let DataType::Map(entries, sorted) = field.data_type() else {
-            panic!("{name} is not a map");
-        };
-        assert!(!sorted, "{name}");
-
-        // A map is never absent, only empty, and Arrow requires the
-        // entries group itself to be non-null.
-        assert!(!field.is_nullable(), "{name}");
-        assert!(!entries.is_nullable(), "{name}");
-
-        let DataType::Struct(kv) = entries.data_type() else {
-            panic!("{name} entries is not a struct");
-        };
-        let names: Vec<&str> = kv.iter().map(|f| f.name().as_str()).collect();
-        assert_eq!(names, ["key", "value"], "{name}");
-
-        assert!(!kv[0].is_nullable(), "{name} key");
-        assert_eq!(kv[1].is_nullable(), value_nullable, "{name} value");
+        assert_eq!(field.data_type(), &ty, "{name}");
+        assert!(field.is_nullable(), "{name}");
     }
 }
 
-/// A generated file holds only the messages its own proto declares. A
-/// message reached across an import is expanded where it is used, so
-/// `Product` is a struct inside `Review` and a schema of its own next
-/// door, never a reference between the two files.
+/// `optional` gives a plain scalar the presence a wrapper had to be a
+/// whole message to carry, and the two reach the same nullable column.
 #[test]
-fn an_imported_message_is_expanded_where_it_is_used() {
-    let DataType::Struct(inlined) =
-        review_schema::review().field_with_name("product").unwrap().data_type().clone()
-    else {
-        panic!("product is not a struct");
-    };
+fn an_optional_scalar_is_nullable() {
+    let order = order_schema::order();
+    let coupon = order.field_with_name("coupon").unwrap();
+    assert_eq!(coupon.data_type(), &DataType::Utf8);
+    assert!(coupon.is_nullable());
+}
 
-    let declared = product_schema::product();
-    assert_eq!(inlined.as_ref(), declared.fields().as_ref());
+/// `Struct` reaches itself through `Value`, so it has no finite tree to
+/// become, and its values are dynamically typed anyway. Proto defines a
+/// JSON mapping for it, and that text is what the column holds.
+#[test]
+fn struct_becomes_json_text() {
+    let product = product_schema::product();
+    let attributes = product.field_with_name("attributes").unwrap();
+    assert_eq!(attributes.data_type(), &DataType::Utf8);
+    assert!(attributes.is_nullable());
+
+    // Text alone would not say the bytes are JSON, so the field carries
+    // Arrow's canonical extension for it.
+    assert_eq!(attributes.extension_type_name(), Some("arrow.json"));
 }

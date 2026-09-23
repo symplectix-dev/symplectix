@@ -8,6 +8,10 @@ package(
 proto.library(
     name = "product_proto",
     srcs = ["product.proto"],
+    deps = [
+        "@protobuf//:struct_proto",
+        "@protobuf//:wrappers_proto",
+    ],
 )
 
 proto.library(
@@ -16,6 +20,18 @@ proto.library(
     deps = [
         ":product_proto",
         "@protobuf//:empty_proto",
+        "@protobuf//:wrappers_proto",
+    ],
+)
+
+proto.library(
+    name = "order_proto",
+    srcs = ["order.proto"],
+    deps = [
+        ":product_proto",
+        "@protobuf//:duration_proto",
+        "@protobuf//:timestamp_proto",
+        "@protobuf//:wrappers_proto",
     ],
 )
 
@@ -29,29 +45,27 @@ proto.library(
     ],
 )
 
-# A compile covers the protos a library declares, not the ones it pulls
-# in, so each file needs its own. That is also what the plugin sees: one
-# output per input, holding only the messages that file declares.
+# One protoc run per plugin, over every proto here. A compile covers the
+# protos a library declares, not the ones it pulls in, so each library is
+# listed rather than relying on the deps between them.
 proto.compile(
-    name = "product_arrow_schema",
+    name = "arrow_schema",
     extra_plugins = ["//shed/protoc_plugin/arrow_schema"],
-    protos = [":product_proto"],
+    protos = [
+        ":customer_proto",
+        ":order_proto",
+        ":product_proto",
+        ":review_proto",
+    ],
 )
 
 proto.compile(
-    name = "review_arrow_schema",
-    extra_plugins = ["//shed/protoc_plugin/arrow_schema"],
-    protos = [":review_proto"],
-)
-
-proto.compile(
-    name = "customer_arrow_schema",
-    extra_plugins = ["//shed/protoc_plugin/arrow_schema"],
-    protos = [":customer_proto"],
-)
-
-proto.compile(
-    name = "customer_message_descriptor_dump",
+    name = "message_descriptor_dump",
     extra_plugins = ["//shed/protoc_plugin/message_descriptor_dump"],
-    protos = [":customer_proto"],
+    protos = [
+        ":customer_proto",
+        ":order_proto",
+        ":product_proto",
+        ":review_proto",
+    ],
 )

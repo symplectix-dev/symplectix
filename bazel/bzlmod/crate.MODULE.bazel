@@ -100,9 +100,10 @@ crate.spec(
     version = "0.16",
 )
 
-# Arrow, whose `datatypes` are what generated schemas are written in.
+# Arrow's type system.
 crate.spec(
-    package = "arrow",
+    features = ["canonical_extension_types"],
+    package = "arrow-schema",
     version = "60",
 )
 

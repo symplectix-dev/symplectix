@@ -1,4 +1,9 @@
-#![allow(missing_docs)]
+//! A protoc plugin emitting Arrow schemas, one Rust function per
+//! message and one file per proto. A Parquet writer derives its own
+//! schema from the Arrow one.
+//!
+//! A column is nullable exactly when its field has proto presence.
+
 use prost_reflect::{
     FieldDescriptor,
     FileDescriptor,
@@ -11,8 +16,6 @@ fn main() -> anyhow::Result<()> {
     protoc_plugin::gen_code(ArrowSchema::default())
 }
 
-/// Generates Arrow schemas, which a Parquet writer derives its own schema
-/// from, for every message in a proto file.
 #[derive(Debug, Default, Clone)]
 struct ArrowSchema {}
 
@@ -107,11 +110,63 @@ fn gen_schema(msg: &MessageDescriptor, package: &str) -> Result<String, Error> {
     let fields = fields_expr(msg, &mut vec![msg.full_name().to_owned()], 2)?;
 
     Ok(format!(
-        "/// Arrow schema for `{}`.\npub fn {}() -> ::arrow::datatypes::Schema {{\n    ::arrow::datatypes::Schema::new(vec![\n{}\n    ])\n}}\n",
+        "/// Arrow schema for `{}`.\npub fn {}() -> ::arrow_schema::Schema {{\n    ::arrow_schema::Schema::new(vec![\n{}\n    ])\n}}\n",
         msg.full_name(),
         fn_name(msg, package),
         fields,
     ))
+}
+
+/// A column's Arrow type, and the canonical extension naming what its
+/// bytes mean when the type alone does not say.
+struct Column {
+    data_type: String,
+    extension: Option<&'static str>,
+}
+
+impl Column {
+    fn plain(data_type: impl Into<String>) -> Self {
+        Self { data_type: data_type.into(), extension: None }
+    }
+
+    /// `Empty` has no fields, so nothing to carry but whether the field
+    /// was set. Nullability already carries that, and the bool is
+    /// somewhere for it to sit.
+    fn empty() -> Self {
+        Self::plain("::arrow_schema::DataType::Boolean")
+    }
+
+    /// A proto timestamp is seconds and nanos since the Unix epoch, so
+    /// nanoseconds lose nothing and the zone is not a guess.
+    fn timestamp() -> Self {
+        Self::plain(
+            "::arrow_schema::DataType::Timestamp(\
+             ::arrow_schema::TimeUnit::Nanosecond, Some(\"UTC\".into()))",
+        )
+    }
+
+    /// A proto duration is seconds and nanos as well.
+    fn duration() -> Self {
+        Self::plain("::arrow_schema::DataType::Duration(::arrow_schema::TimeUnit::Nanosecond)")
+    }
+
+    /// Text holding JSON. The extension fixes the storage type to a
+    /// string, so there is nothing for a caller to choose.
+    fn json() -> Self {
+        Self {
+            data_type: "::arrow_schema::DataType::Utf8".to_owned(),
+            extension: Some("::arrow_schema::extension::Json::default()"),
+        }
+    }
+}
+
+fn field_expr(name: &str, column: &Column, nullable: bool) -> String {
+    let field =
+        format!("::arrow_schema::Field::new(\"{}\", {}, {})", name, column.data_type, nullable,);
+    match column.extension {
+        None => field,
+        Some(extension) => format!("{field}.with_extension_type({extension})"),
+    }
 }
 
 /// A message's fields as a comma-separated list of `Field::new` calls.
@@ -140,12 +195,7 @@ fn fields_expr(
         let expr = if field.is_map() {
             map_field(&field, nullable, stack, depth)?
         } else {
-            format!(
-                "::arrow::datatypes::Field::new(\"{}\", {}, {})",
-                field.name(),
-                field_type(&field, stack, depth)?,
-                nullable,
-            )
+            field_expr(field.name(), &field_type(&field, stack, depth)?, nullable)
         };
         out.push(format!("{}{},", pad, expr));
     }
@@ -168,22 +218,22 @@ fn map_field(
     let key = entry.map_entry_key_field();
     let value = entry.map_entry_value_field();
 
-    let key_ty = kind_type(&key, stack, depth + 1)?;
-    let value_ty = kind_type(&value, stack, depth + 1)?;
+    let key_expr = field_expr("key", &kind_type(&key, stack, depth + 1)?, false);
+    let value_expr =
+        field_expr("value", &kind_type(&value, stack, depth + 1)?, value.supports_presence());
     let pad = "    ".repeat(depth + 1);
     let close = "    ".repeat(depth);
 
     Ok(format!(
-        "::arrow::datatypes::Field::new_map(\n\
+        "::arrow_schema::Field::new_map(\n\
          {pad}\"{name}\",\n\
          {pad}\"entries\",\n\
-         {pad}::arrow::datatypes::Field::new(\"key\", {key_ty}, false),\n\
-         {pad}::arrow::datatypes::Field::new(\"value\", {value_ty}, {value_null}),\n\
+         {pad}{key_expr},\n\
+         {pad}{value_expr},\n\
          {pad}false,\n\
          {pad}{nullable},\n\
          {close})",
         name = field.name(),
-        value_null = value.supports_presence(),
     ))
 }
 
@@ -191,52 +241,55 @@ fn field_type(
     field: &FieldDescriptor,
     stack: &mut Vec<String>,
     depth: usize,
-) -> Result<String, Error> {
+) -> Result<Column, Error> {
     let inner = kind_type(field, stack, depth + 1)?;
+    if !field.is_list() {
+        return Ok(inner);
+    }
 
     // A repeated field is never absent, only empty, and none of its
-    // elements is ever null. `new_list` names the element `item`, which
-    // is what Parquet's three-level list encoding expects.
-    if field.is_list() {
-        return Ok(format!("::arrow::datatypes::DataType::new_list({}, false)", inner));
-    }
-    Ok(inner)
+    // elements is ever null. The element is named `item`, which is what
+    // Parquet's three-level list encoding expects, and it is the element
+    // rather than the list that carries any extension.
+    Ok(Column::plain(match inner.extension {
+        None => format!("::arrow_schema::DataType::new_list({}, false)", inner.data_type),
+        Some(_) => format!(
+            "::arrow_schema::DataType::List(::std::sync::Arc::new({}))",
+            field_expr("item", &inner, false),
+        ),
+    }))
 }
 
 fn kind_type(
     field: &FieldDescriptor,
     stack: &mut Vec<String>,
     depth: usize,
-) -> Result<String, Error> {
+) -> Result<Column, Error> {
     let ty = match field.kind() {
-        Kind::Double => "::arrow::datatypes::DataType::Float64".to_owned(),
-        Kind::Float => "::arrow::datatypes::DataType::Float32".to_owned(),
-        Kind::Int32 | Kind::Sint32 | Kind::Sfixed32 => {
-            "::arrow::datatypes::DataType::Int32".to_owned()
-        }
-        Kind::Int64 | Kind::Sint64 | Kind::Sfixed64 => {
-            "::arrow::datatypes::DataType::Int64".to_owned()
-        }
-        Kind::Uint32 | Kind::Fixed32 => "::arrow::datatypes::DataType::UInt32".to_owned(),
-        Kind::Uint64 | Kind::Fixed64 => "::arrow::datatypes::DataType::UInt64".to_owned(),
-        Kind::Bool => "::arrow::datatypes::DataType::Boolean".to_owned(),
-        Kind::String => "::arrow::datatypes::DataType::Utf8".to_owned(),
-        Kind::Bytes => "::arrow::datatypes::DataType::Binary".to_owned(),
+        Kind::Double => "::arrow_schema::DataType::Float64",
+        Kind::Float => "::arrow_schema::DataType::Float32",
+        Kind::Int32 | Kind::Sint32 | Kind::Sfixed32 => "::arrow_schema::DataType::Int32",
+        Kind::Int64 | Kind::Sint64 | Kind::Sfixed64 => "::arrow_schema::DataType::Int64",
+        Kind::Uint32 | Kind::Fixed32 => "::arrow_schema::DataType::UInt32",
+        Kind::Uint64 | Kind::Fixed64 => "::arrow_schema::DataType::UInt64",
+        Kind::Bool => "::arrow_schema::DataType::Boolean",
+        Kind::String => "::arrow_schema::DataType::Utf8",
+        Kind::Bytes => "::arrow_schema::DataType::Binary",
         // A proto enum's number is its canonical form. Names move when a
         // constant is renamed; numbers are what the wire carries.
-        Kind::Enum(_) => "::arrow::datatypes::DataType::Int32".to_owned(),
-        Kind::Message(msg) => message_type(&msg, stack, depth)?,
+        Kind::Enum(_) => "::arrow_schema::DataType::Int32",
+        Kind::Message(msg) => return message_type(&msg, stack, depth),
     };
-    Ok(ty)
+    Ok(Column::plain(ty))
 }
 
 fn message_type(
     msg: &MessageDescriptor,
     stack: &mut Vec<String>,
     depth: usize,
-) -> Result<String, Error> {
-    if let Some(ty) = well_known(msg.full_name()) {
-        return Ok(ty.to_owned());
+) -> Result<Column, Error> {
+    if let Some(column) = well_known(msg.full_name()) {
+        return Ok(column);
     }
 
     if stack.iter().any(|name| name == msg.full_name()) {
@@ -252,38 +305,37 @@ fn message_type(
     stack.pop();
 
     let close = "    ".repeat(depth);
-    Ok(format!(
-        "::arrow::datatypes::DataType::Struct(::arrow::datatypes::Fields::from(vec![\n{}\n{}]))",
+    Ok(Column::plain(format!(
+        "::arrow_schema::DataType::Struct(::arrow_schema::Fields::from(vec![\n{}\n{}]))",
         fields?, close
-    ))
+    )))
 }
 
-/// Well-known types Arrow has a native spelling for, plus the two that
-/// have no shape of their own: `Any` carries an opaque payload, and
-/// `Empty` would be a group with no children.
-fn well_known(full_name: &str) -> Option<&'static str> {
+/// Well-known types Arrow spells natively, plus `Empty` and `Struct`,
+/// which the generic path cannot reach at all: the first has no fields
+/// and so no group Parquet accepts, and the second reaches itself
+/// through `Value` and so is no finite tree.
+///
+/// `Any` is absent on purpose. It is an ordinary message of `type_url`
+/// and `value`, so expanding it like any other gives the same two
+/// columns, opaque payload included.
+fn well_known(full_name: &str) -> Option<Column> {
     Some(match full_name {
-        "google.protobuf.Timestamp" => {
-            "::arrow::datatypes::DataType::Timestamp(::arrow::datatypes::TimeUnit::Nanosecond, Some(\"UTC\".into()))"
+        "google.protobuf.Empty" => Column::empty(),
+        "google.protobuf.Struct" | "google.protobuf.ListValue" | "google.protobuf.Value" => {
+            Column::json()
         }
-        "google.protobuf.Duration" => {
-            "::arrow::datatypes::DataType::Duration(::arrow::datatypes::TimeUnit::Nanosecond)"
-        }
-        "google.protobuf.Empty" => "::arrow::datatypes::DataType::Boolean",
-        "google.protobuf.Any" => {
-            "::arrow::datatypes::DataType::Struct(::arrow::datatypes::Fields::from(vec![\
-             ::arrow::datatypes::Field::new(\"type_url\", ::arrow::datatypes::DataType::Utf8, false), \
-             ::arrow::datatypes::Field::new(\"value\", ::arrow::datatypes::DataType::Binary, false)]))"
-        }
-        "google.protobuf.BoolValue" => "::arrow::datatypes::DataType::Boolean",
-        "google.protobuf.StringValue" => "::arrow::datatypes::DataType::Utf8",
-        "google.protobuf.BytesValue" => "::arrow::datatypes::DataType::Binary",
-        "google.protobuf.Int32Value" => "::arrow::datatypes::DataType::Int32",
-        "google.protobuf.Int64Value" => "::arrow::datatypes::DataType::Int64",
-        "google.protobuf.UInt32Value" => "::arrow::datatypes::DataType::UInt32",
-        "google.protobuf.UInt64Value" => "::arrow::datatypes::DataType::UInt64",
-        "google.protobuf.FloatValue" => "::arrow::datatypes::DataType::Float32",
-        "google.protobuf.DoubleValue" => "::arrow::datatypes::DataType::Float64",
+        "google.protobuf.Timestamp" => Column::timestamp(),
+        "google.protobuf.Duration" => Column::duration(),
+        "google.protobuf.BoolValue" => Column::plain("::arrow_schema::DataType::Boolean"),
+        "google.protobuf.StringValue" => Column::plain("::arrow_schema::DataType::Utf8"),
+        "google.protobuf.BytesValue" => Column::plain("::arrow_schema::DataType::Binary"),
+        "google.protobuf.Int32Value" => Column::plain("::arrow_schema::DataType::Int32"),
+        "google.protobuf.Int64Value" => Column::plain("::arrow_schema::DataType::Int64"),
+        "google.protobuf.UInt32Value" => Column::plain("::arrow_schema::DataType::UInt32"),
+        "google.protobuf.UInt64Value" => Column::plain("::arrow_schema::DataType::UInt64"),
+        "google.protobuf.FloatValue" => Column::plain("::arrow_schema::DataType::Float32"),
+        "google.protobuf.DoubleValue" => Column::plain("::arrow_schema::DataType::Float64"),
         _ => return None,
     })
 }
