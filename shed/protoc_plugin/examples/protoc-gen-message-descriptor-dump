@@ -1,3 +1,0 @@
-#!/usr/bin/env bash
-
-cargo run --release --package protoc_plugin --example protoc-gen-message-descriptor-dump
