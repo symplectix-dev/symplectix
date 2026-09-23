@@ -1,0 +1,31 @@
+load("//bazel:proto.bzl", "proto")
+load("//bazel:rust.bzl", "rust")
+
+package(
+    default_testonly = True,
+    default_visibility = ["//:__subpackages__"],
+)
+
+rust.binary(
+    name = "gen_message_descriptor_dump",
+    srcs = ["main.rs"],
+    deps = [
+        "//shed/protoc_plugin",
+        "@crates//:anyhow",
+        "@crates//:prost-reflect",
+        "@crates//:prost-types",
+    ],
+)
+
+# This target's name is the plugin name protoc is given, as
+# --plugin=protoc-gen-<name>=<path> and --<name>_out. The tool's own
+# filename plays no part, since the path is passed explicitly.
+#
+# `outputs` declares what it emits: one file per proto, with {protopath}
+# being the path with the .proto extension stripped, which is what the
+# plugin itself writes.
+proto.plugin(
+    name = "message_descriptor_dump",
+    outputs = ["{protopath}.message_descriptor_dump"],
+    tool = ":gen_message_descriptor_dump",
+)

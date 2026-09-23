@@ -1,0 +1,21 @@
+load("//bazel:proto.bzl", "proto")
+
+package(
+    default_testonly = True,
+    default_visibility = ["//:__subpackages__"],
+)
+
+proto.library(
+    name = "example_proto",
+    srcs = ["example.proto"],
+    deps = [
+        "@protobuf//:any_proto",
+        "@protobuf//:empty_proto",
+    ],
+)
+
+proto.compile(
+    name = "example_message_descriptor_dump",
+    extra_plugins = ["//shed/protoc_plugin/message_descriptor_dump"],
+    protos = [":example_proto"],
+)
