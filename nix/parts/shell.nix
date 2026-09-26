@@ -13,7 +13,7 @@
       rust-analyzer-setup-helix = pkgs.writeShellScriptBin "rust-analyzer-setup-helix" ''
         set -eu
         root=$(${pkgs.git}/bin/git rev-parse --show-toplevel)
-        exec "$root/bazel/tools/rust_analyzer_setup_helix.sh" --bazel ${bazel}/bin/bazel "$@"
+        exec "$root/bazel/tools/rust_analyzer_setup_helix.sh" --root "$root" --bazel ${bazel}/bin/bazel "$@"
       '';
 
       venvHook = ''

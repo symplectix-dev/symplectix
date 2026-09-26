@@ -4,15 +4,19 @@
 set -euo pipefail
 
 bazel=bazel
+root=
 
 while [ $# -gt 0 ]; do
   case $1 in
-  --bazel)
+  --bazel | --root)
     if [ $# -lt 2 ]; then
-      echo "--bazel requires an argument" >&2
+      echo "$1 requires an argument" >&2
       exit 2
     fi
-    bazel=$2
+    case $1 in
+    --bazel) bazel=$2 ;;
+    --root) root=$2 ;;
+    esac
     shift 2
     ;;
   *)
@@ -22,7 +26,9 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-root=$(git rev-parse --show-toplevel)
+if [ -z "$root" ]; then
+  root=$(git rev-parse --show-toplevel)
+fi
 
 # `rules_rust`'s helix setup prints a snippet that nests config under
 # an extra `rust-analyzer.` level Helix does not strip, so rust-analyzer
