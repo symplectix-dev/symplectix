@@ -1,6 +1,7 @@
-target
-tmp
+.bazel
 .claude
 .direnv
 .helix
 .vscode
+target
+tmp
