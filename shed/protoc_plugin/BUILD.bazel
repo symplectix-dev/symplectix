@@ -10,8 +10,6 @@ rust.library(
     srcs = ["src/lib.rs"],
     deps = [
         "@crates//:anyhow",
-        "@crates//:prost",
-        "@crates//:prost-reflect",
-        "@crates//:prost-types",
+        "@crates//:protobuf",
     ],
 )

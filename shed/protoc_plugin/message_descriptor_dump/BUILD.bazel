@@ -12,8 +12,7 @@ rust.binary(
     deps = [
         "//shed/protoc_plugin",
         "@crates//:anyhow",
-        "@crates//:prost-reflect",
-        "@crates//:prost-types",
+        "@crates//:protobuf",
     ],
 )
 

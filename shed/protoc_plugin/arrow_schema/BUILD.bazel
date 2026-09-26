@@ -13,8 +13,8 @@ rust.binary(
     deps = [
         "//shed/protoc_plugin",
         "@crates//:anyhow",
-        "@crates//:prost-reflect",
-        "@crates//:prost-types",
+        "@crates//:heck",
+        "@crates//:protobuf",
         "@crates//:thiserror",
     ],
 )
@@ -35,7 +35,6 @@ rust.library(
     name = "order_schema_rs",
     srcs = [":order_schema_src"],
     crate_name = "order_schema",
-    tags = ["norustfmt"],
     deps = ["@crates//:arrow-schema"],
 )
 
@@ -49,7 +48,6 @@ rust.library(
     name = "product_schema_rs",
     srcs = [":product_schema_src"],
     crate_name = "product_schema",
-    tags = ["norustfmt"],
     deps = ["@crates//:arrow-schema"],
 )
 
@@ -63,7 +61,6 @@ rust.library(
     name = "review_schema_rs",
     srcs = [":review_schema_src"],
     crate_name = "review_schema",
-    tags = ["norustfmt"],
     deps = ["@crates//:arrow-schema"],
 )
 
@@ -77,12 +74,12 @@ rust.library(
     name = "customer_schema_rs",
     srcs = [":customer_schema_src"],
     crate_name = "customer_schema",
-    tags = ["norustfmt"],
     deps = ["@crates//:arrow-schema"],
 )
 
 rust.test(
     name = "schema_test",
+    size = "small",
     srcs = ["schema_test.rs"],
     deps = [
         ":customer_schema_rs",
