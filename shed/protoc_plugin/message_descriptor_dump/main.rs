@@ -1,12 +1,13 @@
-#![allow(missing_docs)]
-use prost_reflect::FileDescriptor;
-use prost_types::compiler::code_generator_response::File;
+//! An example protoc plugin, dumping the message descriptors of each
+//! proto it is given.
+
+use protobuf::plugin::code_generator_response::File;
+use protobuf::reflect::FileDescriptor;
 
 fn main() -> anyhow::Result<()> {
-    protoc_plugin::gen_code(MessageDescriptorDump::default())
+    protoc_plugin::run(MessageDescriptorDump::default())
 }
 
-/// An example protobuf compiler plugin which dumps message descriptor.
 #[derive(Debug, Default, Clone)]
 struct MessageDescriptorDump {}
 

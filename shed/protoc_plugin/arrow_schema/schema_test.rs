@@ -4,7 +4,6 @@ use arrow_schema::{
     DataType,
     Field,
     Schema,
-    TimeUnit,
 };
 
 /// A Parquet group holds at least one column, so `google.protobuf.Empty`
@@ -45,8 +44,7 @@ fn nullability_follows_proto_presence() {
 }
 
 /// `Any` needs no handling of its own. It is an ordinary message of
-/// `type_url` and `value`. There is no shape to build columns from,
-/// and the bytes stay readable only by decoding them against `type_url`.
+/// `type_url` and `value`.
 #[test]
 fn any_is_just_an_ordinary_message() {
     let schema = customer_schema::customer();
