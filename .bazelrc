@@ -2,8 +2,10 @@ import %workspace%/bazel/bazelrc/preset.bazelrc
 import %workspace%/bazel/bazelrc/profile.bazelrc
 import %workspace%/bazel/bazelrc/remote.bazelrc
 
-# Create symlinks called bin (etc) inside a hidden directory.
-common --symlink_prefix=.bazel/
+# Create no convenience symlinks in the workspace.
+# `--symlink_prefix=/` does the same, but that
+# spelling is on its way out.
+common --experimental_convenience_symlinks=ignore
 
 # Build metadata is custom key-value string pairs
 # to supply in a build event.
