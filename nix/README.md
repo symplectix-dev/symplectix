@@ -25,6 +25,6 @@ gh api repos/nixos/nixpkgs/commits/nixpkgs-unstable \
 ```
 
 Update the `nixpkgs.url` in `flake.nix`,
-then run `nix flake update ./nix`.
+then run `nix flake update --flake ./nix`.
 
 [flake-parts]: https://flake.parts
