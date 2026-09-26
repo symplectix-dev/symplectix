@@ -14,7 +14,8 @@ rust.binary(
         "//shed/protoc_plugin",
         "@crates//:anyhow",
         "@crates//:heck",
-        "@crates//:protobuf",
+        "@crates//:prost-reflect",
+        "@crates//:prost-types",
         "@crates//:thiserror",
     ],
 )
