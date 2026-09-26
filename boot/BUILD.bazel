@@ -50,6 +50,12 @@ genrule(
         for cmd in sh mount umount ip wget switch_root mkdir chmod ln printf; do
             ln -sf busybox $$WORK/bin/$$cmd
         done
-        (cd $$WORK && find . | sort | cpio -o -H newc | gzip -9) > $@
+        # Fail when the tree is empty: cpio does not treat it as an error.
+        if [ "$$(find $$WORK -mindepth 1 | wc -l)" -eq 0 ]; then
+            echo "initrd: nothing to archive" >&2
+            exit 1
+        fi
+
+        (cd $$WORK && find . | sort | cpio --quiet -o -H newc | gzip -9) > $@
     """,
 )
