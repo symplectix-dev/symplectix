@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package shed.grpc_example;
+
+// Echoes back whatever it is sent.
+service Echo {
+  rpc Echo(EchoRequest) returns (EchoResponse) {}
+}
+
+message EchoRequest {
+  string message = 1;
+}
+
+message EchoResponse {
+  string message = 1;
+}
