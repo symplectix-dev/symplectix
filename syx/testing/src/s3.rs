@@ -1,11 +1,7 @@
 //! Spawns a local S3-compatible server, for tests that need a real remote
 //! rather than `object_store::memory::InMemory` or
-//! `object_store::local::LocalFileSystem`. Backed by MinIO, an
+//! `object_store::local::LocalFileSystem`. Backed by s3s-fs, an
 //! implementation detail callers shouldn't need to care about.
-//!
-//! Linux/x86_64 only -- the `minio_static` runfile is a static Linux/amd64
-//! binary. Callers are expected to gate their own test on the same platform
-//! (`target_compatible_with` in `BUILD`, `#[cfg(...)]` in the test itself).
 
 use std::process::Stdio;
 use std::{
@@ -16,10 +12,10 @@ use std::{
 use crate::TempDir;
 
 /// Local test credentials. Not a secret.
-pub const ACCESS_KEY_ID: &str = "minioadmin";
+pub const ACCESS_KEY_ID: &str = "test";
 
 /// See [`ACCESS_KEY_ID`].
-pub const SECRET_ACCESS_KEY: &str = "minioadmin";
+pub const SECRET_ACCESS_KEY: &str = "test";
 
 /// An S3-compatible server running on localhost, killed when dropped.
 pub struct Server {
@@ -39,17 +35,18 @@ impl Server {
     /// server is actually accepting connections.
     pub fn spawn(data: TempDir) -> io::Result<Self> {
         let port = free_port()?;
-        let bin = crate::rlocation("minio_static/file/downloaded");
+        let bin = crate::rlocation("_main/syx/testing/s3s-fs");
 
         let child = process::Command::new(bin)
-            .arg("server")
+            .arg("--host")
+            .arg("127.0.0.1")
+            .arg("--port")
+            .arg(port.to_string())
+            .arg("--access-key")
+            .arg(ACCESS_KEY_ID)
+            .arg("--secret-key")
+            .arg(SECRET_ACCESS_KEY)
             .arg(data.path())
-            .arg("--address")
-            .arg(format!("127.0.0.1:{port}"))
-            .arg("--console-address")
-            .arg("127.0.0.1:0")
-            .env("MINIO_ROOT_USER", ACCESS_KEY_ID)
-            .env("MINIO_ROOT_PASSWORD", SECRET_ACCESS_KEY)
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()?;

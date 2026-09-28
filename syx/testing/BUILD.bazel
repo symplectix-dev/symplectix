@@ -1,4 +1,16 @@
 load("//bazel:rust.bzl", "rust")
+load("//bazel:util.bzl", "util")
+
+# The server `s3::Server` spawns. Linking it here
+# keeps that path stable across a version bump.
+util.copy_file(
+    name = "s3s_fs",
+    testonly = True,
+    src = "@crates//:s3s-fs__s3s-fs",
+    out = "s3s-fs",
+    allow_symlink = True,
+    is_executable = True,
+)
 
 rust.library(
     name = "testing",
@@ -7,6 +19,7 @@ rust.library(
         "src/lib.rs",
         "src/s3.rs",
     ],
+    data = [":s3s_fs"],
     visibility = ["//visibility:public"],
     deps = [
         "@crates//:rand",
