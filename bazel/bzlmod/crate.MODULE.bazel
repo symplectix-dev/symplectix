@@ -281,6 +281,17 @@ crate.spec(
     version = "3",
 )
 
+# S3-compatible server over a directory.
+crate.spec(
+    features = ["binary"],
+    package = "s3s-fs",
+    version = "0.17",
+)
+crate.annotation(
+    crate = "s3s-fs",
+    gen_binaries = ["s3s-fs"],
+)
+
 # Extra iterator adaptors.
 crate.spec(
     package = "itertools",

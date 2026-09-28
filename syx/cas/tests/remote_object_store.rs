@@ -2,7 +2,6 @@
 //! (local) S3-compatible remote, including a blob large enough to span
 //! multiple chunks (and so multiple staged entries plus a manifest), and
 //! confirms staged entries do consolidate into pack objects.
-#![cfg(all(target_os = "linux", target_arch = "x86_64"))]
 
 use std::sync::Arc;
 
