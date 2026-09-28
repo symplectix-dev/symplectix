@@ -1,25 +1,28 @@
 //! Scaffolding for a protoc plugin. A plugin implements
 //! [`GenFile`] and calls [`run`] from its `main`.
 
-use std::collections::BTreeMap;
-use std::io::Write;
+use std::io::{
+    Read,
+    Write,
+};
 use std::{
     io,
     mem,
 };
 
-use protobuf::plugin::code_generator_response::{
+use prost::Message;
+use prost_reflect::{
+    DescriptorPool,
+    FileDescriptor,
+};
+use prost_types::FileDescriptorSet;
+use prost_types::compiler::code_generator_response::{
     Feature,
     File,
 };
-use protobuf::plugin::{
+use prost_types::compiler::{
     CodeGeneratorRequest,
     CodeGeneratorResponse,
-};
-use protobuf::reflect::FileDescriptor;
-use protobuf::{
-    Enum,
-    Message,
 };
 
 /// A plugin: one request in, one response out.
@@ -45,21 +48,20 @@ pub trait GenFile {
 
 impl<T: GenFile> GenCode for T {
     fn gen_code(&self, mut req: CodeGeneratorRequest) -> CodeGeneratorResponse {
-        let descriptors = build_descriptors(&mut req);
+        let pool = build_descriptor_pool(&mut req);
 
         let mut response = CodeGeneratorResponse {
             error: None,
-            supported_features: Some(Feature::FEATURE_PROTO3_OPTIONAL.value() as u64),
+            supported_features: Some(Feature::Proto3Optional as u64),
             file: Vec::with_capacity(req.file_to_generate.len()),
-            ..Default::default()
         };
 
         for target_proto in &req.file_to_generate {
-            let file_desc = descriptors
-                .get(target_proto.as_str())
+            let file_desc = pool
+                .get_file_by_name(target_proto)
                 .expect("target proto is missing from the request");
 
-            match self.gen_file(target_proto, file_desc) {
+            match self.gen_file(target_proto, &file_desc) {
                 Ok(generated_file) => response.file.push(generated_file),
                 Err(err_message) => {
                     response.error = Some(err_message);
@@ -72,27 +74,32 @@ impl<T: GenFile> GenCode for T {
     }
 }
 
-/// Every file in the request, by name, imports included. protoc sends
-/// those along with the protos to generate, so the request resolves
-/// against itself and needs no descriptors from outside it, the
-/// well-known types included.
-fn build_descriptors(req: &mut CodeGeneratorRequest) -> BTreeMap<String, FileDescriptor> {
-    FileDescriptor::new_dynamic_fds(mem::take(&mut req.proto_file), &[])
-        .expect("failed to build file descriptors")
-        .into_iter()
-        .map(|fd| (fd.name().to_owned(), fd))
-        .collect()
+/// Every file in the request, imports included. protoc sends those along
+/// with the protos to generate, so the request resolves against itself
+/// and needs no descriptors from outside it, the well-known types
+/// included.
+fn build_descriptor_pool(req: &mut CodeGeneratorRequest) -> DescriptorPool {
+    let files = FileDescriptorSet { file: mem::take(&mut req.proto_file) };
+    DescriptorPool::from_file_descriptor_set(files).expect("failed to build the descriptor pool")
 }
 
 /// Reads the request from stdin, runs `generator`, and writes the
 /// response to stdout, which is the protocol protoc speaks to a plugin.
+///
+/// prost parses a `Buf` rather than a reader, so the request is read
+/// whole before it is parsed, and the same buffer carries the response
+/// back out.
 pub fn run<T: GenCode>(generator: T) -> anyhow::Result<()> {
-    let req = CodeGeneratorRequest::parse_from_reader(&mut io::stdin().lock())?;
+    let mut buf = Vec::with_capacity(1 << 10);
+    io::stdin().lock().read_to_end(&mut buf)?;
+    let req = CodeGeneratorRequest::decode(&buf[..])?;
+
     let resp = generator.gen_code(req);
 
-    // `write_to_writer` buffers through a `CodedOutputStream` of its own
-    // and flushes that into stdout, leaving stdout's own buffer to us.
+    buf.clear();
+    resp.encode(&mut buf)?;
+
     let mut stdout = io::stdout().lock();
-    resp.write_to_writer(&mut stdout)?;
+    stdout.write_all(&buf)?;
     Ok(stdout.flush()?)
 }

@@ -5,15 +5,13 @@
 //! A column is nullable exactly when its field has proto presence.
 
 use heck::ToSnakeCase;
-use protobuf::plugin::code_generator_response::File;
-use protobuf::reflect::{
+use prost_reflect::{
     FieldDescriptor,
     FileDescriptor,
+    Kind,
     MessageDescriptor,
-    RuntimeFieldType,
-    RuntimeType,
-    Syntax,
 };
+use prost_types::compiler::code_generator_response::File;
 
 fn main() -> anyhow::Result<()> {
     protoc_plugin::run(ArrowSchema::default())
@@ -46,6 +44,12 @@ enum Error {
          presence as a bool."
     )]
     NoFields(String),
+
+    /// A map field whose entry is not a message. protoc does not emit
+    /// one, but the key and value fields are reached through the entry,
+    /// so the case has to be spelled to reach them.
+    #[error("map field '{0}' is not a message")]
+    MalformedMap(String),
 }
 
 fn gen_file(target_proto: &str, fd: &FileDescriptor) -> Result<File, Error> {
@@ -68,7 +72,7 @@ fn gen_file(target_proto: &str, fd: &FileDescriptor) -> Result<File, Error> {
     // every schema is a free function, so declaration order is free.
     for msg in all_messages(fd) {
         buf.push('\n');
-        buf.push_str(&gen_schema(&msg, fd.package())?);
+        buf.push_str(&gen_schema(&msg, fd.package_name())?);
     }
 
     Ok(File {
@@ -86,7 +90,7 @@ fn all_messages(fd: &FileDescriptor) -> Vec<MessageDescriptor> {
         if msg.is_map_entry() {
             return;
         }
-        for child in msg.nested_messages() {
+        for child in msg.child_messages() {
             walk(child, out);
         }
         out.push(msg);
@@ -164,30 +168,6 @@ impl Column {
     }
 }
 
-/// Whether a field distinguishes "unset" from its default value.
-fn supports_presence(field: &FieldDescriptor) -> bool {
-    // A oneof arm and a proto3 `optional` field are the same case:
-    // `optional` is a synthetic oneof of one arm.
-    if field.containing_oneof_including_synthetic().is_some() {
-        return true;
-    }
-
-    match field.runtime_field_type() {
-        // A message has no zero value that an unset field could be read
-        // as, so a message field has presence under either syntax.
-        RuntimeFieldType::Singular(RuntimeType::Message(_msg)) => true,
-        // An implicit-presence proto3 scalar always carries a value, so
-        // only proto2 leaves a bare scalar somewhere to be absent from.
-        RuntimeFieldType::Singular(_scalar) => {
-            field.containing_message().file_descriptor().syntax() == Syntax::Proto2
-        }
-        // A repeated field and a map have no unset state to report, only
-        // an empty one.
-        RuntimeFieldType::Repeated(_item) => false,
-        RuntimeFieldType::Map(_k, _v) => false,
-    }
-}
-
 fn field_expr(name: &str, column: &Column, nullable: bool) -> String {
     let field =
         format!("::arrow_schema::Field::new(\"{}\", {}, {})", name, column.data_type, nullable,);
@@ -239,23 +219,19 @@ impl<'a> Expanding<'a> {
 /// indents: the caller joins them however it likes, and the whole file
 /// is generated code that a formatter can lay out afterwards.
 fn field_exprs(msg: &MessageDescriptor, expanding: &Expanding) -> Result<Vec<String>, Error> {
-    let mut out = Vec::new();
+    let mut out = Vec::with_capacity(msg.fields().len());
 
     for field in msg.fields() {
         // A oneof needs no Arrow type of its own: `fields()` hands back
         // its arms as plain nullable fields, at most one of which is
         // ever set, so the non-null column is the arm that was chosen
         // and no tag column has to carry it.
-        let nullable = supports_presence(&field);
+        let nullable = field.supports_presence();
 
-        out.push(match field.runtime_field_type() {
-            RuntimeFieldType::Map(key, val) => map_field(&field, &key, &val, nullable, expanding)?,
-            RuntimeFieldType::Repeated(item) => {
-                field_expr(field.name(), &list_type(&item, expanding)?, nullable)
-            }
-            RuntimeFieldType::Singular(item) => {
-                field_expr(field.name(), &runtime_type(&item, expanding)?, nullable)
-            }
+        out.push(if field.is_map() {
+            map_field(&field, nullable, expanding)?
+        } else {
+            field_expr(field.name(), &field_type(&field, expanding)?, nullable)
         });
     }
 
@@ -267,19 +243,19 @@ fn field_exprs(msg: &MessageDescriptor, expanding: &Expanding) -> Result<Vec<Str
 /// including the rule that the entries group is never null.
 fn map_field(
     field: &FieldDescriptor,
-    key: &RuntimeType,
-    val: &RuntimeType,
     nullable: bool,
     expanding: &Expanding,
 ) -> Result<String, Error> {
+    let Kind::Message(entry) = field.kind() else {
+        return Err(Error::MalformedMap(field.full_name().to_owned()));
+    };
+
     // An entry's key is a scalar and always present. Its value has
     // presence exactly when it is a message.
-    let key_expr = field_expr("key", &runtime_type(key, expanding)?, false);
-    let value_expr = field_expr(
-        "value",
-        &runtime_type(val, expanding)?,
-        matches!(val, RuntimeType::Message(_msg)),
-    );
+    let key = entry.map_entry_key_field();
+    let value = entry.map_entry_value_field();
+    let key_expr = field_expr("key", &kind_type(&key, expanding)?, false);
+    let value_expr = field_expr("value", &kind_type(&value, expanding)?, value.supports_presence());
 
     Ok(format!(
         "::arrow_schema::Field::new_map(\"{name}\", \"entries\", {key_expr}, {value_expr}, \
@@ -288,12 +264,18 @@ fn map_field(
     ))
 }
 
+/// A field's type, the list wrapping included.
+///
 /// A repeated field is never absent, only empty, and none of its
 /// elements is ever null. The element is named `item`, which is what
 /// Parquet's three-level list encoding expects, and it is the element
 /// rather than the list that carries any extension.
-fn list_type(item: &RuntimeType, expanding: &Expanding) -> Result<Column, Error> {
-    let inner = runtime_type(item, expanding)?;
+fn field_type(field: &FieldDescriptor, expanding: &Expanding) -> Result<Column, Error> {
+    let inner = kind_type(field, expanding)?;
+    if !field.is_list() {
+        return Ok(inner);
+    }
+
     Ok(Column::plain(match inner.extension {
         None => format!("::arrow_schema::DataType::new_list({}, false)", inner.data_type),
         Some(_extension) => format!(
@@ -303,21 +285,21 @@ fn list_type(item: &RuntimeType, expanding: &Expanding) -> Result<Column, Error>
     }))
 }
 
-fn runtime_type(ty: &RuntimeType, expanding: &Expanding) -> Result<Column, Error> {
-    let data_type = match ty {
-        RuntimeType::F64 => "::arrow_schema::DataType::Float64",
-        RuntimeType::F32 => "::arrow_schema::DataType::Float32",
-        RuntimeType::I32 => "::arrow_schema::DataType::Int32",
-        RuntimeType::I64 => "::arrow_schema::DataType::Int64",
-        RuntimeType::U32 => "::arrow_schema::DataType::UInt32",
-        RuntimeType::U64 => "::arrow_schema::DataType::UInt64",
-        RuntimeType::Bool => "::arrow_schema::DataType::Boolean",
-        RuntimeType::String => "::arrow_schema::DataType::Utf8",
-        RuntimeType::VecU8 => "::arrow_schema::DataType::Binary",
+fn kind_type(field: &FieldDescriptor, expanding: &Expanding) -> Result<Column, Error> {
+    let data_type = match field.kind() {
+        Kind::Double => "::arrow_schema::DataType::Float64",
+        Kind::Float => "::arrow_schema::DataType::Float32",
+        Kind::Int32 | Kind::Sint32 | Kind::Sfixed32 => "::arrow_schema::DataType::Int32",
+        Kind::Int64 | Kind::Sint64 | Kind::Sfixed64 => "::arrow_schema::DataType::Int64",
+        Kind::Uint32 | Kind::Fixed32 => "::arrow_schema::DataType::UInt32",
+        Kind::Uint64 | Kind::Fixed64 => "::arrow_schema::DataType::UInt64",
+        Kind::Bool => "::arrow_schema::DataType::Boolean",
+        Kind::String => "::arrow_schema::DataType::Utf8",
+        Kind::Bytes => "::arrow_schema::DataType::Binary",
         // A proto enum's number is its canonical form. Names move when a
         // constant is renamed; numbers are what the wire carries.
-        RuntimeType::Enum(_enum) => "::arrow_schema::DataType::Int32",
-        RuntimeType::Message(msg) => return message_type(msg, expanding),
+        Kind::Enum(_enum) => "::arrow_schema::DataType::Int32",
+        Kind::Message(msg) => return message_type(&msg, expanding),
     };
     Ok(Column::plain(data_type))
 }

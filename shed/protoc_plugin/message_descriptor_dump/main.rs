@@ -1,8 +1,8 @@
 //! An example protoc plugin, dumping the message descriptors of each
 //! proto it is given.
 
-use protobuf::plugin::code_generator_response::File;
-use protobuf::reflect::FileDescriptor;
+use prost_reflect::FileDescriptor;
+use prost_types::compiler::code_generator_response::File;
 
 fn main() -> anyhow::Result<()> {
     protoc_plugin::run(MessageDescriptorDump::default())
