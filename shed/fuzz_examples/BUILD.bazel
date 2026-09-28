@@ -1,11 +1,11 @@
-load("//bazel:rust.bzl", "rust")
+load("//bazel:rust_fuzz_binary.bzl", "rust_fuzz_binary")
 
 package(
     default_testonly = True,
     default_visibility = ["//:__subpackages__"],
 )
 
-rust.fuzz_binary(
+rust_fuzz_binary(
     name = "should_not_fail",
     srcs = ["should_not_fail.rs"],
     tags = ["manual"],
@@ -14,7 +14,7 @@ rust.fuzz_binary(
     ],
 )
 
-rust.fuzz_binary(
+rust_fuzz_binary(
     name = "buffer_overflow",
     srcs = ["buffer_overflow.rs"],
     tags = ["manual"],
@@ -23,7 +23,7 @@ rust.fuzz_binary(
     ],
 )
 
-rust.fuzz_binary(
+rust_fuzz_binary(
     name = "memory_leaks",
     srcs = ["memory_leaks.rs"],
     tags = ["manual"],
@@ -32,7 +32,7 @@ rust.fuzz_binary(
     ],
 )
 
-rust.fuzz_binary(
+rust_fuzz_binary(
     name = "use_after_scope",
     srcs = ["use_after_scope.rs"],
     env = {

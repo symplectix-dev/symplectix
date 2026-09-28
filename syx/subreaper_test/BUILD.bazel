@@ -1,12 +1,12 @@
-load("//bazel:cc.bzl", "cc")
-load("//bazel:rust.bzl", "rust")
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
+load("@rules_rust//rust:defs.bzl", "rust_library")
 
-cc.binary(
+cc_binary(
     name = "orphan",
     srcs = ["orphan.c"],
 )
 
-rust.library(
+rust_library(
     name = "subreaper_test",
     testonly = True,
     srcs = ["src/lib.rs"],

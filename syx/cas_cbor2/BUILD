@@ -1,6 +1,6 @@
-load("//bazel:rust.bzl", "rust")
+load("@rules_rust//rust:defs.bzl", "rust_proc_macro")
 
-rust.proc_macro(
+rust_proc_macro(
     name = "cas_cbor2",
     srcs = ["src/lib.rs"],
     visibility = ["//visibility:public"],

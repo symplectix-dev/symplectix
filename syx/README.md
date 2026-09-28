@@ -50,7 +50,7 @@ Report ends up at `$CRITERION_HOME/report/index.html`.
 
 ## Rust Fuzzing
 
-`rust.fuzz_binary` (`//bazel/private:rust_fuzz_binary.bzl`) builds a
+`rust_fuzz_binary` (`//bazel:rust_fuzz_binary.bzl`) builds a
 libFuzzer/ASan binary from a `#![no_main]` crate using `libfuzzer_sys::fuzz_target!`.
 See `//shed/fuzz_examples` for working examples. Run one with:
 
@@ -69,8 +69,8 @@ error: unsupported linker arg: .../librustc-nightly_rt.asan.a
 
 Known upstream: [ziglang/zig#16813], still open.
 
-`rust.fuzz_binary` works around it with a Starlark transition
-(`//bazel/private:fuzz_transition.bzl`) applied to the underlying `rust_binary`.
+`rust_fuzz_binary` works around it with a Starlark transition
+(`//bazel:fuzz_transition.bzl`) applied to the underlying `rust_binary`.
 
 `--config=fuzz` exists for optimization settings (e.g., LTO, codegen units)
 that aren't required for correctness, only for less painfully slow

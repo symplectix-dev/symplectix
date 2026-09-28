@@ -1,11 +1,11 @@
-load("//bazel:rust.bzl", "rust")
+load("@rules_rust//rust:defs.bzl", "rust_binary")
 
 package(
     default_testonly = True,
     default_visibility = ["//:__subpackages__"],
 )
 
-rust.binary(
+rust_binary(
     name = "mdcstpp",
     srcs = ["src/main.rs"],
     deps = [

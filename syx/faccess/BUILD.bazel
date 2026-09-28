@@ -1,6 +1,6 @@
-load("//bazel:rust.bzl", "rust")
+load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test_suite")
 
-rust.library(
+rust_library(
     name = "faccess",
     srcs = ["src/faccess.rs"],
     visibility = ["//visibility:public"],
@@ -11,7 +11,7 @@ rust.library(
     ],
 )
 
-rust.test_suite(
+rust_test_suite(
     name = "faccess_test_suite",
     size = "small",
     srcs = ["tests/faccess.rs"],

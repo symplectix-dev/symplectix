@@ -86,7 +86,7 @@ common:ci --experimental_disk_cache_gc_max_age=5d
 # query names targets explicitly; the "manual" tag by itself only excludes a
 # target from wildcard expansion (//..., :all), not from an explicit build
 # invocation. Without this, rust.fuzz_binary's untransitioned *_fuzz_target_impl
-# targets (see //bazel/private:fuzz_transition.bzl) get built directly and fail,
+# targets (see //bazel:fuzz_transition.bzl) get built directly and fail,
 # since only the transitioned wrapper target compiles with a nightly rustc.
 common:ci --build_tag_filters=-no-ci,-manual
 common:ci --test_tag_filters=-no-ci,-manual

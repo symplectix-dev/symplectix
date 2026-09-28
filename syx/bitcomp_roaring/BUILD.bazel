@@ -1,6 +1,6 @@
-load("//bazel:rust.bzl", "rust")
+load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
 
-rust.library(
+rust_library(
     name = "bitcomp_roaring",
     srcs = [
         "src/bit_set.rs",
@@ -33,7 +33,7 @@ rust.library(
 # NOTE: src/bit_set/tests/prim.rs is not reachable from
 # src/bit_set/tests.rs via any `mod` declaration (only `mod primitive;` is),
 # so it is excluded here just as Cargo excludes it from the crate.
-rust.test(
+rust_test(
     name = "bitcomp_roaring_test",
     size = "small",
     crate = ":bitcomp_roaring",

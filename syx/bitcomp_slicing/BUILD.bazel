@@ -1,6 +1,6 @@
-load("//bazel:rust.bzl", "rust")
+load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
 
-rust.library(
+rust_library(
     name = "bitcomp_slicing",
     srcs = [
         "src/block.rs",
@@ -18,7 +18,7 @@ rust.library(
     ],
 )
 
-rust.test(
+rust_test(
     name = "bitcomp_slicing_test",
     size = "small",
     crate = ":bitcomp_slicing",

@@ -1,4 +1,5 @@
-load("//bazel:uv.bzl", "uv")
+load("@rules_uv//uv:pip.bzl", "pip_compile")
+load("@rules_uv//uv:venv.bzl", "create_venv")
 
 exports_files([
     "MODULE.bazel",
@@ -6,13 +7,13 @@ exports_files([
     ".rustfmt.toml",
 ])
 
-uv.pip_compile(
+pip_compile(
     name = "pip_compile",
     requirements_in = ":pyproject.toml",
     requirements_txt = ":requirements.txt",
 )
 
-uv.create_venv(
+create_venv(
     name = "create_venv",
     destination_folder = ".venv",
     requirements_txt = ":requirements.txt",

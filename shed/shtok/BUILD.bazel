@@ -1,29 +1,29 @@
-load("//bazel:rust.bzl", "rust")
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_test", "rust_test_suite")
 
 package(
     default_testonly = True,
     default_visibility = ["//:__subpackages__"],
 )
 
-rust.library(
+rust_library(
     name = "shtok",
     srcs = ["src/lib.rs"],
     deps = ["@crates//:itertools"],
 )
 
-rust.binary(
+rust_binary(
     name = "shtok_bin",
     srcs = ["src/main.rs"],
     deps = [":shtok"],
 )
 
-rust.test(
+rust_test(
     name = "shtok_test",
     size = "small",
     crate = ":shtok",
 )
 
-rust.test_suite(
+rust_test_suite(
     name = "shtok_test_suite",
     size = "small",
     srcs = ["tests/tests.rs"],

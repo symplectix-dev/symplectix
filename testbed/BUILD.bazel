@@ -1,11 +1,12 @@
-load("//bazel:pkg.bzl", "pkg")
+load("@rules_pkg//pkg:install.bzl", "pkg_install")
+load("@rules_pkg//pkg:mappings.bzl", "pkg_attributes", "pkg_filegroup", "pkg_files")
 
-pkg.install(
+pkg_install(
     name = "boot_assets_install",
     srcs = [":boot_assets"],
 )
 
-pkg.filegroup(
+pkg_filegroup(
     name = "boot_assets",
     srcs = [
         ":private_key",
@@ -14,16 +15,16 @@ pkg.filegroup(
     ],
 )
 
-pkg.files(
+pkg_files(
     name = "public_key",
     srcs = ["testkey.pub"],
     prefix = "key",
 )
 
-pkg.files(
+pkg_files(
     name = "private_key",
     srcs = ["testkey"],
-    attributes = pkg.attributes(
+    attributes = pkg_attributes(
         mode = "0600",
     ),
     prefix = "key",

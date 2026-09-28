@@ -1,9 +1,9 @@
-load("//bazel:rust.bzl", "rust")
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_test", "rust_test_suite")
 
 # NOTE: src/bits/fixed_bits.rs, src/bits/bin.rs and src/bits/roaring/** are not
 # reachable from src/lib.rs via any `mod` declaration, so they are excluded
 # here just as Cargo excludes them from the crate.
-rust.library(
+rust_library(
     name = "compacts",
     srcs = [
         "src/bits.rs",
@@ -29,7 +29,7 @@ rust.library(
     visibility = ["//visibility:public"],
 )
 
-rust.test(
+rust_test(
     name = "compacts_test",
     size = "small",
     crate = ":compacts",
@@ -39,7 +39,7 @@ rust.test(
     ],
 )
 
-rust.test_suite(
+rust_test_suite(
     name = "compacts_test_suite",
     size = "small",
     srcs = [
@@ -57,7 +57,7 @@ rust.test_suite(
 # `[[bench]] harness = false` in Cargo.toml: plain binaries providing their
 # own `main` via `criterion_main!`. Run with e.g.:
 #   bazel run //syx/compacts:bits_bench -- --bench
-rust.binary(
+rust_binary(
     name = "bits_bench",
     srcs = ["benches/bits.rs"],
     rustc_flags = ["-Coverflow-checks=off"],
@@ -68,7 +68,7 @@ rust.binary(
     ],
 )
 
-rust.binary(
+rust_binary(
     name = "wm_bench",
     srcs = ["benches/wm.rs"],
     rustc_flags = ["-Coverflow-checks=off"],

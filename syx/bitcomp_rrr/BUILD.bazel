@@ -1,20 +1,22 @@
-load("//bazel:lib.bzl", "lib")
-load("//bazel:py.bzl", "py")
-load("//bazel:rust.bzl", "rust")
+load("@bazel_skylib//rules:run_binary.bzl", "run_binary")
+load("@rules_python//python:defs.bzl", "py_binary")
+load("@rules_rust//cargo:defs.bzl", "cargo_build_script")
+load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
+load("@symplectix_pypi//:requirements.bzl", "requirement")
 
-rust.build_script(
+cargo_build_script(
     name = "build_script",
     srcs = ["build.rs"],
 )
 
-py.binary(
+py_binary(
     name = "comb",
     srcs = ["testdata/comb.py"],
     main = "testdata/comb.py",
-    deps = [py.requirement("pydantic")],
+    deps = [requirement("pydantic")],
 )
 
-lib.run_binary(
+run_binary(
     name = "comb_table_16_json",
     outs = ["testdata/comb_table_16.json"],
     args = [
@@ -26,7 +28,7 @@ lib.run_binary(
     tool = ":comb",
 )
 
-lib.run_binary(
+run_binary(
     name = "comb_table_32_json",
     outs = ["testdata/comb_table_32.json"],
     args = [
@@ -38,7 +40,7 @@ lib.run_binary(
     tool = ":comb",
 )
 
-rust.library(
+rust_library(
     name = "bitcomp_rrr",
     srcs = [
         "src/lib.rs",
@@ -52,7 +54,7 @@ rust.library(
     deps = [":build_script"],
 )
 
-rust.test(
+rust_test(
     name = "bitcomp_rrr_test",
     size = "small",
     crate = ":bitcomp_rrr",

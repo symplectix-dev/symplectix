@@ -1,6 +1,6 @@
-load("//bazel:rust.bzl", "rust")
+load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
 
-rust.library(
+rust_library(
     name = "varint",
     srcs = [
         "src/varint.rs",
@@ -9,7 +9,7 @@ rust.library(
     visibility = ["//visibility:public"],
 )
 
-rust.test(
+rust_test(
     name = "varint_test",
     size = "small",
     crate = ":varint",

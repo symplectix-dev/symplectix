@@ -1,12 +1,12 @@
-load("//bazel:proto.bzl", "proto")
-load("//bazel:rust.bzl", "rust")
+load("@rules_proto_grpc//:defs.bzl", "proto_plugin")
+load("@rules_rust//rust:defs.bzl", "rust_binary")
 
 package(
     default_testonly = True,
     default_visibility = ["//:__subpackages__"],
 )
 
-rust.binary(
+rust_binary(
     name = "gen_message_descriptor_dump",
     srcs = ["main.rs"],
     deps = [
@@ -24,7 +24,7 @@ rust.binary(
 # `outputs` declares what it emits: one file per proto, with {protopath}
 # being the path with the .proto extension stripped, which is what the
 # plugin itself writes.
-proto.plugin(
+proto_plugin(
     name = "message_descriptor_dump",
     outputs = ["{protopath}.message_descriptor_dump"],
     tool = ":gen_message_descriptor_dump",

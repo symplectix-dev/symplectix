@@ -1,6 +1,6 @@
-load("//bazel:rust.bzl", "rust")
+load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test", "rust_test_suite")
 
-rust.library(
+rust_library(
     name = "content_addressing",
     srcs = [
         "src/chunking.rs",
@@ -21,7 +21,7 @@ rust.library(
     ],
 )
 
-rust.test(
+rust_test(
     name = "content_addressing_test",
     size = "small",
     crate = ":content_addressing",
@@ -30,7 +30,7 @@ rust.test(
     ],
 )
 
-rust.test_suite(
+rust_test_suite(
     name = "content_addressing_test_suite",
     size = "small",
     srcs = [
