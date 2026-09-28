@@ -1,8 +1,6 @@
 load("@aspect_bazel_lib//lib:write_source_files.bzl", "write_source_files")
 load("@rules_rust_pyo3//:defs.bzl", _pyo3_extension = "pyo3_extension")
 
-visibility(["//bazel:__pkg__"])
-
 # Prepend a header to the generated stub so that
 # ruff skips the file, "# ruff: noqa";
 #

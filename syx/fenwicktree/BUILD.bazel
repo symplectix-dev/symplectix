@@ -1,6 +1,6 @@
-load("//bazel:rust.bzl", "rust")
+load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test_suite")
 
-rust.library(
+rust_library(
     name = "fenwicktree",
     srcs = ["src/lib.rs"],
     # Matches `[profile.dev.package.fenwicktree] overflow-checks = false` in
@@ -12,7 +12,7 @@ rust.library(
     ],
 )
 
-rust.test_suite(
+rust_test_suite(
     name = "fenwicktree_test_suite",
     size = "small",
     srcs = ["tests/fenwicktree_test.rs"],

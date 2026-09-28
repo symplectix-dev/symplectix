@@ -1,6 +1,6 @@
-load("//bazel:rust.bzl", "rust")
+load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
 
-rust.library(
+rust_library(
     name = "logger",
     srcs = [
         "src/committer.rs",
@@ -18,7 +18,7 @@ rust.library(
     ],
 )
 
-rust.test(
+rust_test(
     name = "logger_test",
     size = "small",
     crate = ":logger",

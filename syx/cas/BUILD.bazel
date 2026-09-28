@@ -1,6 +1,6 @@
-load("//bazel:rust.bzl", "rust")
+load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test", "rust_test_suite")
 
-rust.library(
+rust_library(
     name = "cas",
     srcs = [
         "src/builder.rs",
@@ -21,7 +21,7 @@ rust.library(
     ],
 )
 
-rust.test(
+rust_test(
     name = "cas_test",
     size = "small",
     crate = ":cas",
@@ -30,7 +30,7 @@ rust.test(
     ],
 )
 
-rust.test(
+rust_test(
     name = "cas_remote_object_store_test",
     size = "small",
     srcs = ["tests/remote_object_store.rs"],
@@ -45,7 +45,7 @@ rust.test(
     ],
 )
 
-rust.test_suite(
+rust_test_suite(
     name = "cas_test_suite",
     size = "small",
     srcs = [

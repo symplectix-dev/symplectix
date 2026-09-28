@@ -1,6 +1,6 @@
-load("//bazel:rust.bzl", "rust")
+load("@rules_rust//rust:defs.bzl", "rust_library")
 
-rust.library(
+rust_library(
     name = "forgetter",
     srcs = ["src/lib.rs"],
     visibility = ["//visibility:public"],

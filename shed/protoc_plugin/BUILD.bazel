@@ -1,11 +1,11 @@
-load("//bazel:rust.bzl", "rust")
+load("@rules_rust//rust:defs.bzl", "rust_library")
 
 package(
     default_testonly = True,
     default_visibility = ["//:__subpackages__"],
 )
 
-rust.library(
+rust_library(
     name = "protoc_plugin",
     srcs = ["src/lib.rs"],
     deps = [

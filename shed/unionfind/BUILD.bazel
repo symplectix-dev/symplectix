@@ -1,16 +1,16 @@
-load("//bazel:rust.bzl", "rust")
+load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
 
 package(
     default_testonly = True,
     default_visibility = ["//:__subpackages__"],
 )
 
-rust.library(
+rust_library(
     name = "unionfind",
     srcs = ["src/lib.rs"],
 )
 
-rust.test(
+rust_test(
     name = "unionfind_test",
     size = "small",
     crate = ":unionfind",

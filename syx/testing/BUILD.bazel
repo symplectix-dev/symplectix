@@ -1,9 +1,9 @@
-load("//bazel:rust.bzl", "rust")
-load("//bazel:util.bzl", "util")
+load("@aspect_bazel_lib//lib:copy_file.bzl", "copy_file")
+load("@rules_rust//rust:defs.bzl", "rust_library")
 
 # The server `s3::Server` spawns. Linking it here
 # keeps that path stable across a version bump.
-util.copy_file(
+copy_file(
     name = "s3s_fs",
     testonly = True,
     src = "@crates//:s3s-fs__s3s-fs",
@@ -12,7 +12,7 @@ util.copy_file(
     is_executable = True,
 )
 
-rust.library(
+rust_library(
     name = "testing",
     testonly = True,
     srcs = [

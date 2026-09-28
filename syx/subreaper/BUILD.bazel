@@ -1,6 +1,6 @@
-load("//bazel:rust.bzl", "rust")
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_test", "rust_test_suite")
 
-rust.library(
+rust_library(
     name = "subreaper_lib",
     srcs = [
         "src/lib.rs",
@@ -21,7 +21,7 @@ rust.library(
     ],
 )
 
-rust.test(
+rust_test(
     name = "subreaper_lib_test",
     size = "small",
     crate = ":subreaper_lib",
@@ -30,7 +30,7 @@ rust.test(
     ],
 )
 
-rust.binary(
+rust_binary(
     name = "subreaper",
     srcs = ["src/bin/subreaper.rs"],
     deps = [":subreaper_lib"],
@@ -39,7 +39,7 @@ rust.binary(
 # tests/run.rs locates the `subreaper` binary and subreaper_test's `orphan`
 # helper at runtime via testing::rlocation(), so no CARGO_BIN_EXE_* trick and
 # no no-sandbox/no-cache tags are needed.
-rust.test_suite(
+rust_test_suite(
     name = "subreaper_test_suite",
     size = "small",
     srcs = ["tests/run.rs"],

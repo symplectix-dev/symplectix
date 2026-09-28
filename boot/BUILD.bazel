@@ -1,6 +1,6 @@
-load("//bazel:pkg.bzl", "pkg")
+load("@rules_pkg//pkg:mappings.bzl", "pkg_files")
 
-pkg.files(
+pkg_files(
     name = "boot",
     srcs = [
         ":initrd",

@@ -1,11 +1,12 @@
-load("//bazel:rust.bzl", "rust")
+load("@rules_rust//rust:defs.bzl", "rust_library_group")
+load("@rules_rust_prost//:defs.bzl", "rust_prost_toolchain")
 
-rust.library_group(
+rust_library_group(
     name = "prost_runtime",
     deps = ["@crates//:prost"],
 )
 
-rust.library_group(
+rust_library_group(
     name = "tonic_runtime",
     deps = [
         ":prost_runtime",
@@ -17,7 +18,7 @@ rust.library_group(
 # No proto_compiler here: the attribute is deprecated and warns on every
 # analysis. Left unset, protoc comes from the resolved proto toolchain,
 # which is the prebuilt one @protobuf registers.
-rust.prost_toolchain(
+rust_prost_toolchain(
     name = "prost_toolchain_impl",
     prost_plugin = "@crates//:protoc-gen-prost__protoc-gen-prost",
     prost_runtime = ":prost_runtime",

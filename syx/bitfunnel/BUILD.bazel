@@ -1,6 +1,6 @@
-load("//bazel:rust.bzl", "rust")
+load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test", "rust_test_suite")
 
-rust.library(
+rust_library(
     name = "bitfunnel",
     srcs = [
         "src/lib.rs",
@@ -12,13 +12,13 @@ rust.library(
     ],
 )
 
-rust.test(
+rust_test(
     name = "bitfunnel_test",
     size = "small",
     crate = ":bitfunnel",
 )
 
-rust.test_suite(
+rust_test_suite(
     name = "bitfunnel_test_suite",
     size = "small",
     srcs = ["tests/signatures.rs"],

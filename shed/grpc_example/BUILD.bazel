@@ -1,24 +1,25 @@
-load("//bazel:proto.bzl", "proto")
-load("//bazel:rust.bzl", "rust")
+load("@protobuf//bazel:proto_library.bzl", "proto_library")
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_test")
+load("@rules_rust_prost//:defs.bzl", "rust_prost_library")
 
 package(
     default_testonly = True,
     default_visibility = ["//:__subpackages__"],
 )
 
-proto.library(
+proto_library(
     name = "echo_proto",
     srcs = ["echo.proto"],
 )
 
 # The crate is named after the proto_library rather than after this
 # target, so the module path is `echo_proto::`, not `echo_proto_rs::`.
-rust.prost_library(
+rust_prost_library(
     name = "echo_proto_rs",
     proto = ":echo_proto",
 )
 
-rust.library(
+rust_library(
     name = "echo",
     srcs = ["echo.rs"],
     deps = [
@@ -28,7 +29,7 @@ rust.library(
     ],
 )
 
-rust.binary(
+rust_binary(
     name = "server",
     srcs = ["server_main.rs"],
     deps = [
@@ -39,7 +40,7 @@ rust.binary(
     ],
 )
 
-rust.binary(
+rust_binary(
     name = "client",
     srcs = ["client_main.rs"],
     deps = [
@@ -49,7 +50,7 @@ rust.binary(
     ],
 )
 
-rust.test(
+rust_test(
     name = "echo_test",
     size = "small",
     srcs = ["echo_test.rs"],

@@ -1,12 +1,13 @@
-load("//bazel:py.bzl", "py")
-load("//bazel:rust.bzl", "rust")
+load("@rules_python//python:defs.bzl", "py_library", "py_test")
+load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test", "rust_test_suite")
+load("//bazel:pyo3_extension.bzl", "pyo3_extension")
 
 package(
     default_testonly = True,
     default_visibility = ["//:__subpackages__"],
 )
 
-rust.library(
+rust_library(
     name = "plying",
     srcs = [
         "src/beginning.rs",
@@ -28,13 +29,13 @@ rust.library(
     ],
 )
 
-rust.test(
+rust_test(
     name = "plying_test",
     size = "small",
     crate = ":plying",
 )
 
-rust.test_suite(
+rust_test_suite(
     name = "plying_test_suite",
     size = "small",
     srcs = [
@@ -45,19 +46,19 @@ rust.test_suite(
     deps = [":plying"],
 )
 
-py.library(
+py_library(
     name = "plying_py",
     srcs = ["__init__.py"],
     deps = [":_plying"],
 )
 
-py.extension(
+pyo3_extension(
     name = "_plying",
     srcs = ["_plying.rs"],
     deps = [":plying"],
 )
 
-py.test(
+py_test(
     name = "_plying_test",
     size = "small",
     srcs = ["_plying_test.py"],
