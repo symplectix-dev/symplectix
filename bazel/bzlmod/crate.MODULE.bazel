@@ -101,6 +101,33 @@ crate.spec(
     version = "0.16",
 )
 
+# gRPC over HTTP/2, and the prost codec its generated code uses since
+# tonic 0.14 moved that out of the tonic crate itself.
+crate.spec(
+    package = "tonic",
+    version = "0.14",
+)
+crate.spec(
+    package = "tonic-prost",
+    version = "0.14",
+)
+crate.spec(
+    package = "protoc-gen-prost",
+    version = "0.5",
+)
+crate.annotation(
+    crate = "protoc-gen-prost",
+    gen_binaries = ["protoc-gen-prost"],
+)
+crate.spec(
+    package = "protoc-gen-tonic",
+    version = "0.5",
+)
+crate.annotation(
+    crate = "protoc-gen-tonic",
+    gen_binaries = ["protoc-gen-tonic"],
+)
+
 # Case conversion for naming.
 crate.spec(
     package = "heck",

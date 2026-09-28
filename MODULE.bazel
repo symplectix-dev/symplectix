@@ -39,6 +39,8 @@ register_toolchains(
     # For py.extension.
     "@rules_rust_pyo3//toolchains:toolchain",
     "@rules_rust_pyo3//toolchains:rust_toolchain",
+    # For protobuf/grpc.
+    "//bazel/toolchains:prost_toolchain",
 )
 
 pip = use_extension("@rules_python//python/extensions:pip.bzl", "pip")
