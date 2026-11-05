@@ -264,9 +264,12 @@ crate.spec(
 )
 
 # Raw libc bindings.
+# Pinned exactly, unlike other crates: these are unsafe FFI declarations of the
+# platform ABI, shared across the dependency graph. A wrong declaration still
+# compiles and fails only at runtime, so new versions need an explicit bump.
 crate.spec(
     package = "libc",
-    version = "=0.2.189",
+    version = "=0.2.191",
 )
 
 # Random number generation.
