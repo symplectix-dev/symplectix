@@ -1,4 +1,4 @@
-firecracker_version: "1.16.0"
+firecracker_version: "1.17.0"
 
 fc_node_dir: "{{ fc_data_dir }}/{{ node_name }}"
 fc_socket: "/run/testbed/{{ node_name }}-fc.sock"
