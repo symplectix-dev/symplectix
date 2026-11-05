@@ -73,12 +73,12 @@ http_file(
 
 http_file(
     name = "vmlinux",
-    sha256 = "7f70be51b78157629a019a530bdb8e39cc7bad325e235e75c66cad289e04aecd",
-    urls = ["https://s3.amazonaws.com/spec.ccfc.min/firecracker-ci/20260617-a093a70f7979-0/x86_64/vmlinux-6.1.174"],
+    sha256 = "b82d578fd044ee6b964f3e2b964125f764f7f8401e69e2ebd0ab929c34a0f708",
+    urls = ["https://s3.amazonaws.com/spec.ccfc.min/firecracker-ci/20261104-e3931a50b681-0/x86_64/vmlinux-6.18.56"],
 )
 
 http_file(
     name = "rootfs_squashfs",
-    sha256 = "b3072c50c3638ec36bcbb32ec3c733f204a314e2578c13630b3f2c79dbe35667",
-    urls = ["https://s3.amazonaws.com/spec.ccfc.min/firecracker-ci/20260617-a093a70f7979-0/x86_64/ubuntu-24.04.squashfs"],
+    sha256 = "a1bf43d192a1b82107ed1c69c7e38a3fe5aa4edcff105a8ffe381a85047c7ad3",
+    urls = ["https://s3.amazonaws.com/spec.ccfc.min/firecracker-ci/20261104-e3931a50b681-0/x86_64/ubuntu-24.04.squashfs"],
 )
