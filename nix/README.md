@@ -13,7 +13,7 @@ nix develop ./nix
 # Format Nix files (run from nix/)
 nix fmt
 
-# Run all checks (pre-commit hooks with --all-files + flake validation)
+# Validate the flake. This does not run hooks; CI runs them with prek.
 nix flake check ./nix
 ```
 
