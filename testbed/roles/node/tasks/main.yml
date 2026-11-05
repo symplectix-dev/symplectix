@@ -68,7 +68,7 @@
 - name: Create tap device in namespace
   when: tap_check.rc != 0
   ansible.builtin.command:
-    cmd: ip netns exec {{ node_name }} ip tuntap add {{ tap_dev }} mode tap user "{{ ansible_facts['env']['SUDO_USER'] | default(ansible_user_id, true) }}"
+    cmd: ip netns exec {{ node_name }} ip tuntap add {{ tap_dev }} mode tap user "{{ ansible_facts['env']['SUDO_USER'] | default(ansible_facts['user_id'], true) }}"
 
 - name: Check IPv4 address on tap
   register: tap_addr4
