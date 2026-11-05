@@ -44,9 +44,9 @@ genrule(
 
         mkdir -p $$WORK/{bin,proc,sys,dev,mnt/lower,mnt/rw,mnt/root}
 
-        install -m755 $(location :init_sh) $$WORK/init
-        install -m755 $(location @jq_static//file) $$WORK/bin/jq
-        install -m755 $(location @busybox_static//file) $$WORK/bin/busybox
+        install -m755 $(execpath :init_sh) $$WORK/init
+        install -m755 $(execpath @jq_static//file) $$WORK/bin/jq
+        install -m755 $(execpath @busybox_static//file) $$WORK/bin/busybox
         for cmd in sh mount umount ip wget switch_root mkdir chmod ln printf; do
             ln -sf busybox $$WORK/bin/$$cmd
         done

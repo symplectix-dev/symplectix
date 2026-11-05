@@ -8,7 +8,7 @@ bazel_dep(
 # Prebuilt binaries for buildifier and buildozer
 bazel_dep(
     name = "buildifier_prebuilt",
-    version = "8.5.1.2",
+    version = "10.1.0",
     dev_dependency = True,
 )
 
