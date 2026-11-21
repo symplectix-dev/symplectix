@@ -379,5 +379,7 @@ crate.annotation(
 #     link_deps = ["@@zstd+//:zstd"],
 # )
 
-crate.from_specs()
-use_repo(crate, "crates")
+# protobuf >= 37 defines its own universe named "crates", and universe
+# names must be unique across modules. Keep "@crates" as the local name.
+crate.from_specs(name = "syx_crates")
+use_repo(crate, crates = "syx_crates")
